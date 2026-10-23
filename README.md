@@ -44,7 +44,7 @@ pwsh -NoProfile -File scripts/Test-All.ps1
 
 已完成构建时可传 `--no-build` / `-NoBuild`；增加 `--benchmark` / `-Benchmark` 可执行 MaximumUI 的托管构建与布局策略微基准。`tests/` 中的三个插件回归宿主直接编译相关生产源码，仅替换游戏和外部插件边界。MaximumUI.Runner 执行原有 `net461` 断言程序集的真实 `Main`；单独执行 `dotnet test` 不会运行这些断言。
 
-详细构建、输出、测试边界见 [开发说明](docs/Development.md)，本次修复及基准见 [2026-10-23 审计记录](docs/Audit-2026-10-23.md)。
+详细构建、输出、测试边界见 [开发说明](docs/Development.md)。首轮修复及基准见 [全仓审计](docs/Audit-2026-10-23.md)，最新的 Metro UI、后台自动结束、XML 与表情修复及 226 组回归见 [后续修复记录](docs/Followup-2026-10-23.md)。
 
 ## 游戏内使用
 
@@ -58,6 +58,8 @@ ClothingCompression、ExpressionControl、JuiceControl 等引用 Common 的项�
 
 - [工作区开发说明](docs/Development.md)
 - [全仓审计、回归证据与待游戏内验证事项](docs/Audit-2026-10-23.md)
+- [后续修复、MaximumUI 0.2.0 与 226 组回归](docs/Followup-2026-10-23.md)
+- [真实 Gallery 的可再生深浅主题预览](tests/MaximumUI.Preview/README.md)
 - [MaximumUI 设计与 API 长文档](MaximumUI.md)（具体接口以当前源码为准）
 - [MultiTeamH 开发交接与最后已知验证状态](docs/MultiTeamH-Handoff.md)
 - [MultiTeamH 依赖版本、公开源码与本地参考包索引](docs/MultiTeamH-Dependencies.md)

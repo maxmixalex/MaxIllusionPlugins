@@ -47,7 +47,17 @@ namespace MaximumUI.Tests {
                 DrawListCanAppendItselfWithoutGrowingForever();
                 DialogCallbacksCannotCloseNewDialogsOrLoopForever();
                 OverlayOrderSelectsOnlyTheTopDialog();
+                ThemeDesignTests.RunAll();
+                UiInteractionTests.RunAll();
+                MountRoutingTests.RunAll();
+                UiFollowupReviewTests.Run();
+                CoordinateTests.Run();
+                DialogLayoutTests.RunAll();
+                NumericInputTests.Run();
                 if (Environment.GetEnvironmentVariable("MAXIMUMUI_BENCHMARK") == "1") MeasureBuildAndLayoutPerformance();
+                int count = 41 + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
+                    + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount;
+                Console.WriteLine("MaximumUI regression groups: " + count + " passed.");
                 Console.WriteLine("MaximumUI headless tests passed.");
                 return 0;
             } catch (Exception ex) {

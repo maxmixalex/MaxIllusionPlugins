@@ -1,7 +1,14 @@
 using System;
 
 namespace MaximumUI {
+    public enum LabelRole {
+        Body,
+        Heading,
+        Muted
+    }
+
     public sealed class Label : Widget {
+        public LabelRole Role;
         public string Text;
         public bool WordWrap;
         public object Style;
@@ -47,7 +54,15 @@ namespace MaximumUI {
         }
     }
 
+    public enum ButtonVariant {
+        Default,
+        Primary,
+        Quiet,
+        Danger
+    }
+
     public sealed class Button : Widget {
+        public ButtonVariant Variant;
         public string Text;
         public Action OnClick;
 

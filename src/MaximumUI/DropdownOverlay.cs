@@ -4,8 +4,6 @@ using UnityEngine;
 namespace MaximumUI {
     internal sealed class DropdownOverlay {
         private readonly GUIStyle selectionStyle;
-        private readonly GUIStyleState selectedState;
-        private readonly GUIStyleState normalState;
         private string[] items = new string[0];
         private Action<int> callback;
         private Rect itemRect;
@@ -19,31 +17,12 @@ namespace MaximumUI {
         private string filterText = string.Empty;
         private string filterPlaceholder = string.Empty;
         private Action<string> filterChanged;
+        private int activeIndex;
 
         public DropdownOverlay(int windowId, int fontSize, MaximumTheme theme) {
             WindowId = windowId;
-            Theme = theme ?? MaximumTheme.ExpressionLight;
-
-            selectionStyle = new GUIStyle {
-                fontSize = fontSize,
-                padding = new RectOffset(4, 4, 4, 4)
-            };
-            selectedState = new GUIStyleState {
-                textColor = Theme.ComboBoxItem.hover.textColor,
-                background = Theme.ButtonHover
-            };
-            normalState = new GUIStyleState {
-                textColor = Color.black,
-                background = Texture2D.whiteTexture
-            };
-            selectionStyle.normal = normalState;
-            selectionStyle.hover = selectedState;
-            selectionStyle.active = selectedState;
-            selectionStyle.focused = selectedState;
-            selectionStyle.onNormal = normalState;
-            selectionStyle.onHover = selectedState;
-            selectionStyle.onActive = selectedState;
-            selectionStyle.onFocused = selectedState;
+            Theme = theme ?? MaximumTheme.MetroDark;
+            selectionStyle = new GUIStyle(Theme.ComboBoxItem) { fontSize = fontSize };
         }
 
         public readonly int WindowId;
@@ -76,7 +55,7 @@ namespace MaximumUI {
         public void Set(Rect rect, float itemHeight, string[] items, Action<int> callback, int maxVisibleItems, string filterText, Action<string> filterChanged, string filterPlaceholder) {
             string[] nextItems = items ?? new string[0];
             float effectiveItemHeight = Mathf.Max(itemHeight, GetMinimumItemHeight());
-            bool resetScroll = !Show || this.items.Length != nextItems.Length || !Mathf.Approximately(this.itemHeight, effectiveItemHeight);
+            bool resetScroll = !Show || !ReferenceEquals(this.items, nextItems) || !Mathf.Approximately(this.itemHeight, effectiveItemHeight);
             this.items = nextItems;
             this.callback = callback;
             this.itemHeight = effectiveItemHeight;
@@ -93,20 +72,27 @@ namespace MaximumUI {
             scroll = totalContentHeight > visibleContentHeight || visibleContentHeight > Screen.height * 0.4f;
             if (scroll) visibleContentHeight = Mathf.Min(visibleContentHeight, Screen.height * 0.4f);
             Rect = new Rect(rect.x, rect.y, rect.width, visibleContentHeight + filterHeight + padding.top + padding.bottom);
-            if (Rect.y + Rect.height > Screen.height) Rect.y -= Rect.height + itemHeight;
+            MuiRect placed = WindowGeometry.PlacePopup(new MuiRect(rect.x, rect.y - itemHeight, rect.width, itemHeight),
+                Rect.width, Rect.height, Screen.width, Screen.height);
+            Rect = new Rect(placed.X, placed.Y, placed.Width, placed.Height);
 
-            float contentWidth = Mathf.Max(1f, rect.width - padding.left - padding.right);
+            float contentWidth = Mathf.Max(1f, Rect.width - padding.left - padding.right);
             scrollViewRect = new Rect(padding.left, padding.top + filterHeight, contentWidth, visibleContentHeight);
             this.itemRect = scroll
                 ? new Rect(0f, 0f, Mathf.Max(1f, contentWidth - 16f), totalContentHeight)
                 : new Rect(padding.left, padding.top + filterHeight, contentWidth, totalContentHeight);
-            if (resetScroll) scrollPosition = Vector2.zero;
+            if (resetScroll) {
+                scrollPosition = Vector2.zero;
+                activeIndex = this.items.Length == 0 ? -1 : 0;
+            }
             Show = true;
         }
 
-        public void Focus(string controlName) {
+        public void Focus(string controlName, int selectedIndex = 0) {
             focusControlName = controlName ?? string.Empty;
             focusEstablished = false;
+            activeIndex = items.Length == 0 ? -1 : Math.Max(0, Math.Min(items.Length - 1, selectedIndex));
+            scrollPosition.y = KeyboardNavigation.RevealRow(scrollPosition.y, activeIndex, itemHeight, scrollViewRect.height, items.Length);
             if (focusControlName.Length > 0) GUI.FocusControl(focusControlName);
         }
 
@@ -119,6 +105,8 @@ namespace MaximumUI {
         public void Draw() {
             if (!Show) return;
             CloseIfFocusLost();
+            if (!Show) return;
+            HandleKeyboard();
             if (!Show) return;
             Color oldColor = GUI.color;
             GUI.color = new Color(oldColor.r, oldColor.g, oldColor.b, Theme.WindowOpacity);
@@ -142,15 +130,16 @@ namespace MaximumUI {
             DrawFilter();
 
             if (scroll) {
-                scrollPosition = GUI.BeginScrollView(scrollViewRect, scrollPosition, itemRect, false, false);
+                scrollPosition = Theme.BeginScrollView(scrollViewRect, scrollPosition, itemRect, false, false);
             }
 
-            int selected = DrawItems();
-            if (scroll) GUI.EndScrollView();
+            int selected;
+            try { selected = DrawItems(); }
+            finally { if (scroll) GUI.EndScrollView(); }
 
             if (selected >= 0) {
                 Action<int> action = callback;
-                Show = false;
+                Hide();
                 if (action != null) action(selected);
                 Input.ResetInputAxes();
                 return;
@@ -187,7 +176,7 @@ namespace MaximumUI {
                 Rect row = new Rect(itemRect.x, itemRect.y + itemHeight * i, itemRect.width, itemHeight);
                 bool hover = current != null && row.Contains(current.mousePosition);
                 if (current == null || current.type == EventType.Repaint) {
-                    selectionStyle.Draw(row, items[i] ?? string.Empty, hover, false, false, false);
+                    selectionStyle.Draw(row, items[i] ?? string.Empty, hover, false, i == activeIndex, i == activeIndex);
                 }
 
                 if (GUI.enabled && hover && current != null && current.type == EventType.MouseDown && current.button == 0) {
@@ -199,9 +188,32 @@ namespace MaximumUI {
             return -1;
         }
 
+        private void HandleKeyboard() {
+            Event current = Event.current;
+            if (!GUI.enabled || current == null || current.type != EventType.KeyDown || current.alt || current.control || current.command) return;
+            KeyCode key = current.keyCode;
+            // Home/End and horizontal arrows retain text-editing semantics in a filter.
+            bool moveKey = key == KeyCode.DownArrow || key == KeyCode.UpArrow || key == KeyCode.PageDown || key == KeyCode.PageUp ||
+                (filterChanged == null && (key == KeyCode.Home || key == KeyCode.End));
+            int next;
+            if (moveKey && KeyboardNavigation.MoveSelection(activeIndex, items.Length, key, GetVisibleItemCount(items, maxVisibleItems), out next)) {
+                activeIndex = next;
+                scrollPosition.y = KeyboardNavigation.RevealRow(scrollPosition.y, activeIndex, itemHeight, scrollViewRect.height, items.Length);
+                current.Use();
+                Input.ResetInputAxes();
+            } else if ((key == KeyCode.Return || key == KeyCode.KeypadEnter) && activeIndex >= 0 && activeIndex < items.Length) {
+                Action<int> action = callback;
+                int selected = activeIndex;
+                Hide();
+                current.Use();
+                if (action != null) action(selected);
+                Input.ResetInputAxes();
+            }
+        }
+
         private void CloseIfFocusLost() {
             Event current = Event.current;
-            if (current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape) {
+            if (GUI.enabled && current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape) {
                 Hide();
                 current.Use();
                 return;
@@ -223,7 +235,7 @@ namespace MaximumUI {
             if (Rect.Contains(mousePosition)) return;
 
             Hide();
-            GUI.FocusControl(null);
+            if (GUI.enabled) GUI.FocusControl(null);
         }
 
         private static int GetVisibleItemCount(string[] items, int maxVisibleItems) {

@@ -2,6 +2,16 @@ using System;
 
 namespace MaximumUI {
     internal static class ScrollGeometry {
+        public static MuiRect ContentViewport(MuiRect viewport, MuiRect content, bool horizontal, bool vertical, float scrollbarSize) {
+            float size = Math.Max(0f, scrollbarSize);
+            // Match BeginScrollView's horizontal -> vertical -> horizontal pass.
+            horizontal = horizontal || content.Width > viewport.Width;
+            vertical = vertical || content.Height > viewport.Height - (horizontal ? size : 0f);
+            horizontal = horizontal || content.Width > viewport.Width - (vertical ? size : 0f);
+            return new MuiRect(viewport.X, viewport.Y, Math.Max(0f, viewport.Width - (vertical ? size : 0f)),
+                Math.Max(0f, viewport.Height - (horizontal ? size : 0f)));
+        }
+
         public static MuiRect ContentExtent(LayoutNode node, MuiRect viewport) {
             float width = Math.Max(1f, viewport.Width - 16f);
             float height = viewport.Height;

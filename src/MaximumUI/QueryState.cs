@@ -65,6 +65,8 @@ namespace MaximumUI {
     public sealed class UiQueryStore {
         private readonly List<ItemQuery> items = new List<ItemQuery>();
         private readonly List<WindowQuery> windows = new List<WindowQuery>();
+        private readonly List<MuiRect> inputRegions = new List<MuiRect>();
+        private readonly List<MuiRect> overlayRegions = new List<MuiRect>();
         private readonly Dictionary<string, ItemQuery> itemById = new Dictionary<string, ItemQuery>();
         private readonly Dictionary<string, WindowQuery> windowById = new Dictionary<string, WindowQuery>();
         private readonly InputCaptureState capture = new InputCaptureState();
@@ -84,6 +86,8 @@ namespace MaximumUI {
         public void BeginFrame() {
             items.Clear();
             windows.Clear();
+            inputRegions.Clear();
+            overlayRegions.Clear();
             itemById.Clear();
             windowById.Clear();
             capture.WantCaptureMouse = false;
@@ -111,6 +115,34 @@ namespace MaximumUI {
             capture.Shift = input.Shift;
             capture.Alt = input.Alt;
             capture.Command = input.Command;
+        }
+
+        internal void RecordInputRegion(MuiRect rect) {
+            RecordInputRegion(rect, false);
+        }
+
+        internal void RecordInputRegion(MuiRect rect, bool overlay) {
+            if (rect.Width <= 0f || rect.Height <= 0f) return;
+            inputRegions.Add(rect);
+            if (overlay) overlayRegions.Add(rect);
+        }
+
+        internal bool ContainsInputRegion(MuiVec2 point) {
+            for (int i = inputRegions.Count - 1; i >= 0; i--)
+                if (inputRegions[i].Contains(point)) return true;
+            return false;
+        }
+
+        internal bool ContainsOverlayRegion(MuiVec2 point) {
+            for (int i = overlayRegions.Count - 1; i >= 0; i--)
+                if (overlayRegions[i].Contains(point)) return true;
+            return false;
+        }
+
+        internal bool ContainsVisibleWindow(MuiVec2 point) {
+            for (int i = windows.Count - 1; i >= 0; i--)
+                if (windows[i].Visible && windows[i].Rect.Contains(point)) return true;
+            return false;
         }
 
         public void SetCapture(bool mouse, bool keyboard, bool textInput) {

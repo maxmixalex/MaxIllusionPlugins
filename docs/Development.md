@@ -12,7 +12,7 @@ python scripts/test.py --no-build
 pwsh -NoProfile -File scripts/Test-All.ps1 -NoBuild
 ```
 
-解决方案包含原有九个项目及四个执行测试的宿主，共十三个项目。生产项目仍继承 `.NET Framework 3.5` 目标，MaximumUI.Tests 保持 `net461`，`tests/` 下四个宿主使用 `net9.0`。独立的 `MaximumUI.Benchmark` 比较工具不在解决方案中，需要显式指定被测 DLL。
+解决方案包含原有九个项目及四个执行测试的宿主，共十三个项目。生产项目仍继承 `.NET Framework 3.5` 目标，MaximumUI.Tests 保持 `net461`，`tests/` 下四个宿主使用 `net9.0`。独立的 `MaximumUI.Benchmark` 比较工具和 `MaximumUI.Preview` 实际 Gallery 导出工具不在解决方案中，需要显式指定被测 DLL；两者均不作为游戏插件发布。
 
 NuGet 提供框架引用程序集，编译不需要本机游戏目录。网络环境需允许访问 nuget.org、IllusionMods 和 BepInExLibs 的仓库中所列源。包源映射必须包含 HarmonyX、MonoMod.*、Mono.Cecil 与 KoikatuCompatibilityAnalyzer 等传递依赖；缺失映射会在全新缓存下导致 NU1100。
 
@@ -47,7 +47,7 @@ MaximumUI.Tests 本身是类库；不能把单独运行 `dotnet test` 当成这�
 
 2026-10-23 使用 .NET SDK 9.0.319 完成整仓修复和统一执行回归，具体数量、基线反例、性能数据与未验证内容记录在 [审计记录](Audit-2026-10-23.md)。ClothingCompression 的两处 `Application.loadedLevelName` CS0618 过时 API 警告属于已有代码；本次没有仅为消除警告而改变场景判断逻辑。饰品/服装 .NET 9 测试宿主还会提示共享 net35 源码使用 `XmlReaderSettings.ProhibitDtd` 已过时；这是旧目标框架所需的 API，不代表未阻止 DTD。最终全量编译共 3 个警告、0 个错误。
 
-原交接记录中的 MultiTeamH 0.11.62 相机行为仍无用户游戏内验证结果，本次 0.11.63 的修复也尚未在真实游戏中验证，详见 [原交接说明](MultiTeamH-Handoff.md) 与新审计记录。所有项目的构建成功均不代表已经完成全部游戏内回归。
+最新后续版本完成整仓 Rebuild 和 226 组实际断言：MaximumUI 104、MultiTeamH 39、Accessory/Clothing 38、PluginCore 45，详见 [后续修复记录](Followup-2026-10-23.md)。当前 MultiTeamH 为 0.11.64；原交接记录中的 0.11.62 相机行为，以及后续兼容/自动结束修复仍无游戏内验证结果，详见 [原交接说明](MultiTeamH-Handoff.md)。所有项目的构建成功均不代表已经完成全部游戏内回归。
 
 ## 维护约定
 

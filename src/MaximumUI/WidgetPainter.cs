@@ -6,11 +6,11 @@ namespace MaximumUI {
         private readonly ThemeTokens theme;
 
         public WidgetPainter()
-            : this(new ThemeTokens()) {
+            : this(ThemePalettes.MetroDark()) {
         }
 
         public WidgetPainter(ThemeTokens theme) {
-            this.theme = theme ?? new ThemeTokens();
+            this.theme = theme ?? ThemePalettes.MetroDark();
         }
 
         public DrawList Paint(LayoutNode root, WidgetPaintState state) {
@@ -169,7 +169,7 @@ namespace MaximumUI {
                 if (row.HasBackground) {
                     drawList.FillRect(rowNode.Rect, row.Background);
                 } else if (table.AlternatingRows && dataRow % 2 == 1) {
-                    drawList.FillRect(rowNode.Rect, new MuiColor(0f, 0f, 0f, 0.05f));
+                    drawList.FillRect(rowNode.Rect, new MuiColor(theme.Text.R, theme.Text.G, theme.Text.B, 0.025f));
                 }
 
                 if (table.ShowInnerBorders) {
@@ -192,7 +192,7 @@ namespace MaximumUI {
         }
 
         private void PaintLabel(LayoutNode node, Label label, WidgetPaintState state, DrawList drawList) {
-            drawList.Text(node.Rect, label.Text, null, TextColor(node));
+            drawList.Text(node.Rect, label.Text, label.Style, label.Role == LabelRole.Muted && node.Widget.Enabled ? theme.TextMuted : TextColor(node));
         }
 
         private void PaintBulletText(LayoutNode node, BulletText bulletText, WidgetPaintState state, DrawList drawList) {
@@ -204,20 +204,31 @@ namespace MaximumUI {
 
         private void PaintValueLabel(LayoutNode node, ValueLabel valueLabel, WidgetPaintState state, DrawList drawList) {
             float labelWidth = valueLabel.LabelWidth > 0f ? valueLabel.LabelWidth : Math.Min(96f, node.Rect.Width * 0.45f);
-            drawList.Text(new MuiRect(node.Rect.X, node.Rect.Y, labelWidth, node.Rect.Height), valueLabel.Label, null, theme.TextDisabled);
+            drawList.Text(new MuiRect(node.Rect.X, node.Rect.Y, labelWidth, node.Rect.Height), valueLabel.Label, null, theme.TextMuted);
             drawList.Text(new MuiRect(node.Rect.X + labelWidth + 6f, node.Rect.Y, Math.Max(0f, node.Rect.Width - labelWidth - 6f), node.Rect.Height), valueLabel.Value, null, TextColor(node));
         }
 
         private void PaintTextLink(LayoutNode node, TextLink link, WidgetPaintState state, DrawList drawList) {
-            MuiColor color = state.IsHovered(node) ? theme.ButtonActiveBg : theme.Accent;
+            MuiColor color = state.IsHovered(node) ? theme.AccentHover : theme.Accent;
             drawList.Text(node.Rect, link.Text, null, color);
             drawList.FillRect(new MuiRect(node.Rect.X, node.Rect.Bottom - 2f, Math.Max(0f, node.Rect.Width), 1f), color);
         }
 
         private void PaintButton(LayoutNode node, Button button, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, ControlBg(node, state));
-            drawList.StrokeRect(node.Rect, theme.Border, theme.BorderWidth);
-            drawList.Text(node.Rect, button.Text, null, TextColor(node));
+            MuiColor background = ControlBg(node, state);
+            MuiColor text = TextColor(node);
+            if (button.Enabled && button.Variant == ButtonVariant.Primary) {
+                background = state.IsHovered(node) || state.IsActive(node) ? theme.AccentHover : theme.Accent;
+                text = theme.OnAccent;
+            } else if (button.Enabled && button.Variant == ButtonVariant.Danger) {
+                background = theme.ErrorBg;
+            } else if (button.Enabled && button.Variant == ButtonVariant.Quiet && !state.IsHovered(node) && !state.IsActive(node)) {
+                background = new MuiColor(0f, 0f, 0f, 0f);
+            }
+            if (background.A > 0f) drawList.FillRect(node.Rect, background);
+            if (button.Variant == ButtonVariant.Default || button.Variant == ButtonVariant.Danger || state.IsFocused(node))
+                drawList.StrokeRect(node.Rect, state.IsFocused(node) ? theme.FocusRing : theme.Border, theme.BorderWidth);
+            drawList.Text(node.Rect, button.Text, null, text);
         }
 
         private void PaintSmallButton(LayoutNode node, SmallButton button, WidgetPaintState state, DrawList drawList) {
@@ -298,7 +309,7 @@ namespace MaximumUI {
             t = Clamp01(t);
             float thumbX = node.Rect.X + Math.Max(0f, node.Rect.Width - theme.SliderThumbWidth) * t;
             MuiRect thumb = new MuiRect(thumbX, node.Rect.Y + Math.Max(0f, (node.Rect.Height - theme.SliderThumbHeight) * 0.5f), theme.SliderThumbWidth, theme.SliderThumbHeight);
-            drawList.FillRect(thumb, theme.ButtonActiveBg);
+            drawList.FillRect(thumb, theme.Accent);
             drawList.StrokeRect(thumb, theme.Border, theme.BorderWidth);
         }
 
@@ -336,7 +347,7 @@ namespace MaximumUI {
             drawList.StrokeRect(track, theme.Border, theme.BorderWidth);
             float t = max <= min ? 0f : Clamp01((value - min) / (max - min));
             MuiRect thumb = new MuiRect(track.X + Math.Max(0f, track.Width - theme.SliderThumbWidth) * t, sliderRect.Y + Math.Max(0f, (sliderRect.Height - theme.SliderThumbHeight) * 0.5f), theme.SliderThumbWidth, theme.SliderThumbHeight);
-            drawList.FillRect(thumb, theme.ButtonActiveBg);
+            drawList.FillRect(thumb, theme.Accent);
             drawList.StrokeRect(thumb, theme.Border, theme.BorderWidth);
             drawList.Text(textRect, valueText, null, TextColor(node));
         }
@@ -511,8 +522,8 @@ namespace MaximumUI {
             int row = 0;
             int maxRows = Math.Max(1, ThemeEditorTokens.VisibleRowCount(editor));
             if (editor.ShowColors) {
-                for (int i = 0; i < ThemeEditorTokens.ColorTokens.Length && row < maxRows; i++) {
-                    ThemeColorToken token = ThemeEditorTokens.ColorTokens[i];
+                for (int i = 0; i < ThemeEditorTokens.GetColors(editor).Length && row < maxRows; i++) {
+                    ThemeColorToken token = ThemeEditorTokens.GetColors(editor)[i];
                     MuiRect rect = ThemeRowRect(node, title.Bottom, rowHeight, row);
                     PaintThemeColorRow(rect, ThemeEditorTokens.ColorName(token), tokens.GetColor(token), drawList, node);
                     row++;
@@ -520,8 +531,8 @@ namespace MaximumUI {
             }
 
             if (editor.ShowScalars) {
-                for (int i = 0; i < ThemeEditorTokens.ScalarTokens.Length && row < maxRows; i++) {
-                    ThemeScalarToken token = ThemeEditorTokens.ScalarTokens[i];
+                for (int i = 0; i < ThemeEditorTokens.GetScalars(editor).Length && row < maxRows; i++) {
+                    ThemeScalarToken token = ThemeEditorTokens.GetScalars(editor)[i];
                     MuiRect rect = ThemeRowRect(node, title.Bottom, rowHeight, row);
                     PaintThemeScalarRow(rect, ThemeEditorTokens.ScalarName(token), tokens.GetScalar(token), drawList, node);
                     row++;
@@ -598,9 +609,11 @@ namespace MaximumUI {
         }
 
         private void PaintSelectable(LayoutNode node, Selectable selectable, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, selectable.Selected ? theme.SelectedBg : ControlBg(node, state));
-            drawList.StrokeRect(node.Rect, theme.Border, theme.BorderWidth);
-            drawList.Text(new MuiRect(node.Rect.X + 6f, node.Rect.Y, Math.Max(0f, node.Rect.Width - 12f), node.Rect.Height), selectable.Text, null, TextColor(node));
+            if (selectable.Selected || state.IsHovered(node) || state.IsActive(node))
+                drawList.FillRect(node.Rect, selectable.Selected ? theme.SelectedBg : ControlBg(node, state));
+            if (selectable.Selected) drawList.FillRect(new MuiRect(node.Rect.X, node.Rect.Y, 3f, node.Rect.Height), theme.Accent);
+            if (state.IsFocused(node)) drawList.StrokeRect(node.Rect, theme.FocusRing, theme.BorderWidth);
+            drawList.Text(new MuiRect(node.Rect.X + 14f, node.Rect.Y, Math.Max(0f, node.Rect.Width - 24f), node.Rect.Height), selectable.Text, null, TextColor(node));
         }
 
         private void PaintTreeNode(LayoutNode node, TreeNode treeNode, WidgetPaintState state, DrawList drawList) {
@@ -826,8 +839,10 @@ namespace MaximumUI {
                 Tab tab = visibleTabs[i];
                 MuiRect rect = new MuiRect(x + tabWidth * i, node.Rect.Y, tabWidth, headerHeight);
                 bool selected = i == selectedIndex;
-                drawList.FillRect(rect, selected ? theme.SelectedBg : ControlBg(node, state));
-                drawList.StrokeRect(rect, theme.Border, theme.BorderWidth);
+                if (selected) {
+                    drawList.FillRect(rect, theme.SelectedBg);
+                    drawList.FillRect(new MuiRect(rect.X, rect.Bottom - 3f, rect.Width, 3f), theme.Accent);
+                }
                 string title = tab.Title ?? string.Empty;
                 if (tab.Unsaved) title += "*";
                 if (tab.Closable) title += "  x";

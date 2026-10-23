@@ -68,7 +68,7 @@ namespace MaximumUI {
             if (widget == null || widget is EmptyWidget) return;
 
             if (widget is Window) ArrangeWindow(node, (Window)widget, rect);
-            else if (widget is Dialog) ArrangeWindowLike(node, rect, metrics.WindowPaddingLeft, metrics.WindowPaddingTop, metrics.WindowPaddingRight, metrics.WindowPaddingBottom);
+            else if (widget is Dialog) ArrangeWindowLike(node, rect, metrics.EffectiveDialogPaddingLeft, metrics.EffectiveDialogPaddingTop, metrics.EffectiveDialogPaddingRight, metrics.EffectiveDialogPaddingBottom);
             else if (widget is VStack) ArrangeVStack(node, ((VStack)widget).Gap, rect);
             else if (widget is HStack) ArrangeHStack(node, ((HStack)widget).Gap, rect);
             else if (widget is Panel) ArrangePanel(node, rect);
@@ -97,7 +97,9 @@ namespace MaximumUI {
         }
 
         private void MeasureDialog(LayoutNode node, Dialog dialog, LayoutConstraints constraints) {
-            MeasureChildren(node, dialog, InnerConstraints(constraints), true);
+            MeasureChildren(node, dialog, ShrinkConstraints(constraints,
+                metrics.EffectiveDialogPaddingLeft + metrics.EffectiveDialogPaddingRight,
+                metrics.EffectiveDialogPaddingTop + metrics.EffectiveDialogPaddingBottom), true);
             node.DesiredSize = new MuiVec2(dialog.Width, dialog.Height);
         }
 
@@ -294,11 +296,12 @@ namespace MaximumUI {
 
             Label label = widget as Label;
             if (label != null) {
-                width = MeasureText(label.Text);
+                width = metrics.MeasureLabelWidth == null ? MeasureText(label.Text) : Math.Max(0f, metrics.MeasureLabelWidth(label));
+                float wrapWidth = widget.Layout.HasWidth ? widget.Layout.Width : constraints.MaxWidth;
+                if (widget.Layout.HasMaxWidth) wrapWidth = Math.Min(wrapWidth, widget.Layout.MaxWidth);
+                if (metrics.MeasureLabelHeight != null) height = Math.Max(metrics.RowHeight, metrics.MeasureLabelHeight(label, wrapWidth));
                 if (label.WordWrap) {
-                    float wrapWidth = widget.Layout.HasWidth ? widget.Layout.Width : constraints.MaxWidth;
-                    if (widget.Layout.HasMaxWidth) wrapWidth = Math.Min(wrapWidth, widget.Layout.MaxWidth);
-                    if (wrapWidth > 0f && !float.IsInfinity(wrapWidth)) {
+                    if (metrics.MeasureLabelHeight == null && wrapWidth > 0f && !float.IsInfinity(wrapWidth)) {
                         height = metrics.MeasureWrappedTextHeight != null
                             ? Math.Max(metrics.RowHeight, metrics.MeasureWrappedTextHeight(label.Text, wrapWidth))
                             : Math.Max(metrics.RowHeight, (float)Math.Ceiling(width / wrapWidth) * metrics.RowHeight);

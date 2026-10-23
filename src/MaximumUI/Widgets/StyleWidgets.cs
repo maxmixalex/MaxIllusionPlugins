@@ -9,6 +9,10 @@ namespace MaximumUI {
         public bool ShowScalars;
         public int MaxRows;
         public float ScalarStep;
+        // Null includes every token; an explicit list scopes an editor to the
+        // capabilities of its drawing backend. Empty arrays intentionally hide a group.
+        public ThemeColorToken[] ColorTokens;
+        public ThemeScalarToken[] ScalarTokens;
 
         public ThemeEditor(ThemeTokens tokens, Action<ThemeTokens> onChange = null, object key = null)
             : base(key) {
@@ -387,7 +391,12 @@ namespace MaximumUI {
             ThemeColorToken.InfoBg,
             ThemeColorToken.SuccessBg,
             ThemeColorToken.WarningBg,
-            ThemeColorToken.ErrorBg
+            ThemeColorToken.ErrorBg,
+            ThemeColorToken.TitleBg,
+            ThemeColorToken.TextMuted,
+            ThemeColorToken.OnAccent,
+            ThemeColorToken.AccentHover,
+            ThemeColorToken.FocusRing
         };
 
         public static readonly ThemeScalarToken[] ScalarTokens = new ThemeScalarToken[] {
@@ -422,6 +431,11 @@ namespace MaximumUI {
             if (token == ThemeColorToken.InfoBg) return "InfoBg";
             if (token == ThemeColorToken.SuccessBg) return "SuccessBg";
             if (token == ThemeColorToken.WarningBg) return "WarningBg";
+            if (token == ThemeColorToken.TitleBg) return "TitleBg";
+            if (token == ThemeColorToken.TextMuted) return "TextMuted";
+            if (token == ThemeColorToken.OnAccent) return "OnAccent";
+            if (token == ThemeColorToken.AccentHover) return "AccentHover";
+            if (token == ThemeColorToken.FocusRing) return "FocusRing";
             return "ErrorBg";
         }
 
@@ -445,9 +459,17 @@ namespace MaximumUI {
             if (editor == null) return 1;
 
             int count = 0;
-            if (editor.ShowColors) count += ColorTokens.Length;
-            if (editor.ShowScalars) count += ScalarTokens.Length;
+            if (editor.ShowColors) count += GetColors(editor).Length;
+            if (editor.ShowScalars) count += GetScalars(editor).Length;
             return count;
+        }
+
+        public static ThemeColorToken[] GetColors(ThemeEditor editor) {
+            return editor != null && editor.ColorTokens != null ? editor.ColorTokens : ColorTokens;
+        }
+
+        public static ThemeScalarToken[] GetScalars(ThemeEditor editor) {
+            return editor != null && editor.ScalarTokens != null ? editor.ScalarTokens : ScalarTokens;
         }
     }
 }

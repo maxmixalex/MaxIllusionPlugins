@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="1004" height="1008" viewBox="0 0 1004 1008" role="img" aria-labelledby="title description" xmlns="http://www.w3.org/2000/svg">
+  <title id="title">MaximumUI / Metro Dark / actual Gallery Overview</title>
+  <desc id="description">Managed drawing preview; Unity font/input not validated. Geometry and colors come from GalleryView.Build, LayoutEngine, WidgetPainter and ThemePalettes. SVG uses estimated text metrics and text roles from the real widget tree. Native window chrome and scrollbars are outside this preview.</desc>
+  <metadata>Source: MaximumUIGallery.GalleryView.Build; MaximumUI.LayoutEngine; MaximumUI.WidgetPainter; palette=Metro Dark; nodes=64; commands=75; viewport=940x840; default page=Overview</metadata>
+  <rect x="0" y="0" width="1004" height="1008" fill="#15181c" />
+  <text x="32" y="33" font-size="11" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">MAXIMUM UI   /   DESIGN REVIEW</text>
+  <text x="32" y="65" font-size="25" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">Metro Dark</text>
+  <text x="972" y="63" font-size="11" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="end" xml:space="preserve" fill="#a4b1be">ACTUAL GALLERY  /  MANAGED DRAWLIST</text>
+  <g transform="translate(32 96)">
+    <rect x="0" y="0" width="940" height="840" fill="#191d22" />
+    <rect x="0.5" y="0.5" width="939" height="839" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="0" y="15.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0" fill="#ebf0f4">MAXIMUM UI   /   INTERFACE STUDIO</text>
+    <text x="16" y="65.8" font-size="21" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.0.0" fill="#ebf0f4">MaximumUI</text>
+    <rect x="758" y="44" width="86" height="24" fill="#1e3c52" />
+    <rect x="758.5" y="44.5" width="85" height="23" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="801" y="59.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.0.1" fill="#ebf0f4">GALLERY</text>
+    <text x="891" y="61.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.0.2" fill="#ebf0f4">Light</text>
+    <rect x="16" y="96" width="908" height="1" fill="#2f3841" />
+    <rect x="16" y="113" width="164" height="34" fill="#1c3d52" />
+    <rect x="16" y="113" width="3" height="34" fill="#49aae6" />
+    <text x="30" y="133.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.0" fill="#ebf0f4">Overview</text>
+    <text x="16" y="182.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.2" fill="#a4b1be">COMPONENTS</text>
+    <text x="30" y="215.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.3" fill="#ebf0f4">Controls</text>
+    <text x="30" y="253.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.4" fill="#ebf0f4">Composition</text>
+    <text x="30" y="291.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.5" fill="#ebf0f4">Dialogs</text>
+    <text x="16" y="340.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.7" fill="#a4b1be">WORKSPACE</text>
+    <text x="30" y="373.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.8" fill="#ebf0f4">Appearance</text>
+    <text x="30" y="411.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.9" fill="#ebf0f4">Large lists</text>
+    <text x="30" y="449.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.10" fill="#ebf0f4">Diagnostics</text>
+    <text x="16" y="757.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0.12" fill="#a4b1be">MaximumUI 0.2.0</text>
+    <text x="200" y="137.3" font-size="21" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.0" fill="#ebf0f4">Overview</text>
+    <text x="200" y="180.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.1" fill="#a4b1be">An embedded workspace, designed around your content.</text>
+    <rect x="200" y="205" width="708" height="321" fill="#20252b" />
+    <text x="212" y="238.8" font-size="21" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.0.0" fill="#ebf0f4">Profile preview</text>
+    <rect x="804" y="217" width="92" height="24" fill="#1a463a" />
+    <rect x="804.5" y="217.5" width="91" height="23" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="850" y="232.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.0.1" fill="#ebf0f4">ENABLED</text>
+    <text x="212" y="287.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.1" fill="#a4b1be">A working form built from the same widgets as the rest of this gallery.</text>
+    <text x="212" y="331.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.2.0" fill="#ebf0f4">Name</text>
+    <rect x="306" y="315" width="590" height="26" fill="#171b1f" />
+    <rect x="306.5" y="315.5" width="589" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="310" y="331.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.2.1" fill="#ebf0f4">MaximumUI</text>
+    <text x="212" y="369.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.3.0" fill="#ebf0f4">Mode</text>
+    <rect x="306" y="353" width="147.5" height="26" fill="#1c3d52" />
+    <rect x="306.5" y="353.5" width="146.5" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="379.75" y="369.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.3.1" fill="#ebf0f4">Normal</text>
+    <rect x="453.5" y="353" width="147.5" height="26" fill="#2b323a" />
+    <rect x="454" y="353.5" width="146.5" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="527.25" y="369.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.3.1" fill="#ebf0f4">Compact</text>
+    <rect x="601" y="353" width="147.5" height="26" fill="#2b323a" />
+    <rect x="601.5" y="353.5" width="146.5" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="674.75" y="369.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.3.1" fill="#ebf0f4">Expanded</text>
+    <rect x="748.5" y="353" width="147.5" height="26" fill="#2b323a" />
+    <rect x="749" y="353.5" width="146.5" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="822.25" y="369.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.3.1" fill="#ebf0f4">Debug</text>
+    <text x="212" y="407.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.4.0" fill="#ebf0f4">Strength</text>
+    <rect x="306" y="398" width="536" height="3" fill="#171b1f" />
+    <rect x="306.5" y="398.5" width="535" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+    <rect x="542.7" y="391" width="10" height="18" fill="#49aae6" />
+    <rect x="543.2" y="391.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="854" y="407.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.4.2" fill="#ebf0f4">45%</text>
+    <rect x="212" y="434" width="16" height="16" fill="#171b1f" />
+    <rect x="212.5" y="434.5" width="15" height="15" fill="none" stroke-width="1" stroke="#424e5a" />
+    <rect x="215" y="437" width="10" height="10" fill="#49aae6" />
+    <text x="233" y="445.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.5" fill="#ebf0f4">Enable profile</text>
+    <rect x="212" y="471" width="684" height="1" fill="#2f3841" />
+    <rect x="212" y="488" width="130" height="26" fill="#49aae6" />
+    <text x="277" y="504.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.7.0" fill="#131e28">Apply preview</text>
+    <text x="388" y="504.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.0.0.7.1" fill="#ebf0f4">Reset</text>
+    <rect x="200" y="542" width="348" height="170" fill="#20252b" />
+    <text x="212" y="578.3" font-size="21" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.0.0.0" fill="#ebf0f4">A quieter interface</text>
+    <text x="212" y="617.7" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.0.0.1" fill="#a4b1be">Flat surfaces, clear type and one accent.</text>
+    <text x="212" y="635.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.0.0.1" fill="#a4b1be">Focus, selection and disabled states</text>
+    <text x="212" y="654.1" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.0.0.1" fill="#a4b1be">remain distinct.</text>
+    <rect x="212" y="674" width="324" height="26" fill="#2b323a" />
+    <rect x="212.5" y="674.5" width="323" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="374" y="690.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.0.0.2" fill="#ebf0f4">Choose appearance</text>
+    <rect x="560" y="542" width="348" height="170" fill="#20252b" />
+    <text x="572" y="578.3" font-size="21" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.1.0.0" fill="#ebf0f4">Room for large data</text>
+    <text x="572" y="626.8" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.1.0.1" fill="#a4b1be">Explore 10,000 searchable rows. Scrolling</text>
+    <text x="572" y="645" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.1.0.1" fill="#a4b1be">creates controls for the visible range.</text>
+    <rect x="572" y="674" width="324" height="26" fill="#2b323a" />
+    <rect x="572.5" y="674.5" width="323" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="734" y="690.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1.2.0.1.1.0.2" fill="#ebf0f4">Explore large lists</text>
+    <rect x="16" y="783" width="908" height="1" fill="#2f3841" />
+    <text x="16" y="816.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0" fill="#a4b1be">Ready</text>
+    <text x="629" y="816.9" font-size="13" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.1" fill="#a4b1be">F8  show / hide     Ctrl+1..6  navigate</text>
+  </g>
+  <text x="32" y="965" font-size="12" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">Managed drawing preview; Unity font/input not validated.</text>
+  <text x="32" y="987" font-size="11" font-family="'Segoe UI', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">Production widget tree + layout + palette + drawing commands. SVG typography is approximate; native chrome is omitted.</text>
+</svg>

@@ -21,7 +21,12 @@ namespace MaximumUI {
         InfoBg,
         SuccessBg,
         WarningBg,
-        ErrorBg
+        ErrorBg,
+        TitleBg,
+        TextMuted,
+        OnAccent,
+        AccentHover,
+        FocusRing
     }
 
     public enum ThemeScalarToken {
@@ -62,6 +67,12 @@ namespace MaximumUI {
         public MuiColor WarningBg = new MuiColor(0.95f, 0.88f, 0.50f, 1f);
         public MuiColor ErrorBg = new MuiColor(0.94f, 0.55f, 0.55f, 1f);
 
+        public MuiColor TitleBg = new MuiColor(0.78f, 0.78f, 0.78f, 1f);
+        public MuiColor TextMuted = new MuiColor(0.30f, 0.30f, 0.30f, 1f);
+        public MuiColor OnAccent = new MuiColor(1f, 1f, 1f, 1f);
+        public MuiColor AccentHover = new MuiColor(0.24f, 0.24f, 0.24f, 1f);
+        public MuiColor FocusRing = new MuiColor(0.12f, 0.42f, 0.80f, 1f);
+
         public float BorderWidth = 1f;
         public float Radius = 4f;
         public float FontSize = 12f;
@@ -101,6 +112,11 @@ namespace MaximumUI {
             SuccessBg = source.SuccessBg;
             WarningBg = source.WarningBg;
             ErrorBg = source.ErrorBg;
+            TitleBg = source.TitleBg;
+            TextMuted = source.TextMuted;
+            OnAccent = source.OnAccent;
+            AccentHover = source.AccentHover;
+            FocusRing = source.FocusRing;
             BorderWidth = source.BorderWidth;
             Radius = source.Radius;
             FontSize = source.FontSize;
@@ -132,6 +148,11 @@ namespace MaximumUI {
             if (token == ThemeColorToken.InfoBg) return InfoBg;
             if (token == ThemeColorToken.SuccessBg) return SuccessBg;
             if (token == ThemeColorToken.WarningBg) return WarningBg;
+            if (token == ThemeColorToken.TitleBg) return TitleBg;
+            if (token == ThemeColorToken.TextMuted) return TextMuted;
+            if (token == ThemeColorToken.OnAccent) return OnAccent;
+            if (token == ThemeColorToken.AccentHover) return AccentHover;
+            if (token == ThemeColorToken.FocusRing) return FocusRing;
             return ErrorBg;
         }
 
@@ -157,6 +178,11 @@ namespace MaximumUI {
             else if (token == ThemeColorToken.InfoBg) InfoBg = color;
             else if (token == ThemeColorToken.SuccessBg) SuccessBg = color;
             else if (token == ThemeColorToken.WarningBg) WarningBg = color;
+            else if (token == ThemeColorToken.TitleBg) TitleBg = color;
+            else if (token == ThemeColorToken.TextMuted) TextMuted = color;
+            else if (token == ThemeColorToken.OnAccent) OnAccent = color;
+            else if (token == ThemeColorToken.AccentHover) AccentHover = color;
+            else if (token == ThemeColorToken.FocusRing) FocusRing = color;
             else ErrorBg = color;
         }
 

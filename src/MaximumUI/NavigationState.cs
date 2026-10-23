@@ -21,6 +21,10 @@ namespace MaximumUI {
         private string focusedId;
         private string requestedFocusId;
         private string defaultFocusId;
+        private HashSet<string> previousFocusRequests = new HashSet<string>(StringComparer.Ordinal);
+        private HashSet<string> currentFocusRequests = new HashSet<string>(StringComparer.Ordinal);
+        public bool KeyboardActive { get; private set; }
+        internal int ExplicitFocusRevision { get; private set; }
 
         public string FocusedId {
             get { return focusedId; }
@@ -37,14 +41,21 @@ namespace MaximumUI {
         public void BeginFrame() {
             items.Clear();
             itemById.Clear();
+            currentFocusRequests.Clear();
             requestedFocusId = null;
             defaultFocusId = null;
         }
 
         public void Register(Widget widget, string path, MuiRect rect, bool enabled) {
-            if (widget == null || widget is EmptyWidget || !enabled || !widget.Enabled || !widget.Focusable) return;
+            if (widget == null || widget is EmptyWidget || !widget.Focusable) return;
 
             string id = ItemId(widget, path);
+            bool repeatedRequest = widget.RequestFocus && previousFocusRequests.Contains(id);
+            // Input suppression/modal blocking can temporarily disable a drawn
+            // item for one event. Preserve an already observed request through
+            // that event, while leaving a first disabled request pending.
+            if (repeatedRequest) currentFocusRequests.Add(id);
+            if (!enabled || !widget.Enabled) return;
             NavigationItem item = new NavigationItem {
                 Id = id,
                 Key = widget.Key == null ? null : widget.Key.ToString(),
@@ -60,12 +71,21 @@ namespace MaximumUI {
             if (!string.IsNullOrEmpty(item.Key)) itemById["key:" + item.Key] = item;
 
             if (widget.HasDefaultFocus && string.IsNullOrEmpty(defaultFocusId)) defaultFocusId = id;
-            if (widget.RequestFocus) requestedFocusId = id;
+            if (widget.RequestFocus) {
+                currentFocusRequests.Add(id);
+                // Declarative requests are edge-triggered by logical identity.
+                // Repainting or rebuilding an unchanged request must not take
+                // keyboard ownership away from a window the user clicked.
+                if (!repeatedRequest) requestedFocusId = id;
+            }
         }
 
         public void EndFrame() {
+            HashSet<string> oldRequests = previousFocusRequests;
+            previousFocusRequests = currentFocusRequests;
+            currentFocusRequests = oldRequests;
             if (!string.IsNullOrEmpty(requestedFocusId) && itemById.ContainsKey(requestedFocusId)) {
-                focusedId = requestedFocusId;
+                FocusId(requestedFocusId);
                 return;
             }
 
@@ -73,10 +93,12 @@ namespace MaximumUI {
 
             if (!string.IsNullOrEmpty(defaultFocusId) && itemById.ContainsKey(defaultFocusId)) {
                 focusedId = defaultFocusId;
+                KeyboardActive = true;
                 return;
             }
 
             focusedId = items.Count > 0 ? items[0].Id : null;
+            KeyboardActive = false;
         }
 
         public bool Focus(object key) {
@@ -98,6 +120,7 @@ namespace MaximumUI {
             int index = FocusedIndex();
             int next = index < 0 ? 0 : (index + 1) % items.Count;
             focusedId = items[next].Id;
+            KeyboardActive = true;
             return true;
         }
 
@@ -110,11 +133,22 @@ namespace MaximumUI {
             int index = FocusedIndex();
             int previous = index < 0 ? items.Count - 1 : (index - 1 + items.Count) % items.Count;
             focusedId = items[previous].Id;
+            KeyboardActive = true;
             return true;
         }
 
         public bool IsFocused(Widget widget, string path) {
             return string.Equals(focusedId, ItemId(widget, path), StringComparison.Ordinal);
+        }
+
+        internal void FocusPointer(Widget widget, string path) {
+            string id = ItemId(widget, path);
+            if (itemById.ContainsKey(id)) focusedId = id;
+            KeyboardActive = false;
+        }
+
+        internal bool IsKeyboardFocused(Widget widget, string path) {
+            return KeyboardActive && IsFocused(widget, path);
         }
 
         public NavigationItem FocusedItem() {
@@ -134,8 +168,13 @@ namespace MaximumUI {
         }
 
         private bool FocusId(string id) {
-            if (string.IsNullOrEmpty(id) || !itemById.ContainsKey(id)) return false;
-            focusedId = id;
+            NavigationItem item;
+            if (string.IsNullOrEmpty(id) || !itemById.TryGetValue(id, out item)) return false;
+            // A path lookup can resolve a keyed item. Store its canonical ID
+            // so IsFocused and sequential navigation recognize the selection.
+            focusedId = item.Id;
+            KeyboardActive = true;
+            unchecked { ExplicitFocusRevision++; }
             return true;
         }
 

@@ -15,13 +15,24 @@ namespace MaximumUI {
             public ImguiRenderer Renderer = new ImguiRenderer();
             public DialogService Dialogs = new DialogService();
             public readonly ViewBuildSchedule BuildSchedule = new ViewBuildSchedule();
+            public readonly MountInputTarget InputTarget = new MountInputTarget();
             public Widget CachedRoot;
+            public string RootWindowStateId;
             public BuildContext BuildContext;
             public RenderContext RenderContext;
+            public bool Active = true;
+            public long Order;
         }
 
         private static readonly List<MountRecord> mounts = new List<MountRecord>();
-        private static readonly List<Action> pendingCallbacks = new List<Action>();
+        private static readonly DeferredActions pendingCallbacks = new DeferredActions();
+        private static MountRecord[] mountSnapshot = new MountRecord[0];
+        private static MountInputTarget[] inputSnapshot = new MountInputTarget[0];
+        private static readonly MountInputRouting inputRouting = new MountInputRouting();
+        private static MountInputTarget lastKeyboardOwner;
+        private static MountRecord renderingMount;
+        private static bool snapshotDirty;
+        private static long nextOrder;
         private static MaximumUIHost host;
         private static int frameCount;
 
@@ -44,11 +55,12 @@ namespace MaximumUI {
             MountRecord mount = new MountRecord {
                 Id = id,
                 View = view,
-                Options = options ?? new MountOptions()
+                Options = options ?? new MountOptions(),
+                Order = nextOrder++
             };
             mount.BuildContext = new BuildContext {
                 MountId = id,
-                Theme = mount.Options.Theme ?? MaximumTheme.CleanLight,
+                Theme = mount.Options.Theme ?? MaximumTheme.MetroDark,
                 StateStore = mount.StateStore,
                 Query = mount.QueryStore,
                 Navigation = mount.Navigation,
@@ -67,27 +79,40 @@ namespace MaximumUI {
                 SoftKeyboardCapture = mount.Options.SoftKeyboardCapture
             };
             mount.Dialogs.Theme = mount.BuildContext.Theme;
+            mount.InputTarget.Available = mount.Options.Visible;
             mounts.Add(mount);
             SortMounts();
             try {
                 view.OnMount(mount.BuildContext);
             } catch {
+                mount.Active = false;
+                mount.InputTarget.Available = false;
+                inputRouting.Forget(mount.InputTarget);
                 mounts.Remove(mount);
+                snapshotDirty = true;
                 mount.Renderer.Dispose();
+                mount.RenderContext.ResetOverlays();
+                mount.StateStore.Clear();
                 throw;
             }
         }
 
         public static void Unmount(string id) {
-            for (int i = mounts.Count - 1; i >= 0; i--) {
-                if (!string.Equals(mounts[i].Id, id, StringComparison.Ordinal)) continue;
+            MountRecord[] snapshot = GetMountSnapshot();
+            for (int i = snapshot.Length - 1; i >= 0; i--) {
+                if (!snapshot[i].Active || !string.Equals(snapshot[i].Id, id, StringComparison.Ordinal)) continue;
 
-                MountRecord mount = mounts[i];
-                mounts.RemoveAt(i);
+                MountRecord mount = snapshot[i];
+                mount.Active = false;
+                mount.InputTarget.Available = false;
+                inputRouting.Forget(mount.InputTarget);
+                mounts.Remove(mount);
+                snapshotDirty = true;
                 try {
                     mount.View.OnUnmount(mount.BuildContext);
                 } finally {
                     mount.Renderer.Dispose();
+                    mount.RenderContext.ResetOverlays();
                     mount.StateStore.Clear();
                 }
             }
@@ -99,16 +124,58 @@ namespace MaximumUI {
             }
         }
 
+        public static bool Focus(string id) {
+            for (int i = mounts.Count - 1; i >= 0; i--) {
+                MountRecord mount = mounts[i];
+                if (!mount.Active || !mount.Options.Visible || !string.Equals(mount.Id, id, StringComparison.Ordinal)) continue;
+                Window rootWindow = mount.CachedRoot as Window;
+                if (rootWindow != null && !rootWindow.Visible && !mount.Dialogs.HasOpenDialogs) return false;
+                mount.InputTarget.Available = true;
+                return inputRouting.Focus(mount.InputTarget);
+            }
+            return false;
+        }
+
         public static void EnqueueCallback(Action callback) {
-            if (callback != null) pendingCallbacks.Add(callback);
+            EnqueueOwnedCallback(renderingMount, callback);
+        }
+
+        private static void EnqueueOwnedCallback(MountRecord owner, Action callback) {
+            if (callback == null) return;
+            if (owner == null) pendingCallbacks.Add(callback);
+            else pendingCallbacks.Add(delegate { if (owner.Active) callback(); });
+        }
+
+        public static bool SetTheme(string id, MaximumTheme theme) {
+            for (int i = 0; i < mounts.Count; i++) {
+                MountRecord mount = mounts[i];
+                if (!string.Equals(mount.Id, id, StringComparison.Ordinal)) continue;
+                MaximumTheme next = theme ?? MaximumTheme.MetroDark;
+                if (ReferenceEquals(mount.BuildContext.Theme, next)) return true;
+                mount.Options.Theme = next;
+                mount.BuildContext.Theme = next;
+                mount.RenderContext.Theme = next;
+                mount.Dialogs.Theme = next;
+                mount.RenderContext.ResetOverlays();
+                mount.Renderer.InvalidateLayout();
+                mount.BuildSchedule.MarkDirty();
+                return true;
+            }
+            return false;
         }
 
         public static void Update() {
             FlushCallbacks();
-            for (int i = 0; i < mounts.Count; i++) {
-                MountRecord mount = mounts[i];
+            MountRecord[] snapshot = GetMountSnapshot();
+            for (int i = 0; i < snapshot.Length; i++) {
+                MountRecord mount = snapshot[i];
+                if (!mount.Active) continue;
                 if (mount.Options.HasToggleKey && Input.GetKeyDown(mount.Options.ToggleKey)) {
                     mount.Options.Visible = !mount.Options.Visible;
+                    if (mount.Options.Visible) {
+                        mount.InputTarget.Available = true;
+                        inputRouting.Focus(mount.InputTarget);
+                    }
                 }
 
                 mount.View.Update(mount.BuildContext);
@@ -120,43 +187,64 @@ namespace MaximumUI {
             IsMouseOverAnyWindow = false;
             IsAnyTextFieldFocused = false;
             IsModalOpen = false;
-            int modalMount = -1;
-            for (int i = 0; i < mounts.Count; i++) {
-                MountRecord mount = mounts[i];
-                if (!mount.Options.Visible) continue;
+            MountRecord[] snapshot = GetMountSnapshot();
+            MountInputTarget[] routingSnapshot = inputSnapshot;
+            for (int i = 0; i < snapshot.Length; i++) {
+                MountRecord mount = snapshot[i];
+                if (!mount.Active || !mount.Options.Visible) continue;
 
                 mount.BuildContext.IsModalOpen = mount.Dialogs.HasOpenDialogs;
                 if (mount.BuildSchedule.ShouldBuild(mount.Options, frameCount, mount.CachedRoot != null)) {
                     int revision = mount.BuildSchedule.Revision;
                     mount.Shortcuts.BeginBuild();
-                    mount.CachedRoot = mount.View.Build(mount.BuildContext);
+                    mount.CachedRoot = mount.View.Build(mount.BuildContext) ?? EmptyWidget.Instance;
+                    Window rootWindow = mount.CachedRoot as Window;
+                    mount.RootWindowStateId = rootWindow == null ? null : mount.RenderContext.StateId(rootWindow, "window", "0");
                     mount.Renderer.InvalidateLayout();
                     mount.BuildSchedule.CompleteBuild(frameCount, revision);
                 }
-                if (mount.Dialogs.HasOpenDialogs || WidgetVisibility.ContainsRootDialog(mount.CachedRoot, mount.RenderContext, "0")) modalMount = i;
             }
 
+            // Builds may unmount another view or close its dialogs. Select the
+            // modal only after every build has completed against this snapshot.
+            int modalMount = FindModalMount(snapshot);
             // A modal owns input across all mounts and is painted above other windows.
             IsModalOpen = modalMount >= 0;
-            for (int i = 0; i < mounts.Count; i++) {
-                if (i != modalMount) RenderMount(mounts[i], modalMount >= 0, false);
+            for (int i = 0; i < snapshot.Length; i++) {
+                snapshot[i].RenderContext.SuppressDialogs = modalMount >= 0 && i != modalMount;
             }
-            if (modalMount >= 0) RenderMount(mounts[modalMount], true, true);
-            for (int i = 0; i < mounts.Count; i++) {
-                mounts[i].BuildContext.IsMouseOverMaximumUI = IsMouseOverAnyWindow;
+            PrepareInputRouting(snapshot, routingSnapshot, modalMount);
+            // Route Tab before Unity's TextField consumes it. The previous GUI event
+            // already collected the focus order; rendering below refreshes that order.
+            RouteNavigation();
+            for (int i = 0; i < snapshot.Length; i++) {
+                if (i != modalMount) RenderMount(snapshot[i], modalMount >= 0, false);
             }
+            if (modalMount >= 0) RenderMount(snapshot[modalMount], true, true);
+            for (int i = 0; i < snapshot.Length; i++) {
+                snapshot[i].BuildContext.IsMouseOverMaximumUI = IsMouseOverAnyWindow;
+                snapshot[i].InputTarget.ExplicitFocusRevision = snapshot[i].Navigation.ExplicitFocusRevision;
+            }
+            inputRouting.ObserveFocusRequests(routingSnapshot);
+            SynchronizeKeyboardOwner();
 
-            if (RouteNavigation()) return;
             RouteShortcuts();
         }
 
         private static void RenderMount(MountRecord mount, bool modalOpen, bool ownsModal) {
-            if (!mount.Options.Visible) return;
+            if (!mount.Active || !mount.Options.Visible) {
+                mount.Renderer.CancelInput();
+                mount.RenderContext.ResetOverlays();
+                return;
+            }
             mount.RenderContext.Path = string.Empty;
             mount.RenderContext.IsModalOpen = modalOpen;
             mount.RenderContext.SuppressDialogs = modalOpen && !ownsModal;
             mount.BuildContext.IsModalOpen = modalOpen;
-            mount.Renderer.Render(mount.CachedRoot, mount.RenderContext);
+            MountRecord previous = renderingMount;
+            renderingMount = mount;
+            try { mount.Renderer.Render(mount.CachedRoot ?? EmptyWidget.Instance, mount.RenderContext); }
+            finally { renderingMount = previous; }
         }
 
         public static RuntimeMetrics GetMetrics() {
@@ -177,38 +265,123 @@ namespace MaximumUI {
         }
 
         public static void FlushCallbacks() {
-            if (pendingCallbacks.Count == 0) return;
-
-            Action[] callbacks = pendingCallbacks.ToArray();
-            pendingCallbacks.Clear();
-            for (int i = 0; i < callbacks.Length; i++) {
-                try {
-                    callbacks[i]();
-                } catch (Exception ex) {
-                    Debug.LogException(ex);
-                }
-            }
+            pendingCallbacks.Flush(Debug.LogException);
         }
 
         private static void SortMounts() {
             mounts.Sort(delegate(MountRecord a, MountRecord b) {
-                return a.Options.SortOrder.CompareTo(b.Options.SortOrder);
+                int result = a.Options.SortOrder.CompareTo(b.Options.SortOrder);
+                return result == 0 ? a.Order.CompareTo(b.Order) : result;
             });
+            snapshotDirty = true;
+        }
+
+        private static MountRecord[] GetMountSnapshot() {
+            if (snapshotDirty) {
+                mountSnapshot = mounts.ToArray();
+                inputSnapshot = new MountInputTarget[mountSnapshot.Length];
+                for (int i = 0; i < mountSnapshot.Length; i++) inputSnapshot[i] = mountSnapshot[i].InputTarget;
+                snapshotDirty = false;
+            }
+            return mountSnapshot;
+        }
+
+        private static int FindModalMount(MountRecord[] snapshot) {
+            for (int i = snapshot.Length - 1; i >= 0; i--) {
+                MountRecord mount = snapshot[i];
+                if (!mount.Active || !mount.Options.Visible) continue;
+                if (mount.Dialogs.HasOpenDialogs || WidgetVisibility.ContainsRootDialog(mount.CachedRoot, mount.RenderContext, "0")) return i;
+            }
+            return -1;
+        }
+
+        private static void PrepareInputRouting(MountRecord[] snapshot, MountInputTarget[] targets, int modalMount) {
+            Event current = Event.current;
+            MuiEventType type = RoutingEventType(current);
+            MuiVec2 pointer = current == null ? new MuiVec2() : new MuiVec2(current.mousePosition.x, current.mousePosition.y);
+            for (int i = 0; i < snapshot.Length; i++) {
+                MountRecord mount = snapshot[i];
+                MountInputTarget target = mount.InputTarget;
+                Window rootWindow = mount.CachedRoot as Window;
+                target.Available = mount.Active && mount.Options.Visible &&
+                    (mount.Dialogs.HasOpenDialogs || (mount.CachedRoot != null && !(mount.CachedRoot is EmptyWidget) &&
+                    (rootWindow == null || rootWindow.Visible)));
+                target.HasModal = i == modalMount;
+                target.PointerHit = target.Available && HitTestMount(mount, pointer);
+                target.HasPointerCapture = mount.Renderer.HasPointerCapture;
+                target.ExplicitFocusRevision = mount.Navigation.ExplicitFocusRevision;
+            }
+            inputRouting.Route(targets, type, current == null ? 0 : current.button,
+                current != null && current.rawType == EventType.MouseUp);
+            SynchronizeKeyboardOwner();
+            for (int i = 0; i < snapshot.Length; i++) {
+                MountRecord mount = snapshot[i];
+                mount.RenderContext.SuppressInput = inputRouting.Suppress(mount.InputTarget, type);
+                mount.RenderContext.OwnsKeyboardInput = ReferenceEquals(inputRouting.KeyboardOwner, mount.InputTarget);
+                if (inputRouting.ModalOwner != null && !ReferenceEquals(inputRouting.ModalOwner, mount.InputTarget) &&
+                    mount.InputTarget.HasPointerCapture) mount.Renderer.CancelInput();
+            }
+        }
+
+        private static void SynchronizeKeyboardOwner() {
+            if (ReferenceEquals(lastKeyboardOwner, inputRouting.KeyboardOwner)) return;
+            GUI.FocusControl(null);
+            lastKeyboardOwner = inputRouting.KeyboardOwner;
+        }
+
+        private static bool HitTestMount(MountRecord mount, MuiVec2 pointer) {
+            Window window = mount.CachedRoot as Window;
+            if (window != null) {
+                if (!window.Visible) return false;
+                WindowState state = null;
+                bool initialized = mount.RootWindowStateId != null && mount.StateStore.TryGet(mount.RootWindowStateId, out state);
+                // A newly mounted root has no query yet. Match RenderWindow's
+                // initial position, minimum size, fold height and screen clamp.
+                if (!initialized) state = null;
+                MuiRect saved = state == null ? new MuiRect() :
+                    new MuiRect(state.Rect.x, state.Rect.y, state.Rect.width, state.Rect.height);
+                bool folded = state != null && state.Folded;
+                MuiRect rect = MountInputRouting.RootWindowRect(window, saved, state != null && state.Initialized, folded,
+                    ImguiRenderer.WindowTitleHeight(window, mount.RenderContext), Screen.width, Screen.height);
+                return rect.Contains(pointer) || (!folded && mount.QueryStore.ContainsOverlayRegion(pointer));
+            }
+            return mount.QueryStore.ContainsVisibleWindow(pointer) || mount.QueryStore.ContainsInputRegion(pointer);
+        }
+
+        private static MuiEventType RoutingEventType(Event current) {
+            if (current == null) return MuiEventType.None;
+            switch (current.type) {
+                case EventType.MouseDown: return MuiEventType.MouseDown;
+                case EventType.MouseUp: return MuiEventType.MouseUp;
+                case EventType.MouseDrag: return MuiEventType.MouseDrag;
+                case EventType.MouseMove: return MuiEventType.MouseMove;
+                case EventType.ScrollWheel: return MuiEventType.ScrollWheel;
+                case EventType.KeyDown: return MuiEventType.KeyDown;
+                case EventType.KeyUp: return MuiEventType.KeyUp;
+                case EventType.ValidateCommand:
+                case EventType.ExecuteCommand: return MuiEventType.TextInput;
+                case EventType.Repaint: return MuiEventType.Repaint;
+                default: return MuiEventType.None;
+            }
         }
 
         private static bool RouteNavigation() {
             Event current = Event.current;
             if (current == null || current.type != EventType.KeyDown || current.keyCode != KeyCode.Tab) return false;
 
-            for (int i = mounts.Count - 1; i >= 0; i--) {
-                MountRecord mount = mounts[i];
-                if (mount.Options == null || !mount.Options.Visible || mount.Navigation == null || mount.Navigation.Count == 0) continue;
+            MountRecord[] snapshot = GetMountSnapshot();
+            for (int i = snapshot.Length - 1; i >= 0; i--) {
+                MountRecord mount = snapshot[i];
+                if (!ReferenceEquals(inputRouting.KeyboardOwner, mount.InputTarget)) continue;
+                if (!mount.Active || !mount.Options.Visible || mount.Navigation == null || mount.Navigation.Count == 0) continue;
                 if (mount.RenderContext.SuppressDialogs) continue;
+                if (mount.RenderContext.HasOpenPopup) return false;
 
                 bool moved = current.shift ? mount.Navigation.FocusPrevious() : mount.Navigation.FocusNext();
                 if (!moved) continue;
 
                 if (mount.QueryStore != null) mount.QueryStore.SetCapture(false, true, false);
+                GUI.FocusControl(null);
                 current.Use();
                 Input.ResetInputAxes();
                 return true;
@@ -233,16 +406,17 @@ namespace MaximumUI {
             };
 
             bool textInputActive = IsAnyTextFieldFocused;
-            for (int i = mounts.Count - 1; i >= 0; i--) {
-                MountRecord mount = mounts[i];
-                if (mount.Options == null || !mount.Options.Visible || mount.Shortcuts == null) continue;
+            MountRecord[] snapshot = GetMountSnapshot();
+            for (int i = snapshot.Length - 1; i >= 0; i--) {
+                MountRecord mount = snapshot[i];
+                if (!mount.Active || !mount.Options.Visible || mount.Shortcuts == null) continue;
 
                 ShortcutBinding binding = mount.Shortcuts.Resolve(input, textInputActive);
                 if (binding == null) continue;
 
                 mount.Shortcuts.MarkTriggered(binding);
                 Action action = binding.Action;
-                EnqueueCallback(action);
+                EnqueueOwnedCallback(mount, action);
                 current.Use();
                 Input.ResetInputAxes();
                 return;

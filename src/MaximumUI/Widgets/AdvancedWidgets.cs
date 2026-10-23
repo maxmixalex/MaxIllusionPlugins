@@ -645,6 +645,9 @@ namespace MaximumUI {
     }
 
     public sealed class VirtualList : Widget {
+        // Runtime mounts retain visible rows until their view is invalidated.
+        // Disable this for row factories that intentionally read live external data.
+        public bool CacheItems = true;
         public int ItemCount;
         public float RowHeight;
         public float Height;

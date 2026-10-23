@@ -5,6 +5,9 @@ using UnityEngine;
 namespace MaximumUI {
     public sealed class UnityPainter : IDisposable {
         private readonly Texture2D white;
+        private Texture2D disc;
+        private readonly Dictionary<GUIStyle, GUIStyle> textStyles = new Dictionary<GUIStyle, GUIStyle>();
+        private GUIStyle defaultTextStyle;
         private readonly Stack<MuiVec2> clipOrigins = new Stack<MuiVec2>();
         private MuiVec2 clipOrigin;
 
@@ -14,6 +17,9 @@ namespace MaximumUI {
 
         public void Dispose() {
             if (white != null) UnityEngine.Object.Destroy(white);
+            if (disc != null) UnityEngine.Object.Destroy(disc);
+            textStyles.Clear();
+            defaultTextStyle = null;
         }
 
         public void Paint(DrawList drawList) {
@@ -79,22 +85,43 @@ namespace MaximumUI {
         }
 
         private void DrawText(DrawCommand command) {
-            GUIStyle style = command.Resource as GUIStyle;
-            if (style == null) style = GUI.skin.label;
+            GUIStyle source = command.Resource as GUIStyle;
+            if (source == null) {
+                if (defaultTextStyle == null) {
+                    defaultTextStyle = new GUIStyle(GUI.skin.label);
+                    MaximumTheme.SetTextColor(defaultTextStyle, Color.white);
+                }
+                source = defaultTextStyle;
+            }
+            GUIStyle style;
+            if (!textStyles.TryGetValue(source, out style)) {
+                // GUI.contentColor multiplies style color. A black source style used to
+                // make every custom color black; normalize a private cached copy only.
+                style = new GUIStyle(source);
+                MaximumTheme.SetTextColor(style, Color.white);
+                if (textStyles.Count >= 64) textStyles.Clear();
+                textStyles.Add(source, style);
+            }
 
             Color oldColor = GUI.contentColor;
-            GUI.contentColor = ToColor(command.Color);
-            GUI.Label(ToRectRelative(command.Rect), command.Text ?? string.Empty, style);
-            GUI.contentColor = oldColor;
+            try {
+                GUI.contentColor = ToColor(command.Color);
+                GUI.Label(ToRectRelative(command.Rect), command.Text ?? string.Empty, style);
+            } finally {
+                GUI.contentColor = oldColor;
+            }
         }
 
         private void DrawTexture(MuiRect rect, Texture texture, MuiColor color) {
             if (texture == null) return;
 
             Color oldColor = GUI.color;
-            GUI.color = ToColor(color);
-            GUI.DrawTexture(ToRectRelative(rect), texture);
-            GUI.color = oldColor;
+            try {
+                GUI.color = ToColor(color);
+                GUI.DrawTexture(ToRectRelative(rect), texture);
+            } finally {
+                GUI.color = oldColor;
+            }
         }
 
         private void DrawLine(MuiVec2 start, MuiVec2 end, MuiColor color, float thickness) {
@@ -113,12 +140,15 @@ namespace MaximumUI {
             float t = thickness <= 0f ? 1f : thickness;
             Matrix4x4 oldMatrix = GUI.matrix;
             Color oldColor = GUI.color;
-            GUI.color = ToColor(color);
-            float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
-            GUIUtility.RotateAroundPivot(angle, new Vector2(start.X, start.Y));
-            GUI.DrawTexture(new Rect(start.X, start.Y - t * 0.5f, length, t), white);
-            GUI.matrix = oldMatrix;
-            GUI.color = oldColor;
+            try {
+                GUI.color = ToColor(color);
+                float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                GUIUtility.RotateAroundPivot(angle, new Vector2(start.X, start.Y));
+                GUI.DrawTexture(new Rect(start.X, start.Y - t * 0.5f, length, t), white);
+            } finally {
+                GUI.matrix = oldMatrix;
+                GUI.color = oldColor;
+            }
         }
 
         private void DrawPolyline(MuiVec2[] points, MuiColor color, float thickness) {
@@ -143,11 +173,8 @@ namespace MaximumUI {
         private void FillCircle(MuiVec2 center, float radius, MuiColor color) {
             if (radius <= 0f) return;
 
-            int r = Mathf.CeilToInt(radius);
-            for (int y = -r; y <= r; y++) {
-                float halfWidth = Mathf.Sqrt(Mathf.Max(0f, radius * radius - y * y));
-                DrawTexture(new MuiRect(center.X - halfWidth, center.Y + y, halfWidth * 2f, 1f), white, color);
-            }
+            if (disc == null) disc = Textures.Disc();
+            DrawTexture(new MuiRect(center.X - radius, center.Y - radius, radius * 2f, radius * 2f), disc, color);
         }
 
         private void FillTriangle(MuiVec2 a, MuiVec2 b, MuiVec2 c, MuiColor color) {
