@@ -16,7 +16,7 @@ namespace ExpressionControl {
             private string filter = string.Empty;
             private string status = "选择角色后编辑表情；预设、程序和场景设置沿用现有 XML。";
             private string shortcutDraft;
-            private bool lightTheme;
+            private bool lightTheme = true;
             private float nextPoll;
             private FemaleData observedFemale;
             private int observedCount = -1;
@@ -331,7 +331,7 @@ namespace ExpressionControl {
                             new Button("复制到末尾", delegate { Change(delegate { owner.CopyUnit(false); }); }, "unit-copy").Height(Row).Enabled(unit != null),
                             new Button("复制到下方", delegate { Change(delegate { owner.CopyUnit(true); }); }, "unit-copy-below").Height(Row).Enabled(unit != null),
                             new Button("删除单位", delegate { Change(owner.DeleteUnit); }, "unit-delete") { Variant = ButtonVariant.Danger }.Height(Row).Enabled(unit != null)
-                        }.ExpandHeight()).Width(150f).ExpandHeight(),
+                        }.ExpandHeight()).Width(164f).ExpandHeight(),
                         new Panel("conditions").Content(new ScrollView("unit-conditions-scroll").Content(
                             ExpressionProgramWidgets.BuildUnit(unit, Invalidate)).ExpandHeight()).ExpandWidth().ExpandHeight(),
                         new Panel("unit-expressions").Content(new VStack(8f) {

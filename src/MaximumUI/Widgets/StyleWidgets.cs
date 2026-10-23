@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 namespace MaximumUI {
     public class ThemeEditor : Widget {
+        public string Title;
+        public bool ShowTitle;
         public ThemeTokens Tokens;
         public Action<ThemeTokens> OnChange;
         public bool ShowColors;
@@ -16,6 +18,8 @@ namespace MaximumUI {
 
         public ThemeEditor(ThemeTokens tokens, Action<ThemeTokens> onChange = null, object key = null)
             : base(key) {
+            Title = "Theme Editor";
+            ShowTitle = true;
             Tokens = tokens ?? new ThemeTokens();
             OnChange = onChange;
             ShowColors = true;
@@ -396,7 +400,10 @@ namespace MaximumUI {
             ThemeColorToken.TextMuted,
             ThemeColorToken.OnAccent,
             ThemeColorToken.AccentHover,
-            ThemeColorToken.FocusRing
+            ThemeColorToken.FocusRing,
+            ThemeColorToken.AccentPressed,
+            ThemeColorToken.ControlBorder,
+            ThemeColorToken.ControlHoverBorder
         };
 
         public static readonly ThemeScalarToken[] ScalarTokens = new ThemeScalarToken[] {
@@ -436,7 +443,21 @@ namespace MaximumUI {
             if (token == ThemeColorToken.OnAccent) return "OnAccent";
             if (token == ThemeColorToken.AccentHover) return "AccentHover";
             if (token == ThemeColorToken.FocusRing) return "FocusRing";
+            if (token == ThemeColorToken.AccentPressed) return "AccentPressed";
+            if (token == ThemeColorToken.ControlBorder) return "ControlBorder";
+            if (token == ThemeColorToken.ControlHoverBorder) return "ControlHoverBorder";
             return "ErrorBg";
+        }
+
+        public static float MeasureLabelWidth(ThemeEditor editor, Func<string, float> measureText, float availableWidth) {
+            float width = 0f;
+            ThemeColorToken[] colors = GetColors(editor);
+            for (int i = 0; i < colors.Length; i++) {
+                string name = ColorName(colors[i]);
+                float measured = measureText == null ? ThemeTypography.EstimateTextWidth(name, ThemeTypography.DefaultFontSize) : measureText(name);
+                width = Math.Max(width, measured + 8f);
+            }
+            return Math.Min((float)Math.Ceiling(width / 4f) * 4f, Math.Max(0f, availableWidth) * 0.4f);
         }
 
         public static string ScalarName(ThemeScalarToken token) {

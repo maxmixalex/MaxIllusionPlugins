@@ -51,6 +51,8 @@ MaximumUI.Tests 本身是类库；不能把单独运行 `dotnet test` 当成这�
 
 MaximumUI 0.3.0 接入后的整仓 Rebuild 为 0 错误、4 警告：上述三条旧 API 提示与 AccessoryClothing 测试宿主引用旧框架 UI 的 NU1702。实际执行 **303 组**：MaximumUI 139、MultiTeamH 39、Accessory/Clothing 56、PluginCore 69；另有 5 项打包规则测试。三份上传 XML 通过生产加载器的临时副本往返校验。Actions 重复公开构建/测试/预览/打包流程，私人配置不参与线上执行。
 
+MaximumUI 0.4.0 MDL2 本轮完成整仓 Release Rebuild 和 **343 组**实际断言：MaximumUI 179、MultiTeamH 39、Accessory/Clothing 56、PluginCore 69；另有 **16 项** Python 打包/预览检查。构建仍为 0 错误、4 个上述已有警告。Gallery 全页、主题、字号、弹层和连续滚动的模拟渲染及边界检查详见 [MDL2 记录](MDL2-2026-10-23.md)。
+
 ## 维护约定
 
 - 源码放在 `src/<项目名>/`，共用构建设置优先留在根 `.props` / `.targets` 中。

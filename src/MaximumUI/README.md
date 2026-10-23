@@ -36,9 +36,15 @@ python scripts/test.py
 
 ## 外观与交互
 
-默认主题为 `MaximumTheme.MetroDark`，另提供 `MetroLight`、原有 `CleanLight` 和 `ExpressionLight`。Metro 版本采用不透明分层表面、独立标题条、方正边缘、蓝色强调、选中侧边标记、标签底线、输入框底线与独立的正文/标题/次要文字。设计参考是 [Metro for Steam 的重制项目](https://github.com/RoseTheFlower/MetroSteam) 的公开预览与主题配置；其 README 说明风格源自 Windows 8/10。用户提及的“Metra”未查到同名 Steam 主题，本次按最接近描述的 Metro 方向实施，没有复制第三方图像或皮肤代码。
+默认主题为 **`MaximumTheme.MetroLight`**，另提供 `MetroDark`、原有 `CleanLight` 和 `ExpressionLight`。0.4.0 以 Windows 8–10 的 Metro / MDL2 为设计依据：白色主表面、浅灰分区、中性按钮、方角、蓝色强调、选中侧边标记和清楚的键盘焦点。输入框使用完整的 2px 边框，选中、悬停、按下、禁用与焦点分别处理。复选框、单选框和开关有各自的几何与反馈；关闭、展开、搜索、加减和排序图标来自同一组线段几何，不依赖字符代替图标。
 
-`Label.Role` 支持 `Body`、`Heading`、`Muted`，已有显式 `Label.Style` 优先。`Button.Variant` 支持 `Default`、`Primary`、`Quiet`、`Danger`。内置双配色的正文、次要文字、主按钮文字及焦点/选中标记对比由纯托管回归验证。字体自动缩放仍限制在基础大小的 1–1.5 倍；自定义主题可设置 8–32px，标题和换行使用实际 `GUIStyle` 度量。内置与自定义样式的文字测量缓存按样式复用。
+排版参考 [Microsoft 2015 UWP 设计指南](https://download.microsoft.com/download/2/4/A/24A81A29-77CF-4AA5-967E-64E42554F21B/UWP%20app%20design%20guidelines%20v1509.pdf) 与 [Windows 10 的 Segoe UI / 4px 网格说明](https://learn.microsoft.com/en-us/archive/msdn-magazine/2015/windows-10-special-issue/ui-design-responsive-design-for-universal-windows-apps)。本库为插件编辑器采用 14px 正文、20px 行高、32px 常规控件高度，标题为 24px Semilight，分节标题 20px，注释 12px。它是适应桌面插件密度的实现；没有套用 2015 UWP 的 15px 正文作为所有控件的强制尺寸。放大字号同时扩大共用行高，不再按屏幕宽度单独放大字体。
+
+`Label.Role` 支持 `Body`、`Heading`、`Subheading`、`Muted`、`Caption`，已有显式 `Label.Style` 优先。`Button.Variant` 支持 `Default`、`Primary`、`Quiet`、`Danger`；`ToggleSwitch` 提供独立的立即生效开关，不改变原 `Toggle` / `Checkbox` 的语义。`DrawList.Text` 可携带 `TextFormat`，显式传递字号、字重、对齐、换行与垂直位置；没有字号时继续保留调用方的原生样式。`ThemeTypography.CreateLayoutMetrics` 统一布局度量，游戏端使用实际 `GUIStyle`，预览使用 Pango 排版测量。
+
+原生字体优先使用系统 Segoe UI 字重家族，再回退到微软雅黑、日文字体与 Noto；由 Unity 5.6 的 `CreateDynamicFontFromOSFont` 按字符选择已安装字体。字体按字重缓存，未分发 Microsoft 字体文件。Linux 模拟预览使用可用回退字体，不能当作 Windows Segoe UI 字形完全一致的截图。自定义主题可设置 8–32px；标题、行高与换行随字号一起适配。
+
+内置双配色的正文、次要文字、主按钮各状态文字、输入边框及焦点/选中标记对比由纯托管回归验证。默认强调色为 `#0076D7`，使白色主按钮文字达到 4.5:1；禁用控件使用单独的灰色状态。
 
 主题可在挂载后真正切换，而不必卸载视图：
 
@@ -49,11 +55,11 @@ MaximumUIRuntime.SetTheme(mountId, MaximumTheme.MetroLight);
 
 `ThemePalettes.MetroDark()` / `MetroLight()` 返回相互独立、可编辑的纯托管 `ThemeTokens`。`MaximumTheme.Create(tokens, fontSize: 14, name: "My panel")` 会复制并规范化令牌，再创建原生样式。不要就地修改正在使用的 `theme.Tokens`；编辑副本后创建新主题并调用 `SetTheme`，让原生样式和缓存一起切换。调用方拥有自定义主题，替换后或卸载后需 `Dispose()`；不要在别的挂载仍在引用时释放。内置共享主题的 `Dispose()` 不销毁全局资源。Gallery 在明确点击 Apply 时才创建主题，并释放自己持有的旧主题，避免每次颜色拖动分配原生纹理。
 
-ThemeEditor 的 `ColorTokens` / `ScalarTokens` 可选数组限定可编辑项，null 沿用全量 token，空数组表示没有这一类项。原生 Metro 后端采用固定方角和细边框，禁用状态由 Unity 绘制；`Radius`、`BorderWidth`、`TextDisabled`、`ButtonDisabledBg` 当前只属于通用绘制令牌，不会改变原生 Metro 样式。Gallery 的编辑器已排除这四项。RGBA 编辑直接使用实际分量控件；`FieldHoverBg`、字体、滑条与勾选框尺寸都会进入原生样式。
+ThemeEditor 的 `ColorTokens` / `ScalarTokens` 可选数组限定可编辑项，null 沿用全量 token，空数组表示没有这一类项。颜色标签按整组最长文字计算固定列宽，RGBA 字段保持纵向对齐；字号与滑条/勾选框尺寸都会进入原生样式。原生 MDL2 后端保持固定方角和边框规则，因此 Gallery 不提供 `Radius` / `BorderWidth` 编辑。`TextDisabled` / `ButtonDisabledBg` 用于禁用按钮、选择控件和自绘内容；原生文本输入还会经过 Unity 自身的禁用绘制。
 
 滚动条也使用主题配色：`MaximumTheme.BeginScrollView` 在首次使用时创建私有 `GUISkin`，同时设置轨道、拖块、方向按钮和滚动背景。每次调用只在原生 `GUI.BeginScrollView` 内暂时切换 skin，并在 `finally` 恢复调用者皮肤；子控件与配对的 `GUI.EndScrollView` 保持正常上下文。12px 轨道加 4px 间距与布局预留的 16px 一致。主题释放时一起释放这个皮肤。此实现针对 [Unity 5.6 的原生 BeginScrollView 重载](https://docs.unity3d.com/560/Documentation/ScriptReference/GUI.BeginScrollView.html)，并核对了 [Unity 官方 2017.4 IMGUI 参考源码](https://github.com/Unity-Technologies/UnityCsReference/blob/2017.4/Runtime/IMGUI/Managed/GUI.cs) 中按 style 名称读取 thumb 和方向按钮的机制；实际游戏内拖块命中、滚轮和视觉仍需运行验证。
 
-主题与绘制纹理不生成 mipmap。平面表面使用小型九宫格纹理；自定义绘制的填充圆复用一张懒创建的抗锯齿圆纹理，以一次纹理绘制替代按扫描行绘制。`UnityPainter` 按受限缓存保留白色文字样式副本，确保 `DrawList.Text` 指定的颜色不被来源样式的黑色文字乘成黑色；绘制异常时恢复 GUI 颜色与矩阵。
+主题与绘制纹理不生成 mipmap。平面表面使用小型九宫格纹理；选择控件与自定义绘制的填充圆复用懒创建的抗锯齿圆纹理，以一次纹理绘制替代按扫描行绘制。`UnityPainter` 按来源样式和 `TextFormat` 建立至多 128 项的白色文字样式缓存，确保绘制颜色不被来源样式的黑色文字乘成黑色；切换主题清理缓存，绘制异常恢复 GUI 颜色与矩阵。图标几何不加载字体或每帧创建贴图。
 
 自定义样式与绘制命令只在 Repaint 事件执行；输入控件仍处理相应输入事件。滚动容器按完整内容高度测量，长列表建议使用 `VirtualList`；普通 `ScrollView` 的全部子控件仍会参与渲染遍历。下拉与 ListBox 仅绘制可见行；首次构建/失效时仍需处理全部选项，因此超大数据集应优先使用虚拟列表。
 
@@ -92,7 +98,7 @@ MAXIMUMUI_BENCHMARK=1 dotnet run --project tests/MaximumUI.Runner/MaximumUI.Runn
 
 场景为 1000 个 Label、150 帧、每帧 2 个 GUI 事件。逐事件策略执行 300 次树构建和布局，默认逐帧策略执行 150 次，按需空闲策略执行 1 次。0.2.0 的 .NET 9.0.319 测量中，三者分配量分别为 129,062,440 / 64,538,576 / 430,432 字节。计时受预热、JIT 和运行环境影响；该基准不含 Unity 绘制、输入处理和游戏负载，不能换算为游戏帧率。
 
-当前 UI 入口执行 139 组回归，包括 19 组实际饰品/皮肤效果 View 与会话行为、8 组共享滚动/挂载隐藏/查询池回归，以及 8 组内联 Dialog 布局回归。额外热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁与数值同步零分配。0.3.0 还验证 80 个保留控件在 1,000 次查询/导航登记循环中的零托管分配。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。ClothingCompression 和 ExpressionControl 的实际 View→业务回归由各自插件宿主执行。完整结果见 [接入记录](../../docs/Integration-2026-10-23.md)。
+当前 UI 入口执行 179 组回归，包括 40 组 MDL2 几何图标、排版、禁用继承、焦点、图表、颜色列与弹层/事件策略，19 组实际饰品/皮肤效果 View 与会话行为、8 组共享滚动/挂载隐藏/查询池回归，以及 8 组内联 Dialog 布局回归。额外热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁、数值同步与弹层所属控件检查零分配。0.3.0 还验证 80 个保留控件在 1,000 次查询/导航登记循环中的零托管分配。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。ClothingCompression 和 ExpressionControl 的实际 View→业务回归由各自插件宿主执行。本轮结果见 [MDL2 记录](../../docs/MDL2-2026-10-23.md)，此前的业务接入结果见 [接入记录](../../docs/Integration-2026-10-23.md)。
 
 `python scripts/test.py --benchmark` 也会执行上述策略基准及全部回归。若需比较历史版本与修复版本的独立 DLL，使用 [MaximumUI.Benchmark](../../tests/MaximumUI.Benchmark/README.md) 的显式程序集路径和独立输出目录；该项目不加入解决方案、不产生插件发布产物。
 

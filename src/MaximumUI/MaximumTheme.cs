@@ -19,12 +19,17 @@ namespace MaximumUI {
         public readonly string Name;
         public readonly ThemeTokens Tokens;
         public readonly GUIStyle Heading;
+        public readonly GUIStyle Subheading;
+        public readonly GUIStyle Caption;
         public readonly GUIStyle MutedLabel;
         public readonly GUIStyle PrimaryButton;
         public readonly GUIStyle QuietButton;
         public readonly GUIStyle DangerButton;
         public readonly GUIStyle NavigationItem;
         public readonly int FontSize;
+        public readonly float RowHeight;
+        public readonly float SmallRowHeight;
+        public readonly float TitleBarHeight;
         public readonly GUIStyle Window;
         public readonly GUIStyle FoldedWindow;
         public readonly GUIStyle Box;
@@ -69,6 +74,9 @@ namespace MaximumUI {
             Tokens = clean ? ThemePalettes.MetroLight() : new ThemeTokens();
             Tokens.FontSize = fontSize;
             FontSize = fontSize;
+            RowHeight = Math.Max(26f, fontSize + 12f);
+            SmallRowHeight = Math.Max(20f, fontSize + 6f);
+            TitleBarHeight = Math.Max(26f, fontSize + 12f);
             WindowOpacity = clean ? 1f : 0.8f;
             Color border = new Color(0.78f, 0.81f, 0.85f, 1f);
             Color text = new Color(0.13f, 0.17f, 0.23f, 1f);
@@ -262,6 +270,8 @@ namespace MaximumUI {
                 SetBackground(ToggleCheck, Textures.Solid(accent));
             }
             Heading = new GUIStyle(Label) { fontSize = fontSize + 7 };
+            Subheading = new GUIStyle(Label) { fontSize = fontSize + 4 };
+            Caption = new GUIStyle(Label) { fontSize = Math.Max(10, fontSize - 2) };
             MutedLabel = new GUIStyle(Label);
             SetTextColor(MutedLabel, ColorOf(Tokens.TextMuted));
             PrimaryButton = new GUIStyle(Button);
@@ -277,9 +287,13 @@ namespace MaximumUI {
             FontSize = Math.Max(8, Math.Min(32, fontSize > 0 ? fontSize : (int)Tokens.FontSize));
             Tokens.FontSize = FontSize;
             WindowOpacity = 1f;
-            int titleHeight = Math.Max(32, FontSize + 18);
-            WindowContentPadding = new RectOffset(16, 16, titleHeight + 12, 14);
-            DialogContentPadding = new RectOffset(20, 20, titleHeight + 16, 18);
+            LayoutMetrics geometry = ThemeTypography.CreateLayoutMetrics(Tokens);
+            RowHeight = geometry.RowHeight;
+            SmallRowHeight = geometry.SmallRowHeight;
+            int titleHeight = (int)geometry.WindowPaddingTop - 16;
+            TitleBarHeight = titleHeight;
+            WindowContentPadding = new RectOffset(16, 16, (int)geometry.WindowPaddingTop, 16);
+            DialogContentPadding = new RectOffset(24, 24, (int)geometry.DialogPaddingTop, 24);
             DropdownContentPadding = new RectOffset(4, 4, 4, 4);
 
             WindowOn = Own(Textures.WindowSurface(ColorOf(Tokens.WindowBg), ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border), titleHeight));
@@ -287,11 +301,11 @@ namespace MaximumUI {
             WindowFoldOn = Own(Textures.Frame(ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border)));
             WindowFoldOff = WindowFoldOn;
             BackgroundOn = Own(Textures.Frame(ColorOf(Tokens.PanelBg), ColorOf(Tokens.Separator)));
-            ButtonNormal = Own(Textures.Frame(ColorOf(Tokens.ButtonBg), ColorOf(Tokens.Border)));
-            ButtonHover = Own(Textures.Frame(ColorOf(Tokens.ButtonHoverBg), ColorOf(Tokens.Accent)));
-            ButtonActive = Own(Textures.Frame(ColorOf(Tokens.ButtonActiveBg), ColorOf(Tokens.Accent)));
-            InputNormal = Own(Textures.Surface(ColorOf(Tokens.FieldBg), ColorOf(Tokens.Border), ColorOf(Tokens.TextMuted), 1, 1));
-            InputActive = Own(Textures.Surface(ColorOf(Tokens.FieldActiveBg), ColorOf(Tokens.Border), ColorOf(Tokens.Accent), 1, 2));
+            ButtonNormal = Own(Textures.Frame(ColorOf(Tokens.ButtonBg), ColorOf(Tokens.ButtonBg), 2));
+            ButtonHover = Own(Textures.Frame(ColorOf(Tokens.ButtonHoverBg), ColorOf(Tokens.ControlBorder), 2));
+            ButtonActive = Own(Textures.Frame(ColorOf(Tokens.ButtonActiveBg), ColorOf(Tokens.ButtonActiveBg), 2));
+            InputNormal = Own(Textures.Frame(ColorOf(Tokens.FieldBg), ColorOf(Tokens.ControlBorder), 2));
+            InputActive = Own(Textures.Frame(ColorOf(Tokens.FieldActiveBg), ColorOf(Tokens.Accent), 2));
             Black = Own(Textures.Solid(Color.black));
             Gray = Own(Textures.Solid(ColorOf(Tokens.Separator)));
             Texture2D accent = Own(Textures.Solid(ColorOf(Tokens.Accent)));
@@ -303,7 +317,10 @@ namespace MaximumUI {
             Label = TextStyle(FontSize, TextAnchor.MiddleLeft, Tokens.Text);
             wrappedLabel = new GUIStyle(Label) { wordWrap = true };
             CenterLabel = new GUIStyle(Label) { alignment = TextAnchor.MiddleCenter };
-            Heading = TextStyle(FontSize + 8, TextAnchor.MiddleLeft, Tokens.Text);
+            Heading = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Heading), TextAnchor.MiddleLeft, Tokens.Text);
+            Heading.font = ThemeFonts.Get(TextWeight.Semilight);
+            Subheading = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Subheading), TextAnchor.MiddleLeft, Tokens.Text);
+            Caption = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Caption), TextAnchor.MiddleLeft, Tokens.TextMuted);
             MutedLabel = TextStyle(FontSize, TextAnchor.MiddleLeft, Tokens.TextMuted);
             Window = TextStyle(FontSize, TextAnchor.UpperLeft, Tokens.Text);
             Window.padding = new RectOffset(16, 64, 8, 0);
@@ -319,8 +336,8 @@ namespace MaximumUI {
             SetBackground(Box, BackgroundOn);
             SetOnBackground(Box, BackgroundOn);
             Button = TextStyle(FontSize, TextAnchor.MiddleCenter, Tokens.Text);
-            Button.border = new RectOffset(1, 1, 1, 1);
-            Button.padding = new RectOffset(12, 12, 4, 4);
+            Button.border = new RectOffset(2, 2, 2, 2);
+            Button.padding = new RectOffset(8, 8, 4, 4);
             Button.normal.background = ButtonNormal;
             Button.hover.background = ButtonHover;
             Button.active.background = ButtonActive;
@@ -329,20 +346,21 @@ namespace MaximumUI {
 
             PrimaryButton = new GUIStyle(Button);
             SetBackground(PrimaryButton, accent);
-            PrimaryButton.hover.background = Own(Textures.Solid(ColorOf(Tokens.AccentHover)));
+            PrimaryButton.hover.background = Own(Textures.Frame(ColorOf(Tokens.AccentHover), ColorOf(Tokens.ControlBorder), 2));
             PrimaryButton.focused.background = Own(Textures.Frame(ColorOf(Tokens.Accent), ColorOf(Tokens.OnAccent)));
-            PrimaryButton.active.background = PrimaryButton.hover.background;
+            PrimaryButton.active.background = Own(Textures.Solid(ColorOf(Tokens.AccentPressed)));
             SetTextColor(PrimaryButton, ColorOf(Tokens.OnAccent));
             QuietButton = new GUIStyle(Button);
             QuietButton.normal.background = transparent;
-            QuietButton.hover.background = QuietButton.active.background = hoverSurface;
+            QuietButton.hover.background = hoverSurface;
+            QuietButton.active.background = ButtonActive;
             DangerButton = new GUIStyle(Button);
             DangerButton.normal.background = Own(Textures.Frame(ColorOf(Tokens.ErrorBg), ColorOf(Tokens.Border)));
             DangerButton.hover.background = DangerButton.active.background = Own(Textures.Frame(ColorOf(Tokens.ErrorBg), ColorOf(Tokens.Text)));
 
             Toggle = new GUIStyle(Label);
             ToggleBox = new GUIStyle {
-                border = new RectOffset(1, 1, 1, 1),
+                border = new RectOffset(2, 2, 2, 2),
                 fixedWidth = Math.Max(14f, Tokens.ToggleBoxSize), fixedHeight = Math.Max(14f, Tokens.ToggleBoxSize)
             };
             SetBackground(ToggleBox, InputNormal);
@@ -350,11 +368,13 @@ namespace MaximumUI {
             ToggleBox.hover.background = ToggleBox.focused.background = InputActive;
             ToggleCheck = new GUIStyle();
             SetBackground(ToggleCheck, accent);
-            TextField = new GUIStyle(Label) { border = new RectOffset(1, 1, 1, 2), padding = new RectOffset(9, 9, 4, 4) };
+            TextField = new GUIStyle(Label) { border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(8, 8, 4, 4) };
             SetBackground(TextField, InputNormal);
-            TextField.hover.background = Own(Textures.Surface(ColorOf(Tokens.FieldHoverBg), ColorOf(Tokens.Border), ColorOf(Tokens.Accent), 1, 2));
+            TextField.hover.background = Own(Textures.Frame(ColorOf(Tokens.FieldHoverBg), ColorOf(Tokens.ControlHoverBorder), 2));
             TextField.focused.background = TextField.active.background = InputActive;
-            ComboBoxButton = new GUIStyle(Button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(10, 22, 3, 3) };
+            ComboBoxButton = new GUIStyle(Button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(8, 32, 4, 4) };
+            ComboBoxButton.normal.background = InputNormal;
+            ComboBoxButton.hover.background = TextField.hover.background;
             ComboBoxItem = new GUIStyle(Label) { padding = new RectOffset(10, 10, 3, 3) };
             SetBackground(ComboBoxItem, transparent);
             ComboBoxItem.hover.background = ComboBoxItem.focused.background = hoverSurface;
@@ -384,6 +404,9 @@ namespace MaximumUI {
             SetBackground(Separator, Gray);
             HelpBox = new GUIStyle(Box) { wordWrap = true, padding = new RectOffset(12, 12, 9, 9) };
             Dialog = new GUIStyle(Window);
+            Dialog.fontSize = Heading.fontSize;
+            Dialog.font = Heading.font;
+            Dialog.padding = new RectOffset(24, 24, 20, 0);
             Texture2D dialogSurface = Own(Textures.WindowSurface(ColorOf(Tokens.DialogBg), ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border), titleHeight));
             SetBackground(Dialog, dialogSurface);
             SetOnBackground(Dialog, dialogSurface);
@@ -392,7 +415,7 @@ namespace MaximumUI {
         }
 
         private static GUIStyle TextStyle(int size, TextAnchor alignment, MuiColor color) {
-            GUIStyle result = new GUIStyle { fontSize = size, alignment = alignment };
+            GUIStyle result = new GUIStyle { font = ThemeFonts.Get(TextWeight.Normal), fontSize = size, alignment = alignment };
             SetTextColor(result, ColorOf(color));
             return result;
         }
@@ -449,10 +472,10 @@ namespace MaximumUI {
                 // inheriting user customStyles that could shadow canonical thumb names.
                 scrollSkin = ScriptableObject.CreateInstance<GUISkin>();
                 scrollSkin.hideFlags = HideFlags.HideAndDontSave;
-                Texture2D track = Own(Textures.Solid(ColorOf(Tokens.FieldBg)));
-                Texture2D thumb = Own(Textures.Solid(ColorOf(Tokens.TextMuted)));
-                Texture2D hovered = Own(Textures.Solid(ColorOf(Tokens.Accent)));
-                Texture2D active = Own(Textures.Solid(ColorOf(Tokens.AccentHover)));
+                Texture2D track = Own(Textures.Solid(ColorOf(ScrollbarGeometry.TrackColor(Tokens))));
+                Texture2D thumb = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, false, false))));
+                Texture2D hovered = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, true, false))));
+                Texture2D active = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, false, true))));
 
                 GUIStyle vertical = new GUIStyle {
                     fixedWidth = 12f, margin = new RectOffset(4, 0, 0, 0), padding = new RectOffset(2, 2, 2, 2)
@@ -490,14 +513,14 @@ namespace MaximumUI {
 
         public static MaximumTheme MetroDark {
             get {
-                if (metroDark == null) metroDark = new MaximumTheme(ThemePalettes.MetroDark(), ScaledPixels(13), "Metro Dark", true);
+                if (metroDark == null) metroDark = new MaximumTheme(ThemePalettes.MetroDark(), 14, "MDL2 Dark", true);
                 return metroDark;
             }
         }
 
         public static MaximumTheme MetroLight {
             get {
-                if (metroLight == null) metroLight = new MaximumTheme(ThemePalettes.MetroLight(), ScaledPixels(13), "Metro Light", true);
+                if (metroLight == null) metroLight = new MaximumTheme(ThemePalettes.MetroLight(), 14, "MDL2 Light", true);
                 return metroLight;
             }
         }
@@ -522,31 +545,28 @@ namespace MaximumUI {
         }
 
         public LayoutMetrics CreateLayoutMetrics() {
-            return new LayoutMetrics {
-                RowHeight = System.Math.Max(26f, FontSize + 12f),
-                SmallRowHeight = System.Math.Max(16f, FontSize + 4f),
-                PanelPadding = 12f,
-                TitleHeight = WindowContentPadding.top,
-                WindowPaddingLeft = WindowContentPadding.left,
-                WindowPaddingTop = WindowContentPadding.top,
-                WindowPaddingRight = WindowContentPadding.right,
-                WindowPaddingBottom = WindowContentPadding.bottom,
-                DialogPaddingLeft = DialogContentPadding.left,
-                DialogPaddingTop = DialogContentPadding.top,
-                DialogPaddingRight = DialogContentPadding.right,
-                DialogPaddingBottom = DialogContentPadding.bottom,
-                TextWidth = FontSize * 0.6f,
-                MeasureText = MeasureTextWidth,
-                MeasureWrappedTextHeight = MeasureWrappedTextHeight,
-                MeasureLabelWidth = MeasureLabelWidth,
-                MeasureLabelHeight = MeasureLabelHeight
-            };
+            LayoutMetrics result = ThemeTypography.CreateLayoutMetrics(Tokens);
+            result.TitleHeight = result.WindowPaddingTop = WindowContentPadding.top;
+            result.WindowPaddingLeft = WindowContentPadding.left;
+            result.WindowPaddingRight = WindowContentPadding.right;
+            result.WindowPaddingBottom = WindowContentPadding.bottom;
+            result.DialogPaddingLeft = DialogContentPadding.left;
+            result.DialogPaddingTop = DialogContentPadding.top;
+            result.DialogPaddingRight = DialogContentPadding.right;
+            result.DialogPaddingBottom = DialogContentPadding.bottom;
+            result.MeasureText = MeasureTextWidth;
+            result.MeasureWrappedTextHeight = MeasureWrappedTextHeight;
+            result.MeasureLabelWidth = MeasureLabelWidth;
+            result.MeasureLabelHeight = MeasureLabelHeight;
+            return result;
         }
 
         private GUIStyle LabelStyle(Label label) {
             GUIStyle custom = label == null ? null : label.Style as GUIStyle;
             if (custom != null) return custom;
             return label != null && label.Role == LabelRole.Heading ? Heading :
+                label != null && label.Role == LabelRole.Subheading ? Subheading :
+                label != null && label.Role == LabelRole.Caption ? Caption :
                 label != null && label.Role == LabelRole.Muted ? MutedLabel : Label;
         }
 
@@ -558,7 +578,7 @@ namespace MaximumUI {
         private float MeasureLabelHeight(Label label, float width) {
             GUIStyle style = LabelStyle(label);
             measurementContent.text = label == null ? string.Empty : label.Text ?? string.Empty;
-            float rowHeight = Math.Max(style.fontSize > 0 ? style.fontSize + 10f : FontSize + 10f,
+            float rowHeight = Math.Max(ThemeTypography.LineHeight(Tokens, label == null ? LabelRole.Body : label.Role),
                 style.CalcSize(measurementContent).y);
             if (label == null || !label.WordWrap || width <= 0f || float.IsInfinity(width)) return rowHeight;
             GUIStyle wrapped;

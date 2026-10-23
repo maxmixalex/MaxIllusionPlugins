@@ -198,22 +198,25 @@ namespace MaximumUI.Tests {
 
             TreeNode before = new TreeNode("Tree", true) { DrawLines = true, Children = { new Label("Child") } };
             TreeNode after = new TreeNode("Tree", true) { DrawLines = true, Children = { new Label("Child"), Modal("tree-modal") } };
-            DrawCommand expectedLine = OnlyLine(painter.Paint(Engine().Layout(before, Viewport()), null));
-            DrawCommand actualLine = OnlyLine(painter.Paint(Engine().Layout(after, Viewport()), null));
+            DrawCommand expectedLine = OnlyTreeConnector(painter.Paint(Engine().Layout(before, Viewport()), null), theme);
+            DrawCommand actualLine = OnlyTreeConnector(painter.Paint(Engine().Layout(after, Viewport()), null), theme);
             Require(expectedLine != null && actualLine != null, "the tree still connects its ordinary child");
             Equal(expectedLine.P1.X, actualLine.P1.X, "tree line start x");
             Equal(expectedLine.P1.Y, actualLine.P1.Y, "tree line start y");
             Equal(expectedLine.P2.X, actualLine.P2.X, "tree line end x");
             Equal(expectedLine.P2.Y, actualLine.P2.Y, "modal geometry must not extend the tree connector");
             after.Children.RemoveAt(0);
-            Require(OnlyLine(painter.Paint(Engine().Layout(after, Viewport()), null)) == null,
+            Require(OnlyTreeConnector(painter.Paint(Engine().Layout(after, Viewport()), null), theme) == null,
                 "an overlay alone is not a tree branch");
         }
 
-        private static DrawCommand OnlyLine(DrawList list) {
+        private static DrawCommand OnlyTreeConnector(DrawList list, ThemeTokens theme) {
             DrawCommand found = null;
             foreach (DrawCommand command in list.Commands) {
-                if (command.Type != DrawCommandType.Line) continue;
+                // Disclosure icons now use actual line geometry. Their diagonal
+                // strokes are not the vertical hierarchy connector under test.
+                if (command.Type != DrawCommandType.Line || command.P1.X != command.P2.X ||
+                    !object.Equals(command.Color, theme.Separator)) continue;
                 Require(found == null, "the fixture emits at most one tree line");
                 found = command;
             }

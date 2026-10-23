@@ -61,7 +61,7 @@ namespace MaximumUI {
             };
             mount.BuildContext = new BuildContext {
                 MountId = id,
-                Theme = mount.Options.Theme ?? MaximumTheme.MetroDark,
+                Theme = mount.Options.Theme ?? MaximumTheme.MetroLight,
                 StateStore = mount.StateStore,
                 Query = mount.QueryStore,
                 Navigation = mount.Navigation,
@@ -204,7 +204,7 @@ namespace MaximumUI {
             for (int i = 0; i < mounts.Count; i++) {
                 MountRecord mount = mounts[i];
                 if (!string.Equals(mount.Id, id, StringComparison.Ordinal)) continue;
-                MaximumTheme next = theme ?? MaximumTheme.MetroDark;
+                MaximumTheme next = theme ?? MaximumTheme.MetroLight;
                 if (ReferenceEquals(mount.BuildContext.Theme, next)) return true;
                 mount.Options.Theme = next;
                 mount.BuildContext.Theme = next;

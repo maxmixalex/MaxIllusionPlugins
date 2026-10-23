@@ -41,6 +41,24 @@ namespace MaximumUI {
             return Surface(fill, border, border, 0, 0);
         }
 
+        internal static Texture2D Frame(Color fill, Color border, int thickness) {
+            const int size = 8;
+            int edge = Mathf.Clamp(thickness, 1, 3);
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            texture.hideFlags = HideFlags.HideAndDontSave;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Point;
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++) {
+                for (int x = 0; x < size; x++) {
+                    pixels[y * size + x] = x < edge || y < edge || x >= size - edge || y >= size - edge ? border : fill;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            return texture;
+        }
+
         /// <summary>A tiny nine-sliced surface; 1 selects the bottom edge, 2 the leading edge.</summary>
         internal static Texture2D Surface(Color fill, Color border, Color accent, int markedEdge, int markerWidth) {
             const int size = 8;

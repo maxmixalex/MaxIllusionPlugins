@@ -4,7 +4,9 @@ namespace MaximumUI {
     public enum LabelRole {
         Body,
         Heading,
-        Muted
+        Muted,
+        Subheading,
+        Caption
     }
 
     public sealed class Label : Widget {

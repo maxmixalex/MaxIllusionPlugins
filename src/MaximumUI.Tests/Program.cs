@@ -48,6 +48,8 @@ namespace MaximumUI.Tests {
                 DialogCallbacksCannotCloseNewDialogsOrLoopForever();
                 OverlayOrderSelectsOnlyTheTopDialog();
                 ThemeDesignTests.RunAll();
+                Mdl2DesignTests.RunAll();
+                Mdl2PopupTests.RunAll();
                 UiInteractionTests.RunAll();
                 MountRoutingTests.RunAll();
                 UiFollowupReviewTests.Run();
@@ -58,7 +60,7 @@ namespace MaximumUI.Tests {
                 EmbeddedUiTests.Run();
                 InlineDialogLayoutTests.RunAll();
                 if (Environment.GetEnvironmentVariable("MAXIMUMUI_BENCHMARK") == "1") MeasureBuildAndLayoutPerformance();
-                int count = 41 + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
+                int count = 41 + Mdl2DesignTests.TestCount + Mdl2PopupTests.TestCount + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
                     + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount
                     + PluginEditorViewTests.TestCount + EmbeddedUiTests.TestCount + InlineDialogLayoutTests.TestCount;
                 Console.WriteLine("MaximumUI regression groups: " + count + " passed.");
@@ -536,8 +538,13 @@ namespace MaximumUI.Tests {
 
             Assert(drawList.Commands.Count >= 10, "paint command count");
             AssertEqual(DrawCommandType.FillRect, drawList.Commands[0].Type, "window fill");
-            AssertEqual(DrawCommandType.StrokeRect, drawList.Commands[1].Type, "window stroke");
-            AssertEqual(DrawCommandType.Text, drawList.Commands[2].Type, "window title");
+            bool outline = false, title = false, content = false;
+            foreach (DrawCommand command in drawList.Commands) {
+                if (command.Type == DrawCommandType.StrokeRect && command.Rect.Width == 240f && command.Rect.Height == 120f) outline = true;
+                if (command.Type == DrawCommandType.Text && command.Text == "Paint") title = true;
+                if (command.Type == DrawCommandType.Text && command.Text == "Apply") content = true;
+            }
+            Assert(outline && title && content, "Window decoration and interactive content must both be painted.");
         }
 
         private static void BasicFeatureControlsLayoutAndPaint() {
@@ -789,9 +796,12 @@ namespace MaximumUI.Tests {
                 ActivePath = "0.2"
             });
             Assert(drawList.Commands.Count >= 18, "tree header paint command count");
-            Assert(ContainsText(drawList, "v Header"), "collapsing header text");
-            Assert(ContainsText(drawList, "* Leaf"), "tree leaf bullet text");
-            Assert(ContainsCommand(drawList, DrawCommandType.Line), "tree hierarchy line");
+            Assert(ContainsText(drawList, "Header") && !ContainsText(drawList, "v Header"), "Header text must be independent of its disclosure icon.");
+            Assert(ContainsText(drawList, "Leaf") && ContainsCommand(drawList, DrawCommandType.FillCircle), "Tree bullet must be real geometry beside the label.");
+            bool hierarchyLine = false;
+            foreach (DrawCommand command in drawList.Commands)
+                if (command.Type == DrawCommandType.Line && command.P1.X == tree.Rect.X + 9f && command.P2.X == command.P1.X) hierarchyLine = true;
+            Assert(hierarchyLine, "DrawLines must preserve the tree hierarchy connector.");
         }
 
         private static void MenuBarLayoutAndPaint() {
@@ -854,7 +864,8 @@ namespace MaximumUI.Tests {
             DrawList drawList = new WidgetPainter().Paint(root, new WidgetPaintState());
             Assert(ContainsText(drawList, "+"), "leading tab button text");
             Assert(ContainsText(drawList, "General*"), "unsaved tab marker text");
-            Assert(ContainsText(drawList, "Debug  x"), "closable tab marker text");
+            Assert(ContainsText(drawList, "Debug") && !ContainsText(drawList, "Debug  x"), "Closable tabs must retain the label without a fake character icon.");
+            Assert(ContainsCommand(drawList, DrawCommandType.Line), "Closable tabs must draw a geometric close icon.");
             Assert(ContainsText(drawList, "Log"), "trailing tab button text");
         }
 
@@ -964,7 +975,8 @@ namespace MaximumUI.Tests {
             AssertEqual("0", result.ActivePath, "virtual list active path");
 
             DrawList drawList = new WidgetPainter().Paint(root, new WidgetPaintState());
-            Assert(drawList.Commands.Count >= 3, "virtual list paint command count");
+            Assert(ContainsCommand(drawList, DrawCommandType.FillRect) && ContainsCommand(drawList, DrawCommandType.StrokeRect), "Virtual list retains its viewport surface.");
+            Assert(!ContainsCommand(drawList, DrawCommandType.Text), "Virtual list chrome must not invent debug labels over the actual rows.");
         }
 
         private static void TwoPaneLayoutArrangesPanes() {

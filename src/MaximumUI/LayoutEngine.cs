@@ -333,13 +333,15 @@ namespace MaximumUI {
                 height = metrics.RowHeight;
             } else if (widget is Toggle) {
                 Toggle toggle = (Toggle)widget;
-                width = MeasureText(toggle.Text) + 24f;
+                width = MeasureText(toggle.Text) + 28f;
+            } else if (widget is ToggleSwitch) {
+                width = MeasureText(((ToggleSwitch)widget).Text) + 52f;
             } else if (widget is Checkbox) {
                 Checkbox checkbox = (Checkbox)widget;
-                width = MeasureText(checkbox.Text) + 24f;
+                width = MeasureText(checkbox.Text) + 28f;
             } else if (widget is RadioButton) {
                 RadioButton radio = (RadioButton)widget;
-                width = MeasureText(radio.Text) + 24f;
+                width = MeasureText(radio.Text) + 28f;
             } else if (widget is ISegmentedControlWidget) {
                 ISegmentedControlWidget segmented = (ISegmentedControlWidget)widget;
                 width = 0f;
@@ -368,14 +370,14 @@ namespace MaximumUI {
             } else if (widget is ProgressBar) {
                 ProgressBar progressBar = (ProgressBar)widget;
                 width = Math.Max(120f, MeasureText(progressBar.Text) + 24f);
-                height = metrics.SmallRowHeight;
+                height = metrics.RowHeight;
             } else if (widget is StatusBadge) {
                 StatusBadge badge = (StatusBadge)widget;
                 width = MeasureText(badge.Text) + 16f;
                 height = metrics.SmallRowHeight;
             } else if (widget is LoadingIndicator) {
                 LoadingIndicator indicator = (LoadingIndicator)widget;
-                width = MeasureText(indicator.Text) + 24f;
+                width = MeasureText(indicator.Text) + 44f;
                 height = metrics.SmallRowHeight;
             } else if (widget is Image) {
                 Image image = (Image)widget;
@@ -407,7 +409,7 @@ namespace MaximumUI {
             } else if (widget is ThemeEditor) {
                 ThemeEditor editor = (ThemeEditor)widget;
                 width = 280f;
-                height = metrics.RowHeight * (Math.Max(1, ThemeEditorTokens.VisibleRowCount(editor)) + 1) + 6f;
+                height = metrics.RowHeight * (Math.Max(1, ThemeEditorTokens.VisibleRowCount(editor)) + (editor.ShowTitle ? 1 : 0)) + 6f;
             } else if (widget is IComboBoxWidget) {
                 IComboBoxWidget combo = (IComboBoxWidget)widget;
                 width = MeasureText(combo.GetComboText(combo.ComboValue)) + 32f;
@@ -428,10 +430,10 @@ namespace MaximumUI {
                 width = 160f;
             } else if (widget is ColorPicker3) {
                 width = 220f;
-                height = metrics.RowHeight * 4f + 10f;
+                height = metrics.RowHeight * 4f + 20f;
             } else if (widget is ColorPicker4) {
                 width = 220f;
-                height = metrics.RowHeight * 5f + 12f;
+                height = metrics.RowHeight * 5f + 20f;
             } else if (widget is VectorField) {
                 VectorField vector = (VectorField)widget;
                 width = Math.Max(180f, MeasureText(vector.Label) + 120f);

@@ -3,7 +3,7 @@ namespace MaximumUI {
     public static class ThemePalettes {
         /// <summary>Copy and bound editable values before creating native styles or textures.</summary>
         public static ThemeTokens Normalize(ThemeTokens source) {
-            ThemeTokens fallback = MetroDark();
+            ThemeTokens fallback = MetroLight();
             ThemeTokens result = (source ?? fallback).Clone();
             foreach (ThemeColorToken token in System.Enum.GetValues(typeof(ThemeColorToken))) {
                 MuiColor value = result.GetColor(token);
@@ -12,13 +12,13 @@ namespace MaximumUI {
                     Bound(value.R, 0f, 1f, defaultValue.R), Bound(value.G, 0f, 1f, defaultValue.G),
                     Bound(value.B, 0f, 1f, defaultValue.B), Bound(value.A, 0f, 1f, defaultValue.A)));
             }
-            result.FontSize = Bound(result.FontSize, 8f, 32f, 13f);
+            result.FontSize = Bound(result.FontSize, 8f, 32f, 14f);
             result.BorderWidth = Bound(result.BorderWidth, 0f, 4f, 1f);
             result.Radius = Bound(result.Radius, 0f, 16f, 0f);
-            result.ToggleBoxSize = Bound(result.ToggleBoxSize, 12f, 32f, 16f);
-            result.SliderTrackHeight = Bound(result.SliderTrackHeight, 1f, 16f, 3f);
-            result.SliderThumbWidth = Bound(result.SliderThumbWidth, 6f, 32f, 10f);
-            result.SliderThumbHeight = Bound(result.SliderThumbHeight, 8f, 40f, 18f);
+            result.ToggleBoxSize = Bound(result.ToggleBoxSize, 12f, 32f, 20f);
+            result.SliderTrackHeight = Bound(result.SliderTrackHeight, 1f, 16f, 2f);
+            result.SliderThumbWidth = Bound(result.SliderThumbWidth, 6f, 32f, 8f);
+            result.SliderThumbHeight = Bound(result.SliderThumbHeight, 8f, 40f, 24f);
             return result;
         }
 
@@ -29,43 +29,47 @@ namespace MaximumUI {
 
         public static ThemeTokens MetroDark() {
             return new ThemeTokens {
-                WindowBg = Rgb(25, 29, 34), PanelBg = Rgb(32, 37, 43),
-                TitleBg = Rgb(21, 24, 28), DialogBg = Rgb(32, 37, 43),
-                DropdownBg = Rgb(36, 42, 49), Backdrop = new MuiColor(0f, 0f, 0f, 0.58f),
-                Text = Rgb(235, 240, 244), TextMuted = Rgb(164, 177, 190),
-                TextDisabled = Rgb(117, 130, 144), Border = Rgb(66, 78, 90),
-                Separator = Rgb(47, 56, 65), Accent = Rgb(73, 170, 230),
-                AccentHover = Rgb(109, 191, 241), OnAccent = Rgb(19, 30, 40),
-                FocusRing = Rgb(109, 191, 241),
-                ButtonBg = Rgb(43, 50, 58), ButtonHoverBg = Rgb(55, 65, 75),
-                ButtonActiveBg = Rgb(66, 79, 94), ButtonDisabledBg = Rgb(36, 42, 49),
-                FieldBg = Rgb(23, 27, 31), FieldHoverBg = Rgb(29, 35, 41),
-                FieldActiveBg = Rgb(27, 34, 42), SelectedBg = Rgb(28, 61, 82),
-                InfoBg = Rgb(30, 60, 82), SuccessBg = Rgb(26, 70, 58),
-                WarningBg = Rgb(77, 61, 30), ErrorBg = Rgb(84, 42, 48),
-                BorderWidth = 1f, Radius = 0f, FontSize = 13f, ToggleBoxSize = 16f,
-                SliderTrackHeight = 3f, SliderThumbWidth = 10f, SliderThumbHeight = 18f
+                WindowBg = Rgb(32, 32, 32), PanelBg = Rgb(43, 43, 43),
+                TitleBg = Rgb(32, 32, 32), DialogBg = Rgb(43, 43, 43),
+                DropdownBg = Rgb(43, 43, 43), Backdrop = new MuiColor(0f, 0f, 0f, 0.58f),
+                Text = Rgb(255, 255, 255), TextMuted = Rgb(198, 198, 198),
+                TextDisabled = Rgb(119, 119, 119), Border = Rgb(96, 96, 96),
+                Separator = Rgb(67, 67, 67), Accent = Rgb(76, 166, 234),
+                AccentHover = Rgb(117, 189, 241), AccentPressed = Rgb(55, 143, 210),
+                OnAccent = Rgb(0, 0, 0), FocusRing = Rgb(255, 255, 255),
+                ControlBorder = Rgb(158, 158, 158), ControlHoverBorder = Rgb(255, 255, 255),
+                ButtonBg = Rgb(64, 64, 64), ButtonHoverBg = Rgb(77, 77, 77),
+                ButtonActiveBg = Rgb(96, 96, 96), ButtonDisabledBg = Rgb(51, 51, 51),
+                FieldBg = Rgb(32, 32, 32), FieldHoverBg = Rgb(32, 32, 32),
+                FieldActiveBg = Rgb(24, 24, 24), SelectedBg = Rgb(41, 72, 96),
+                InfoBg = Rgb(38, 57, 73), SuccessBg = Rgb(38, 65, 48),
+                WarningBg = Rgb(73, 61, 34), ErrorBg = Rgb(76, 39, 42),
+                BorderWidth = 1f, Radius = 0f, FontSize = 14f, ToggleBoxSize = 20f,
+                SliderTrackHeight = 2f, SliderThumbWidth = 8f, SliderThumbHeight = 24f
             };
         }
 
         public static ThemeTokens MetroLight() {
             return new ThemeTokens {
-                WindowBg = Rgb(245, 247, 250), PanelBg = Rgb(255, 255, 255),
-                TitleBg = Rgb(235, 239, 244), DialogBg = Rgb(255, 255, 255),
+                WindowBg = Rgb(255, 255, 255), PanelBg = Rgb(242, 242, 242),
+                TitleBg = Rgb(255, 255, 255), DialogBg = Rgb(255, 255, 255),
                 DropdownBg = Rgb(255, 255, 255), Backdrop = new MuiColor(0f, 0f, 0f, 0.42f),
-                Text = Rgb(31, 41, 54), TextMuted = Rgb(83, 100, 119),
-                TextDisabled = Rgb(125, 137, 150), Border = Rgb(165, 179, 195),
-                Separator = Rgb(219, 226, 234), Accent = Rgb(0, 91, 163),
-                AccentHover = Rgb(0, 74, 133), OnAccent = Rgb(255, 255, 255),
-                FocusRing = Rgb(0, 91, 163),
-                ButtonBg = Rgb(239, 242, 246), ButtonHoverBg = Rgb(228, 237, 247),
-                ButtonActiveBg = Rgb(211, 226, 243), ButtonDisabledBg = Rgb(235, 239, 244),
-                FieldBg = Rgb(250, 252, 254), FieldHoverBg = Rgb(244, 249, 255),
-                FieldActiveBg = Rgb(255, 255, 255), SelectedBg = Rgb(219, 237, 251),
-                InfoBg = Rgb(224, 240, 254), SuccessBg = Rgb(222, 241, 229),
-                WarningBg = Rgb(255, 244, 214), ErrorBg = Rgb(251, 228, 231),
-                BorderWidth = 1f, Radius = 0f, FontSize = 13f, ToggleBoxSize = 16f,
-                SliderTrackHeight = 3f, SliderThumbWidth = 10f, SliderThumbHeight = 18f
+                Text = Rgb(23, 23, 23), TextMuted = Rgb(96, 96, 96),
+                TextDisabled = Rgb(153, 153, 153), Border = Rgb(204, 204, 204),
+                Separator = Rgb(229, 229, 229),
+                // Slightly darker than #0078D7 to retain >= 4.5:1 contrast with white text.
+                Accent = Rgb(0, 118, 215), AccentHover = Rgb(0, 100, 182),
+                AccentPressed = Rgb(0, 83, 151), OnAccent = Rgb(255, 255, 255),
+                FocusRing = Rgb(23, 23, 23),
+                ControlBorder = Rgb(118, 118, 118), ControlHoverBorder = Rgb(23, 23, 23),
+                ButtonBg = Rgb(230, 230, 230), ButtonHoverBg = Rgb(218, 218, 218),
+                ButtonActiveBg = Rgb(195, 195, 195), ButtonDisabledBg = Rgb(239, 239, 239),
+                FieldBg = Rgb(255, 255, 255), FieldHoverBg = Rgb(255, 255, 255),
+                FieldActiveBg = Rgb(255, 255, 255), SelectedBg = Rgb(204, 228, 247),
+                InfoBg = Rgb(229, 241, 251), SuccessBg = Rgb(228, 242, 232),
+                WarningBg = Rgb(255, 244, 206), ErrorBg = Rgb(253, 231, 233),
+                BorderWidth = 1f, Radius = 0f, FontSize = 14f, ToggleBoxSize = 20f,
+                SliderTrackHeight = 2f, SliderThumbWidth = 8f, SliderThumbHeight = 24f
             };
         }
 

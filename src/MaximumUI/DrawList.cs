@@ -31,10 +31,12 @@ namespace MaximumUI {
         public float Thickness;
         public float Radius;
         public int Segments;
+        public TextFormat TextFormat;
     }
 
     public sealed class DrawList {
         private readonly List<DrawCommand> commands = new List<DrawCommand>();
+        public TextFormat DefaultTextFormat;
 
         public IList<DrawCommand> Commands {
             get { return commands; }
@@ -158,12 +160,17 @@ namespace MaximumUI {
         }
 
         public void Text(MuiRect rect, string text, object fontOrStyle, MuiColor color) {
+            Text(rect, text, fontOrStyle, color, DefaultTextFormat);
+        }
+
+        public void Text(MuiRect rect, string text, object fontOrStyle, MuiColor color, TextFormat format) {
             commands.Add(new DrawCommand {
                 Type = DrawCommandType.Text,
                 Rect = rect,
                 Text = text ?? string.Empty,
                 Resource = fontOrStyle,
-                Color = color
+                Color = color,
+                TextFormat = format
             });
         }
 
@@ -204,7 +211,8 @@ namespace MaximumUI {
                 Resource = source.Resource,
                 Thickness = source.Thickness,
                 Radius = source.Radius,
-                Segments = source.Segments
+                Segments = source.Segments,
+                TextFormat = source.TextFormat
             };
 
             if (source.Points != null) {

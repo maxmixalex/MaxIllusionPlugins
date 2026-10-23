@@ -119,7 +119,7 @@ namespace MaximumUI {
         private Dialog CreateDialog(string title, string message, string key, int buttonCount,
             out VStack content, out float buttonWidth, out float rowHeight) {
             string dialogKey = key + dialogs.Count;
-            LayoutMetrics metrics = metricsProvider != null ? metricsProvider() : (Theme ?? MaximumTheme.MetroDark).CreateLayoutMetrics();
+            LayoutMetrics metrics = metricsProvider != null ? metricsProvider() : (Theme ?? MaximumTheme.MetroLight).CreateLayoutMetrics();
             MuiVec2 viewport = viewportProvider != null ? viewportProvider() : NativeViewport();
             LayoutEngine engine = new LayoutEngine(metrics);
             float horizontalPadding = metrics.EffectiveDialogPaddingLeft + metrics.EffectiveDialogPaddingRight;

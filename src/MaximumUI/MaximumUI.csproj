@@ -5,8 +5,8 @@
     <Authors>MaxMixAlex</Authors>
     <Company>MaxMixAlex</Company>
     <Product>MaximumUI</Product>
-    <Version>0.3.0</Version>
-    <AssemblyVersion>0.3.0.0</AssemblyVersion>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />

@@ -109,10 +109,40 @@ internal sealed class PreviewScene {
     internal string Source;
     internal string Detail;
     internal Widget Widget;
-    internal ThemeTokens Palette = ThemePalettes.MetroDark();
-    internal string PaletteName = "Metro Dark";
+    internal ThemeTokens Palette = ThemePalettes.MetroLight();
+    internal string PaletteName = "Metro Light";
     internal float Width;
     internal float Height;
     internal string[] RequiredKeys = new string[0];
     internal bool Gallery;
+    internal string PageId;
+    internal string StateId = "default";
+    internal string SizeName = "standard";
+    internal Func<Widget> Build;
+    internal string PaintState;
+    internal object PaintKey;
+    internal string PaintPath;
+    internal string ScrollOf;
+    internal string PopupKind;
+    internal object PopupKey;
+    internal string PopupFilter;
+    internal int PopupMenuIndex;
+    internal int PopupSubmenuIndex = -1;
+    internal bool PopupBottom;
+    internal readonly Dictionary<string, float> ScrollOffsets = new Dictionary<string, float>(StringComparer.Ordinal);
+
+    internal PreviewScene Copy(string slug) {
+        PreviewScene copy = new PreviewScene {
+            Slug = slug, Title = Title, Source = Source, Detail = Detail, Widget = Widget,
+            Palette = Palette, PaletteName = PaletteName, Width = Width, Height = Height,
+            RequiredKeys = RequiredKeys, Gallery = Gallery, PageId = PageId,
+            StateId = StateId, SizeName = SizeName, Build = Build,
+            PaintState = PaintState, PaintKey = PaintKey, PaintPath = PaintPath,
+            ScrollOf = ScrollOf, PopupKind = PopupKind, PopupKey = PopupKey,
+            PopupFilter = PopupFilter, PopupMenuIndex = PopupMenuIndex,
+            PopupSubmenuIndex = PopupSubmenuIndex, PopupBottom = PopupBottom
+        };
+        foreach (KeyValuePair<string, float> pair in ScrollOffsets) copy.ScrollOffsets.Add(pair.Key, pair.Value);
+        return copy;
+    }
 }

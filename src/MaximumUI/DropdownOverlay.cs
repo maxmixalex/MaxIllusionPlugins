@@ -4,6 +4,8 @@ using UnityEngine;
 namespace MaximumUI {
     internal sealed class DropdownOverlay {
         private readonly GUIStyle selectionStyle;
+        private readonly GUIStyle disabledStyle;
+        private readonly GUIStyle placeholderStyle;
         private string[] items = new string[0];
         private Action<int> callback;
         private Rect itemRect;
@@ -18,11 +20,16 @@ namespace MaximumUI {
         private string filterPlaceholder = string.Empty;
         private Action<string> filterChanged;
         private int activeIndex;
+        private PopupLayout layout;
 
         public DropdownOverlay(int windowId, int fontSize, MaximumTheme theme) {
             WindowId = windowId;
-            Theme = theme ?? MaximumTheme.MetroDark;
-            selectionStyle = new GUIStyle(Theme.ComboBoxItem) { fontSize = fontSize };
+            Theme = theme ?? MaximumTheme.MetroLight;
+            selectionStyle = new GUIStyle(Theme.Label) { fontSize = fontSize, padding = new RectOffset() };
+            disabledStyle = new GUIStyle(selectionStyle);
+            MaximumTheme.SetTextColor(disabledStyle, ToColor(Theme.Tokens.TextDisabled));
+            placeholderStyle = new GUIStyle(selectionStyle);
+            MaximumTheme.SetTextColor(placeholderStyle, ToColor(Theme.Tokens.TextMuted));
         }
 
         public readonly int WindowId;
@@ -64,27 +71,20 @@ namespace MaximumUI {
             this.filterChanged = filterChanged;
             this.filterPlaceholder = filterPlaceholder ?? string.Empty;
 
-            RectOffset padding = Theme.DropdownContentPadding;
-            float filterHeight = this.filterChanged == null ? 0f : this.itemHeight + 3f;
-            float totalContentHeight = this.itemHeight * GetItemCount(this.items);
-            float maxHeightByItems = this.itemHeight * GetVisibleItemCount(this.items, this.maxVisibleItems);
-            float visibleContentHeight = Mathf.Min(totalContentHeight, maxHeightByItems);
-            scroll = totalContentHeight > visibleContentHeight || visibleContentHeight > Screen.height * 0.4f;
-            if (scroll) visibleContentHeight = Mathf.Min(visibleContentHeight, Screen.height * 0.4f);
-            Rect = new Rect(rect.x, rect.y, rect.width, visibleContentHeight + filterHeight + padding.top + padding.bottom);
-            MuiRect placed = WindowGeometry.PlacePopup(new MuiRect(rect.x, rect.y - itemHeight, rect.width, itemHeight),
-                Rect.width, Rect.height, Screen.width, Screen.height);
-            Rect = new Rect(placed.X, placed.Y, placed.Width, placed.Height);
-
-            float contentWidth = Mathf.Max(1f, Rect.width - padding.left - padding.right);
-            scrollViewRect = new Rect(padding.left, padding.top + filterHeight, contentWidth, visibleContentHeight);
+            layout = PopupGeometry.Dropdown(new MuiRect(rect.x, rect.y - itemHeight, rect.width, itemHeight),
+                new MuiRect(0f, 0f, Screen.width, Screen.height), this.items.Length, maxVisibleItems,
+                effectiveItemHeight, this.filterChanged != null, Theme.DropdownContentPadding.left);
+            Rect = ToRect(layout.Bounds);
+            scroll = layout.Scrollable;
+            scrollViewRect = LocalRect(layout.ScrollViewport);
             this.itemRect = scroll
-                ? new Rect(0f, 0f, Mathf.Max(1f, contentWidth - 16f), totalContentHeight)
-                : new Rect(padding.left, padding.top + filterHeight, contentWidth, totalContentHeight);
+                ? new Rect(0f, 0f, layout.ContentViewport.Width, layout.ContentHeight)
+                : new Rect(layout.ContentViewport.X - Rect.x, layout.ContentViewport.Y - Rect.y, layout.ContentViewport.Width, layout.ContentHeight);
             if (resetScroll) {
                 scrollPosition = Vector2.zero;
                 activeIndex = this.items.Length == 0 ? -1 : 0;
             }
+            scrollPosition.y = layout.ClampScroll(scrollPosition.y);
             Show = true;
         }
 
@@ -112,7 +112,8 @@ namespace MaximumUI {
             GUI.color = new Color(oldColor.r, oldColor.g, oldColor.b, Theme.WindowOpacity);
             try {
                 if (Event.current == null || Event.current.type == EventType.Repaint) {
-                    Theme.Dropdown.Draw(Rect, GUIContent.none, false, false, false, false);
+                    Fill(Rect, Theme.Tokens.DropdownBg);
+                    Stroke(Rect, Theme.Tokens.ControlBorder, 1f);
                 }
             } finally {
                 GUI.color = oldColor;
@@ -151,8 +152,7 @@ namespace MaximumUI {
         private void DrawFilter() {
             if (filterChanged == null) return;
 
-            RectOffset padding = Theme.DropdownContentPadding;
-            Rect rect = new Rect(padding.left, padding.top, Mathf.Max(1f, Rect.width - padding.left - padding.right), itemHeight);
+            Rect rect = LocalRect(layout.FilterRect);
             GUI.SetNextControlName(focusControlName);
             string next = GUI.TextField(rect, filterText, Theme.TextField);
             if (!string.Equals(next, filterText, StringComparison.Ordinal)) {
@@ -162,8 +162,11 @@ namespace MaximumUI {
             }
 
             if (string.IsNullOrEmpty(filterText) && !string.IsNullOrEmpty(filterPlaceholder) && (Event.current == null || Event.current.type == EventType.Repaint)) {
-                Theme.Label.Draw(rect, filterPlaceholder, false, false, false, false);
+                placeholderStyle.Draw(LocalRect(PopupGeometry.Inset(layout.FilterRect, 8f, 0f, 8f, 0f)), filterPlaceholder, false, false, false, false);
             }
+            if (Event.current == null || Event.current.type == EventType.Repaint)
+                Stroke(rect, Mdl2ControlChrome.FieldBorderColor(Theme.Tokens, GUI.enabled, false,
+                    string.Equals(GUI.GetNameOfFocusedControl(), focusControlName, StringComparison.Ordinal)), 2f);
         }
 
         private int DrawItems() {
@@ -172,11 +175,20 @@ namespace MaximumUI {
             int first = 0;
             int end = count;
             if (scroll) ScrollGeometry.VisibleRows(scrollPosition.y, scrollViewRect.height, itemHeight, count, out first, out end);
+            if (count == 0 && (current == null || current.type == EventType.Repaint)) {
+                MuiRect empty = PopupGeometry.DropdownTextBounds(new MuiRect(itemRect.x, itemRect.y, itemRect.width, itemHeight));
+                placeholderStyle.Draw(ToRect(empty), "No results", false, false, false, false);
+            }
             for (int i = first; i < end; i++) {
-                Rect row = new Rect(itemRect.x, itemRect.y + itemHeight * i, itemRect.width, itemHeight);
-                bool hover = current != null && row.Contains(current.mousePosition);
+                MuiRect sharedRow = layout.Row(i, 0f);
+                Rect row = new Rect(itemRect.x, itemRect.y + sharedRow.Y - layout.ContentViewport.Y, sharedRow.Width, sharedRow.Height);
+                bool hover = GUI.enabled && current != null && row.Contains(current.mousePosition);
                 if (current == null || current.type == EventType.Repaint) {
-                    selectionStyle.Draw(row, items[i] ?? string.Empty, hover, false, i == activeIndex, i == activeIndex);
+                    bool selected = GUI.enabled && i == activeIndex;
+                    Fill(row, PopupPresentation.RowBackground(Theme.Tokens, GUI.enabled, hover, selected));
+                    if (selected) Fill(new Rect(row.x, row.y, Mathf.Min(3f, row.width), row.height), Theme.Tokens.Accent);
+                    MuiRect text = PopupGeometry.DropdownTextBounds(new MuiRect(row.x, row.y, row.width, row.height));
+                    (GUI.enabled ? selectionStyle : disabledStyle).Draw(ToRect(text), items[i] ?? string.Empty, false, false, false, false);
                 }
 
                 if (GUI.enabled && hover && current != null && current.type == EventType.MouseDown && current.button == 0) {
@@ -251,7 +263,28 @@ namespace MaximumUI {
         }
 
         private float GetMinimumItemHeight() {
-            return Mathf.Max(20f, Theme.FontSize + selectionStyle.padding.top + selectionStyle.padding.bottom + 4f);
+            return Theme.RowHeight;
+        }
+
+        private Rect LocalRect(MuiRect rect) {
+            return new Rect(rect.X - Rect.x, rect.Y - Rect.y, rect.Width, rect.Height);
+        }
+
+        private static Rect ToRect(MuiRect rect) { return new Rect(rect.X, rect.Y, rect.Width, rect.Height); }
+        private static Color ToColor(MuiColor color) { return new Color(color.R, color.G, color.B, color.A); }
+
+        private static void Fill(Rect rect, MuiColor color) {
+            Color previous = GUI.color;
+            GUI.color = new Color(previous.r * color.R, previous.g * color.G, previous.b * color.B, previous.a * color.A);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        private static void Stroke(Rect rect, MuiColor color, float width) {
+            Fill(new Rect(rect.x, rect.y, rect.width, width), color);
+            Fill(new Rect(rect.x, rect.yMax - width, rect.width, width), color);
+            Fill(new Rect(rect.x, rect.y, width, rect.height), color);
+            Fill(new Rect(rect.xMax - width, rect.y, width, rect.height), color);
         }
 
         private static bool AnyMouseButtonDown() {

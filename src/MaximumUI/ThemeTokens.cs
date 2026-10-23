@@ -26,7 +26,10 @@ namespace MaximumUI {
         TextMuted,
         OnAccent,
         AccentHover,
-        FocusRing
+        FocusRing,
+        ControlBorder,
+        ControlHoverBorder,
+        AccentPressed
     }
 
     public enum ThemeScalarToken {
@@ -72,6 +75,9 @@ namespace MaximumUI {
         public MuiColor OnAccent = new MuiColor(1f, 1f, 1f, 1f);
         public MuiColor AccentHover = new MuiColor(0.24f, 0.24f, 0.24f, 1f);
         public MuiColor FocusRing = new MuiColor(0.12f, 0.42f, 0.80f, 1f);
+        public MuiColor ControlBorder = new MuiColor(0.48f, 0.48f, 0.48f, 1f);
+        public MuiColor ControlHoverBorder = new MuiColor(0.1f, 0.1f, 0.1f, 1f);
+        public MuiColor AccentPressed = new MuiColor(0f, 0.35f, 0.62f, 1f);
 
         public float BorderWidth = 1f;
         public float Radius = 4f;
@@ -117,6 +123,9 @@ namespace MaximumUI {
             OnAccent = source.OnAccent;
             AccentHover = source.AccentHover;
             FocusRing = source.FocusRing;
+            ControlBorder = source.ControlBorder;
+            ControlHoverBorder = source.ControlHoverBorder;
+            AccentPressed = source.AccentPressed;
             BorderWidth = source.BorderWidth;
             Radius = source.Radius;
             FontSize = source.FontSize;
@@ -153,6 +162,9 @@ namespace MaximumUI {
             if (token == ThemeColorToken.OnAccent) return OnAccent;
             if (token == ThemeColorToken.AccentHover) return AccentHover;
             if (token == ThemeColorToken.FocusRing) return FocusRing;
+            if (token == ThemeColorToken.ControlBorder) return ControlBorder;
+            if (token == ThemeColorToken.ControlHoverBorder) return ControlHoverBorder;
+            if (token == ThemeColorToken.AccentPressed) return AccentPressed;
             return ErrorBg;
         }
 
@@ -183,6 +195,9 @@ namespace MaximumUI {
             else if (token == ThemeColorToken.OnAccent) OnAccent = color;
             else if (token == ThemeColorToken.AccentHover) AccentHover = color;
             else if (token == ThemeColorToken.FocusRing) FocusRing = color;
+            else if (token == ThemeColorToken.ControlBorder) ControlBorder = color;
+            else if (token == ThemeColorToken.ControlHoverBorder) ControlHoverBorder = color;
+            else if (token == ThemeColorToken.AccentPressed) AccentPressed = color;
             else ErrorBg = color;
         }
 
@@ -208,9 +223,13 @@ namespace MaximumUI {
     }
 
     public sealed class WidgetPaintState {
+        /// <summary>Effective ancestor state when painting a subtree (for example inside a clipped viewport).</summary>
+        public bool ParentEnabled = true;
         public string HoveredPath;
         public string ActivePath;
         public string FocusedPath;
+        public string OpenPopupPath;
+        public int OpenMenuIndex = -1;
 
         public bool IsHovered(LayoutNode node) {
             return node != null && string.Equals(node.Path, HoveredPath, System.StringComparison.Ordinal);
@@ -222,6 +241,10 @@ namespace MaximumUI {
 
         public bool IsFocused(LayoutNode node) {
             return node != null && string.Equals(node.Path, FocusedPath, System.StringComparison.Ordinal);
+        }
+
+        public bool IsPopupOpen(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(OpenPopupPath) && string.Equals(node.Path, OpenPopupPath, System.StringComparison.Ordinal);
         }
     }
 }

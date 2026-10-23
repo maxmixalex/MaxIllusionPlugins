@@ -73,6 +73,7 @@ namespace MaximumUI {
                 if (state == activeState || state.Dropdown == null) continue;
                 state.Dropdown.Hide();
                 state.Open = false;
+                state.PopupOwner.Invalidate();
             }
         }
 
@@ -83,6 +84,7 @@ namespace MaximumUI {
                 if (state.Dropdown != null) state.Dropdown.Hide();
                 state.Dropdown = null;
                 state.Open = false;
+                state.PopupOwner.Invalidate();
             }
             comboBoxStates.Clear();
             dropdowns.Clear();
@@ -92,11 +94,12 @@ namespace MaximumUI {
         }
 
         internal void CloseMenus() {
-            if (ActiveContextMenu != null) ActiveContextMenu.Open = false;
+            if (ActiveContextMenu != null) { ActiveContextMenu.Open = false; ActiveContextMenu.PopupOwner.Invalidate(); }
             if (ActiveMenuBar != null) {
                 ActiveMenuBar.Open = false;
                 ActiveMenuBar.OpenIndex = -1;
                 ActiveMenuBar.SubmenuPath.Clear();
+                ActiveMenuBar.PopupOwner.Invalidate();
             }
             ActiveContextMenu = null;
             ActiveMenuBar = null;
@@ -107,6 +110,7 @@ namespace MaximumUI {
                 ComboBoxState state = comboBoxStates[i];
                 if (state.Dropdown != null && state.Dropdown.Show) continue;
                 if (state.Dropdown != null) dropdowns.Remove(state.Dropdown);
+                state.PopupOwner.Close();
                 comboBoxStates.RemoveAt(i);
             }
         }
@@ -140,6 +144,7 @@ namespace MaximumUI {
         public int MaxVisibleItems = 8;
         internal Dialog ModalDialog;
         internal readonly ChoiceCache Choices = new ChoiceCache();
+        internal readonly PopupOwnerState PopupOwner = new PopupOwnerState();
         internal IComboBoxWidget Owner;
         internal System.Func<object, string> Formatter;
         internal System.Action<string> FilterChanged;
@@ -158,6 +163,7 @@ namespace MaximumUI {
     }
 
     internal sealed class ContextMenuState {
+        public readonly PopupOwnerState PopupOwner = new PopupOwnerState();
         public bool Open;
         public Rect Rect;
         public Vector2 Position;
@@ -166,10 +172,13 @@ namespace MaximumUI {
     }
 
     internal sealed class MenuBarState {
+        public readonly PopupOwnerState PopupOwner = new PopupOwnerState();
         public bool Open;
         public int OpenIndex = -1;
         public Rect Anchor;
         public Rect PopupRect;
+        public Menu PopupMenu;
+        public Vector2 ScrollPosition;
         public bool Seen;
         public Dialog ModalDialog;
         public readonly List<int> SubmenuPath = new List<int>();

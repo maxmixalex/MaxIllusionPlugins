@@ -29,6 +29,9 @@ namespace MaximumUI.Tests {
                 Assert(Contrast(palette.TextMuted, palette.WindowBg) >= 4.5, "Navigation captions must remain readable.");
                 Assert(Contrast(palette.OnAccent, palette.Accent) >= 4.5, "Primary button text needs contrast against the accent.");
                 Assert(Contrast(palette.OnAccent, palette.AccentHover) >= 4.5, "Primary hover text needs contrast.");
+                Assert(Contrast(palette.OnAccent, palette.AccentPressed) >= 4.5, "Primary pressed text needs contrast.");
+                Assert(Contrast(palette.ControlBorder, palette.FieldBg) >= 3.0, "Input boundaries must remain visible.");
+                Assert(Contrast(palette.ControlHoverBorder, palette.FieldHoverBg) >= 3.0, "Hovered input boundaries must remain visible.");
                 Assert(Contrast(palette.Accent, palette.SelectedBg) >= 3.0, "The selected-row marker must remain distinct.");
                 Assert(Contrast(palette.FocusRing, palette.ButtonBg) >= 3.0, "Keyboard focus must be distinct from the surrounding control.");
             }
@@ -59,11 +62,12 @@ namespace MaximumUI.Tests {
             input.SliderThumbWidth = 1000000f;
             input.Accent = new MuiColor(-1f, 2f, float.NaN, float.PositiveInfinity);
             ThemeTokens output = ThemePalettes.Normalize(input);
-            Assert(output.FontSize == 13f && output.ToggleBoxSize == 16f, "Invalid sizes must use bounded defaults.");
+            Assert(output.FontSize == 14f && output.ToggleBoxSize == 20f, "Invalid sizes must use the MDL2 desktop defaults.");
             Assert(output.SliderTrackHeight == 1f && output.SliderThumbWidth == 32f, "Finite sizes must respect limits.");
             Assert(output.Accent.R == 0f && output.Accent.G == 1f && !float.IsNaN(output.Accent.B) && output.Accent.A == 1f,
                 "Invalid colors must not reach native textures.");
             Assert(float.IsNaN(input.FontSize), "Normalizing must not mutate pending editor data.");
+            Assert(Same(ThemePalettes.Normalize(null).WindowBg, ThemePalettes.MetroLight().WindowBg), "The default palette must be light.");
         }
 
         private static void PrimaryButtonsAndMutedLabelsUseTheirSemanticColors() {

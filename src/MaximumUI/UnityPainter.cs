@@ -6,13 +6,24 @@ namespace MaximumUI {
     public sealed class UnityPainter : IDisposable {
         private readonly Texture2D white;
         private Texture2D disc;
-        private readonly Dictionary<GUIStyle, GUIStyle> textStyles = new Dictionary<GUIStyle, GUIStyle>();
+        private readonly Dictionary<TextStyleKey, GUIStyle> textStyles = new Dictionary<TextStyleKey, GUIStyle>();
         private GUIStyle defaultTextStyle;
+        private MaximumTheme theme;
         private readonly Stack<MuiVec2> clipOrigins = new Stack<MuiVec2>();
         private MuiVec2 clipOrigin;
 
         public UnityPainter() {
             white = Textures.Solid(Color.white);
+        }
+
+        public MaximumTheme Theme {
+            get { return theme; }
+            set {
+                if (object.ReferenceEquals(theme, value)) return;
+                theme = value;
+                defaultTextStyle = null;
+                textStyles.Clear();
+            }
         }
 
         public void Dispose() {
@@ -88,19 +99,36 @@ namespace MaximumUI {
             GUIStyle source = command.Resource as GUIStyle;
             if (source == null) {
                 if (defaultTextStyle == null) {
-                    defaultTextStyle = new GUIStyle(GUI.skin.label);
+                    defaultTextStyle = new GUIStyle((theme ?? MaximumTheme.MetroLight).Label);
                     MaximumTheme.SetTextColor(defaultTextStyle, Color.white);
                 }
                 source = defaultTextStyle;
             }
+            TextStyleKey key = new TextStyleKey(source, command.TextFormat);
             GUIStyle style;
-            if (!textStyles.TryGetValue(source, out style)) {
+            if (!textStyles.TryGetValue(key, out style)) {
                 // GUI.contentColor multiplies style color. A black source style used to
                 // make every custom color black; normalize a private cached copy only.
                 style = new GUIStyle(source);
+                TextFormat format = command.TextFormat;
+                if (format.FontSize > 0f) {
+                    style.fontSize = Math.Max(1, (int)Math.Round(format.FontSize));
+                    style.font = ThemeFonts.Get(format.Weight);
+                    style.fontStyle = format.Weight == TextWeight.Bold ? FontStyle.Bold : FontStyle.Normal;
+                    style.alignment = format.VerticalAlignment == TextVerticalAlignment.Top
+                        ? (format.Alignment == TextAlignment.Center ? TextAnchor.UpperCenter : format.Alignment == TextAlignment.End ? TextAnchor.UpperRight : TextAnchor.UpperLeft)
+                        : format.VerticalAlignment == TextVerticalAlignment.Bottom
+                        ? (format.Alignment == TextAlignment.Center ? TextAnchor.LowerCenter : format.Alignment == TextAlignment.End ? TextAnchor.LowerRight : TextAnchor.LowerLeft)
+                        : (format.Alignment == TextAlignment.Center ? TextAnchor.MiddleCenter : format.Alignment == TextAlignment.End ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft);
+                    style.wordWrap = format.WordWrap;
+                    style.padding = new RectOffset(0, 0, 0, 0);
+                    style.clipping = TextClipping.Clip;
+                }
                 MaximumTheme.SetTextColor(style, Color.white);
-                if (textStyles.Count >= 64) textStyles.Clear();
-                textStyles.Add(source, style);
+                // Keep warm entries when custom drawing exceeds the cache budget.
+                // Clearing the whole dictionary here makes a stable 129-style
+                // frame recreate every GUIStyle on every repaint.
+                if (textStyles.Count < 128) textStyles.Add(key, style);
             }
 
             Color oldColor = GUI.contentColor;
@@ -109,6 +137,28 @@ namespace MaximumUI {
                 GUI.Label(ToRectRelative(command.Rect), command.Text ?? string.Empty, style);
             } finally {
                 GUI.contentColor = oldColor;
+            }
+        }
+
+        private struct TextStyleKey : IEquatable<TextStyleKey> {
+            private readonly GUIStyle source;
+            private readonly TextFormat format;
+            public TextStyleKey(GUIStyle source, TextFormat format) { this.source = source; this.format = format; }
+            public bool Equals(TextStyleKey other) {
+                return object.ReferenceEquals(source, other.source) && format.FontSize == other.format.FontSize &&
+                    format.Weight == other.format.Weight && format.Alignment == other.format.Alignment &&
+                    format.VerticalAlignment == other.format.VerticalAlignment && format.WordWrap == other.format.WordWrap;
+            }
+            public override bool Equals(object obj) { return obj is TextStyleKey && Equals((TextStyleKey)obj); }
+            public override int GetHashCode() {
+                unchecked {
+                    int hash = source == null ? 0 : source.GetHashCode();
+                    hash = hash * 31 + format.FontSize.GetHashCode();
+                    hash = hash * 31 + (int)format.Weight;
+                    hash = hash * 31 + (int)format.Alignment;
+                    hash = hash * 31 + (int)format.VerticalAlignment;
+                    return hash * 31 + (format.WordWrap ? 1 : 0);
+                }
             }
         }
 

@@ -7,12 +7,22 @@ namespace MaximumUI {
         private static readonly GUIContent TempContent = new GUIContent();
         private readonly DragController dragController = new DragController();
         private LayoutEngine layoutEngine = new LayoutEngine();
+        private float controlRowHeight = 32f;
         private LayoutCache layoutCache;
         private UnityPainter unityPainter;
         private MaximumTheme layoutTheme;
         private int contentRevision;
         private GUIStyle linkLabel;
         private GUIStyle hoveredLinkLabel;
+        private GUIStyle disabledLabel;
+        private GUIStyle disabledCenterLabel;
+        private GUIStyle disabledRightLabel;
+        private GUIStyle disabledButtonText;
+        private GUIStyle searchFieldStyle;
+        private GUIStyle popupShortcutStyle;
+        private readonly Func<string, float> popupTextMeasure;
+        private readonly Func<string, float, float> tooltipTextHeightMeasure;
+        private Texture2D selectionDisc;
         private readonly Dictionary<GUIStyle, GUIStyle> wrappedLabels = new Dictionary<GUIStyle, GUIStyle>();
 
         private RenderContext currentContext;
@@ -30,6 +40,10 @@ namespace MaximumUI {
         private readonly GuiCoordinates coordinates = new GuiCoordinates();
         private int popupDepth;
         private TabsState activeTabs;
+        private readonly List<Widget> ownerAncestors = new List<Widget>(8);
+        private bool modelEnabled = true;
+        private bool modelRootEnabled = true;
+        private PopupOwnerState currentPopupOwner;
 
         internal bool HasPointerCapture {
             get { return ownedHotControl != 0 && GUIUtility.hotControl == ownedHotControl; }
@@ -37,6 +51,8 @@ namespace MaximumUI {
 
         public ImguiRenderer() {
             layoutCache = new LayoutCache(layoutEngine);
+            popupTextMeasure = MeasurePopupText;
+            tooltipTextHeightMeasure = MeasureTooltipTextHeight;
         }
 
         public void InvalidateLayout() {
@@ -50,6 +66,10 @@ namespace MaximumUI {
             wrappedLabels.Clear();
             if (unityPainter != null) unityPainter.Dispose();
             unityPainter = null;
+            // An unpainted renderer owns no Unity objects; disposing a retained
+            // mount must not call Unity's native equality operator in that case.
+            if (!ReferenceEquals(selectionDisc, null)) UnityEngine.Object.Destroy(selectionDisc);
+            selectionDisc = null;
         }
 
         internal void CancelInput() {
@@ -80,6 +100,7 @@ namespace MaximumUI {
 
         private void Paint(DrawList drawList) {
             if (unityPainter == null) unityPainter = new UnityPainter();
+            unityPainter.Theme = layoutTheme;
             unityPainter.Paint(drawList);
         }
 
@@ -92,6 +113,12 @@ namespace MaximumUI {
             Color oldContentColor = GUI.contentColor;
             Color oldBackgroundColor = GUI.backgroundColor;
             bool oldGuiEnabled = GUI.enabled;
+            bool oldModelEnabled = modelEnabled;
+            bool oldModelRootEnabled = modelRootEnabled;
+            PopupOwnerState oldPopupOwner = currentPopupOwner;
+            int oldOwnerCount = ownerAncestors.Count;
+            modelEnabled = modelRootEnabled = oldGuiEnabled;
+            currentPopupOwner = null;
             Matrix4x4 oldMatrix = GUI.matrix;
             int previousHotControl = GUIUtility.hotControl;
             Event guiEvent = Event.current;
@@ -102,13 +129,27 @@ namespace MaximumUI {
                 if (context.ActiveMenuBar != null) context.ActiveMenuBar.Seen = false;
                 if (layoutTheme != context.Theme) {
                     layoutTheme = context.Theme;
-                    layoutEngine = new LayoutEngine(layoutTheme == null ? null : layoutTheme.CreateLayoutMetrics());
+                    LayoutMetrics metrics = layoutTheme == null ? new LayoutMetrics() : layoutTheme.CreateLayoutMetrics();
+                    controlRowHeight = metrics.RowHeight;
+                    layoutEngine = new LayoutEngine(metrics);
                     layoutCache = new LayoutCache(layoutEngine);
                     wrappedLabels.Clear();
                     linkLabel = new GUIStyle(context.Theme.Label);
                     hoveredLinkLabel = new GUIStyle(context.Theme.Label);
                     MaximumTheme.SetTextColor(linkLabel, ToUnityColor(context.Theme.Tokens.Accent));
                     MaximumTheme.SetTextColor(hoveredLinkLabel, ToUnityColor(context.Theme.Tokens.AccentHover));
+                    disabledLabel = new GUIStyle(context.Theme.Label);
+                    MaximumTheme.SetTextColor(disabledLabel, ToUnityColor(context.Theme.Tokens.TextDisabled));
+                    disabledCenterLabel = new GUIStyle(disabledLabel) { alignment = TextAnchor.MiddleCenter };
+                    disabledRightLabel = new GUIStyle(disabledLabel) { alignment = TextAnchor.MiddleRight };
+                    disabledButtonText = new GUIStyle(context.Theme.Button);
+                    MaximumTheme.SetBackground(disabledButtonText, null);
+                    MaximumTheme.SetOnBackground(disabledButtonText, null);
+                    MaximumTheme.SetTextColor(disabledButtonText, ToUnityColor(context.Theme.Tokens.TextDisabled));
+                    searchFieldStyle = new GUIStyle(context.Theme.TextField);
+                    searchFieldStyle.padding = new RectOffset(context.Theme.TextField.padding.left, 32,
+                        context.Theme.TextField.padding.top, context.Theme.TextField.padding.bottom);
+                    popupShortcutStyle = new GUIStyle(context.Theme.MutedLabel) { alignment = TextAnchor.MiddleRight };
                 }
                 for (int i = 0; i < context.ComboBoxStates.Count; i++) context.ComboBoxStates[i].HasButtonRect = false;
                 if (context.Query != null) {
@@ -136,10 +177,11 @@ namespace MaximumUI {
 
                 for (int i = 0; i < context.ComboBoxStates.Count; i++) {
                     ComboBoxState state = context.ComboBoxStates[i];
-                    if (state != null && (!state.HasButtonRect || (context.IsModalOpen &&
+                    if (state != null && (!state.HasButtonRect || !state.PopupOwner.IsEnabled || (context.IsModalOpen &&
                         (context.InputDialog == null || !ReferenceEquals(state.ModalDialog, context.InputDialog))))) {
                         if (state.Dropdown != null) state.Dropdown.Hide();
                         state.Open = false;
+                        state.PopupOwner.Invalidate();
                     }
                     if (state == null || state.Dropdown == null || !state.Dropdown.Show || !state.HasButtonRect || string.IsNullOrEmpty(state.WindowStateId)) continue;
 
@@ -155,7 +197,7 @@ namespace MaximumUI {
                 for (int i = 0; i < context.Dropdowns.Count; i++) {
                     DropdownOverlay dropdown = context.Dropdowns[i];
                     bool enabled = GUI.enabled;
-                    GUI.enabled = enabled && !context.SuppressInput;
+                    GUI.enabled = GuiEventPolicy.ControlEnabled(enabled, true, context.SuppressInput, Event.current == null ? EventType.Layout : Event.current.type);
                     try { dropdown.Draw(); }
                     finally { GUI.enabled = enabled; }
                     RegisterInputRegion(dropdown.Rect, dropdown.Show, true);
@@ -182,6 +224,10 @@ namespace MaximumUI {
                 GUI.contentColor = oldContentColor;
                 GUI.backgroundColor = oldBackgroundColor;
                 GUI.enabled = oldGuiEnabled;
+                modelEnabled = oldModelEnabled;
+                modelRootEnabled = oldModelRootEnabled;
+                currentPopupOwner = oldPopupOwner;
+                ownerAncestors.RemoveRange(oldOwnerCount, ownerAncestors.Count - oldOwnerCount);
                 GUI.matrix = oldMatrix;
                 currentContext = oldContext;
             }
@@ -194,8 +240,11 @@ namespace MaximumUI {
             context.Path = oldPath == null || oldPath.Length == 0 ? path : oldPath + "." + path;
 
             bool oldEnabled = GUI.enabled;
+            bool oldModelEnabled = modelEnabled;
+            modelEnabled = modelEnabled && widget.Enabled;
+            ownerAncestors.Add(widget);
             bool blockInput = context.SuppressInput || popupBlocksInput || (IsInputBlockedByDialog() && !(widget is Dialog) && !HasDialogWidget(widget));
-            GUI.enabled = oldEnabled && widget.Enabled && !blockInput;
+            GUI.enabled = GuiEventPolicy.ControlEnabled(oldEnabled, widget.Enabled, blockInput, Event.current == null ? EventType.Layout : Event.current.type);
             try {
                 if (widget is Window) {
                     RenderWindow((Window)widget, context);
@@ -207,6 +256,8 @@ namespace MaximumUI {
                 }
             } finally {
                 GUI.enabled = oldEnabled;
+                modelEnabled = oldModelEnabled;
+                ownerAncestors.RemoveAt(ownerAncestors.Count - 1);
                 context.Path = oldPath;
             }
         }
@@ -282,14 +333,14 @@ namespace MaximumUI {
             float foldX = widget.Closable ? closeX - buttonSize : closeX;
             bool inputBlocked = IsInputBlockedByDialog();
 
-            if (!inputBlocked && widget.Foldable && DoButton(new Rect(foldX, state.Rect.y, buttonSize, buttonSize), state.Folded ? "+" : "-", context.Theme.Button, false)) {
+            if (widget.Foldable && DoIconButton(new Rect(foldX, state.Rect.y, buttonSize, buttonSize), state.Folded ? Mdl2Icon.ChevronDown : Mdl2Icon.Remove, context.Theme.QuietButton, false) && !inputBlocked) {
                 if (!state.Folded) state.ExpandedHeight = state.Rect.height;
                 state.Folded = !state.Folded;
                 if (!state.Folded) state.Rect.height = state.ExpandedHeight > 0f ? state.ExpandedHeight : widget.Height;
             }
 
-            if (!inputBlocked && widget.Closable && DoButton(new Rect(closeX, state.Rect.y, buttonSize, buttonSize), "×", context.Theme.Button, false)) {
-                MaximumUIRuntime.EnqueueCallback(delegate {
+            if (widget.Closable && DoIconButton(new Rect(closeX, state.Rect.y, buttonSize, buttonSize), Mdl2Icon.Close, context.Theme.QuietButton, false) && !inputBlocked) {
+                EnqueueCallback(delegate {
                     widget.Visible = false;
                     if (widget.OnVisibleChange != null) widget.OnVisibleChange(false);
                 });
@@ -346,8 +397,11 @@ namespace MaximumUI {
             currentWidget = widget;
 
             bool oldEnabled = GUI.enabled;
+            bool oldModelEnabled = modelEnabled;
+            modelEnabled = modelEnabled && widget.Enabled;
+            ownerAncestors.Add(widget);
             bool blockInput = context.SuppressInput || popupBlocksInput || (IsInputBlockedByDialog() && !(widget is Dialog) && !HasDialogWidget(widget));
-            GUI.enabled = oldEnabled && widget.Enabled && !blockInput;
+            GUI.enabled = GuiEventPolicy.ControlEnabled(oldEnabled, widget.Enabled, blockInput, Event.current == null ? EventType.Layout : Event.current.type);
             try {
                 RecordItemQuery(context, node, widget, offset);
                 if (widget is Window) {
@@ -390,6 +444,8 @@ namespace MaximumUI {
                     RenderArrowButtonAt(node, (ArrowButton)widget, context, offset);
                 } else if (widget is Toggle) {
                     RenderToggleAt(node, (Toggle)widget, context, offset);
+                } else if (widget is ToggleSwitch) {
+                    RenderToggleSwitchAt(node, (ToggleSwitch)widget, context, offset);
                 } else if (widget is Checkbox) {
                     RenderCheckboxAt(node, (Checkbox)widget, context, offset);
                 } else if (widget is RadioButton) {
@@ -496,18 +552,27 @@ namespace MaximumUI {
                 }
 
                 RegisterWidgetOverlays(node, widget, context, offset);
-                if (GUI.enabled && context.OwnsKeyboardInput && context.Navigation != null && context.Navigation.IsKeyboardFocused(widget, node.Path) && IsNavigationFocusable(widget)) {
-                    DrawStrokeRect(OffsetRect(node.Rect, offset), ToUnityColor(context.Theme.Tokens.FocusRing), 1f);
+                if (GUI.enabled && !IsInputBlockedByDialog() && context.OwnsKeyboardInput && context.Navigation != null && context.Navigation.IsKeyboardFocused(widget, node.Path) && IsNavigationFocusable(widget)) {
+                    if (!(widget is TextField) && !(widget is TextArea) && !(widget is PasswordField) && !(widget is SearchBox)) {
+                        Rect focusRect = OffsetRect(node.Rect, offset);
+                        if (widget is Foldout || widget is CollapsingHeader || widget is ClosableCollapsingHeader || widget is TreeNode)
+                            focusRect.height = Mathf.Min(focusRect.height, controlRowHeight);
+                        DrawKeyboardFocus(focusRect, context.Theme.Tokens);
+                    }
                 }
             } finally {
                 currentWidget = oldWidget;
                 GUI.enabled = oldEnabled;
+                modelEnabled = oldModelEnabled;
+                ownerAncestors.RemoveAt(ownerAncestors.Count - 1);
                 context.Path = oldPath;
             }
         }
 
         private void RenderLabelAt(LayoutNode node, Label widget, RenderContext context, Vector2 offset) {
             GUIStyle style = widget.Style as GUIStyle ?? (widget.Role == LabelRole.Heading ? context.Theme.Heading :
+                widget.Role == LabelRole.Subheading ? context.Theme.Subheading :
+                widget.Role == LabelRole.Caption ? context.Theme.Caption :
                 widget.Role == LabelRole.Muted ? context.Theme.MutedLabel : context.Theme.Label);
             if (widget.WordWrap && !style.wordWrap) {
                 GUIStyle wrapped;
@@ -572,10 +637,16 @@ namespace MaximumUI {
                 if (column == null || !column.Visible) continue;
 
                 Rect rect = new Rect(x, tableRect.y, widths[columnIndex], headerHeight);
-                bool clicked = DoButton(rect, FormatColumnTitle(column), context.Theme.TabButton, column.SortDirection != TableSortDirection.None);
+                bool clicked = DoButton(rect, string.Empty, context.Theme.TabButton, column.SortDirection != TableSortDirection.None);
+                DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                    new Rect(rect.x + 8f, rect.y, Mathf.Max(0f, rect.width - (column.SortDirection == TableSortDirection.None ? 16f : 36f)), rect.height),
+                    GetContent(column.Title), false, false, false, false);
+                if (column.SortDirection != TableSortDirection.None)
+                    DrawIcon(new Rect(rect.xMax - 24f, rect.y, 20f, rect.height),
+                        column.SortDirection == TableSortDirection.Ascending ? Mdl2Icon.ChevronUp : Mdl2Icon.ChevronDown, NativeTextColor(context), 1f);
                 if (clicked && column.Sortable && column.OnSort != null && !IsInputBlockedByDialog()) {
                     TableSortDirection next = NextSortDirection(column.SortDirection);
-                    MaximumUIRuntime.EnqueueCallback(delegate { column.OnSort(next); });
+                    EnqueueCallback(delegate { column.OnSort(next); });
                 }
 
                 x += widths[columnIndex] + table.ColumnGap;
@@ -621,7 +692,7 @@ namespace MaximumUI {
                     next = (current.mousePosition.y - whole.y) / available;
                 }
                 next = Mathf.Clamp01(next);
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(next); });
+                EnqueueCallback(delegate { widget.OnChange(next); });
                 current.Use();
                 Input.ResetInputAxes();
             }
@@ -687,7 +758,7 @@ namespace MaximumUI {
                 context.DragDrop.Active && accepts && MouseOverVisibleRect(rect)) {
                 DragPayload payload = context.DragDrop.Payload;
                 context.DragDrop.Clear();
-                if (widget.OnDrop != null) MaximumUIRuntime.EnqueueCallback(delegate { widget.OnDrop(payload); });
+                if (widget.OnDrop != null) EnqueueCallback(delegate { widget.OnDrop(payload); });
                 current.Use();
                 Input.ResetInputAxes();
             }
@@ -715,11 +786,11 @@ namespace MaximumUI {
             bool hover;
             bool clicked = DoTextClick(rect, out hover) || ConsumeActivation(widget, context);
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
 
-            Color color = ToUnityColor(hover ? context.Theme.Tokens.AccentHover : context.Theme.Tokens.Accent);
-            DrawStyle(hover ? hoveredLinkLabel : linkLabel, rect, GetContent(widget.Text), false, false, false, false);
+            Color color = ToUnityColor(!GUI.enabled ? context.Theme.Tokens.TextDisabled : hover ? context.Theme.Tokens.AccentHover : context.Theme.Tokens.Accent);
+            DrawStyle(!GUI.enabled ? disabledLabel : hover ? hoveredLinkLabel : linkLabel, rect, GetContent(widget.Text), false, false, false, false);
             DrawFilledRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 1f), color);
         }
 
@@ -729,7 +800,7 @@ namespace MaximumUI {
             bool hovered = current != null && MouseOverVisibleRect(rect) &&
                 coordinates.ContainsScreenPoint(coordinates.ToScreen(new MuiVec2(current.mousePosition.x, current.mousePosition.y)));
 
-            if (hovered && GUI.enabled && !string.IsNullOrEmpty(widget.TooltipText)) {
+            if (hovered && GUI.enabled && !IsInputBlockedByDialog() && !string.IsNullOrEmpty(widget.TooltipText)) {
                 string tooltip = widget.TooltipText;
                 MuiVec2 point = coordinates.ToScreen(new MuiVec2(current.mousePosition.x, current.mousePosition.y));
                 Vector2 mouse = new Vector2(point.X, point.Y);
@@ -746,10 +817,16 @@ namespace MaximumUI {
             string id = context.StateId(widget, "context-menu");
             ContextMenuState state = context.StateStore.GetOrCreate<ContextMenuState>(id);
             state.Seen = true;
+            if (!state.PopupOwner.Capture(ownerAncestors, modelRootEnabled) || !modelEnabled) {
+                state.Open = false;
+                state.PopupOwner.Invalidate();
+                return;
+            }
             if (GUI.enabled && !IsInputBlockedByDialog() && current != null && current.type == EventType.MouseDown && current.button == 1 && hovered) {
                 context.CloseMenus();
                 context.HideOtherComboBoxes(null);
                 state.Open = true;
+                state.PopupOwner.BeginOpen();
                 MuiVec2 point = coordinates.ToScreen(new MuiVec2(current.mousePosition.x, current.mousePosition.y));
                 state.Position = new Vector2(point.X, point.Y);
                 state.ModalDialog = currentDialog;
@@ -764,7 +841,7 @@ namespace MaximumUI {
             context.Overlay.Register(new OverlayRequest {
                 SortOrder = 1200,
                 Render = delegate(RenderContext renderContext) {
-                    DrawPopup(renderContext, state.ModalDialog, delegate { DrawContextMenu(renderContext, id, state, content); });
+                    DrawPopup(renderContext, state.ModalDialog, delegate { DrawContextMenu(renderContext, id, state, content); }, state.PopupOwner);
                 }
             });
         }
@@ -772,9 +849,8 @@ namespace MaximumUI {
         private void DrawTooltip(RenderContext context, string text, Vector2 mousePosition) {
             if (string.IsNullOrEmpty(text)) return;
 
-            float width = Mathf.Min(320f, Mathf.Max(80f, text.Length * 7f + 16f));
-            float height = Mathf.Max(22f, context.Theme.FontSize + 10f);
-            Rect rect = ClampOverlayRect(new Rect(mousePosition.x + 12f, mousePosition.y + 18f, width, height));
+            Rect rect = ToUnityRect(PopupGeometry.Tooltip(text, new MuiVec2(mousePosition.x, mousePosition.y),
+                new MuiRect(0f, 0f, Screen.width, Screen.height), popupTextMeasure, tooltipTextHeightMeasure, context.Theme.RowHeight));
             Color oldColor = GUI.color;
             GUI.color = WithAlpha(oldColor, context.Theme.WindowOpacity);
             try {
@@ -788,6 +864,7 @@ namespace MaximumUI {
         private void DrawContextMenu(RenderContext context, string id, ContextMenuState state, Widget content) {
             Event current = Event.current;
             if (!state.Open) return;
+            if (!state.PopupOwner.IsEnabled) { state.Open = false; state.PopupOwner.Invalidate(); return; }
             if (GUI.enabled && current != null && current.type == EventType.KeyDown && current.keyCode == KeyCode.Escape) {
                 state.Open = false;
                 current.Use();
@@ -816,7 +893,7 @@ namespace MaximumUI {
             LayoutNode root = layoutEngine.Layout(content, ToMuiRect(new Rect(state.Rect.x + 4f, state.Rect.y + 4f, Mathf.Max(1f, state.Rect.width - 8f), Mathf.Max(1f, state.Rect.height - 8f))), id + ":content");
             EventType before = current == null ? EventType.Ignore : current.type;
             RenderLayoutNode(root, context, Vector2.zero);
-            if (before == EventType.MouseUp && current.type == EventType.Used) state.Open = false;
+            if (before == EventType.MouseUp && current.type == EventType.Used) { state.Open = false; state.PopupOwner.Close(); }
             RegisterInputRegion(state.Rect, state.Open, true);
         }
 
@@ -827,7 +904,7 @@ namespace MaximumUI {
                 widget.Variant == ButtonVariant.Danger ? context.Theme.DangerButton : context.Theme.Button;
             bool clicked = DoButton(rect, widget.Text, style, false) || ConsumeActivation(widget, context);
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
         }
 
@@ -835,15 +912,15 @@ namespace MaximumUI {
             Rect rect = OffsetRect(node.Rect, offset);
             bool clicked = DoButton(rect, widget.Text, context.Theme.Button, false) || ConsumeActivation(widget, context);
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
         }
 
         private void RenderArrowButtonAt(LayoutNode node, ArrowButton widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            bool clicked = DoButton(rect, ArrowText(widget.Direction), context.Theme.Button, false) || ConsumeActivation(widget, context);
+            bool clicked = DoIconButton(rect, Mdl2IconGeometry.Chevron(widget.Direction), context.Theme.Button, false) || ConsumeActivation(widget, context);
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
         }
 
@@ -853,23 +930,33 @@ namespace MaximumUI {
             Event current = Event.current;
             if ((inputEnabled && current != null && current.type == EventType.MouseDown && current.button == 0 && MouseOverVisibleRect(rect)) || ConsumeActivation(widget, context)) {
                 bool captured = !widget.Value;
-                if (widget.OnChange != null) MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                if (widget.OnChange != null) EnqueueCallback(delegate { widget.OnChange(captured); });
                 current.Use();
                 Input.ResetInputAxes();
             }
 
-            float boxSize = Mathf.Min(context.Theme.ToggleBox.fixedWidth, Mathf.Max(10f, rect.height - 4f));
-            Rect boxRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - boxSize) * 0.5f), boxSize, boxSize);
-            DrawStyle(context.Theme.ToggleBox, boxRect, GUIContent.none, false, false, widget.Value, false);
-            if (widget.Value) {
-                Rect checkRect = new Rect(boxRect.x + 3f, boxRect.y + 3f, Mathf.Max(1f, boxRect.width - 6f), Mathf.Max(1f, boxRect.height - 6f));
-                DrawStyle(context.Theme.ToggleCheck, checkRect, GUIContent.none, false, false, false, false);
-            }
+            DrawSelectionControl(rect, widget.Text, widget.Value, false, context);
+        }
 
-            if (!string.IsNullOrEmpty(widget.Text)) {
-                Rect labelRect = new Rect(boxRect.xMax + 5f, rect.y, Mathf.Max(1f, rect.xMax - boxRect.xMax - 5f), rect.height);
-                DrawStyle(context.Theme.Toggle, labelRect, GetContent(widget.Text), false, false, false, false);
+        private void RenderToggleSwitchAt(LayoutNode node, ToggleSwitch widget, RenderContext context, Vector2 offset) {
+            Rect rect = OffsetRect(node.Rect, offset);
+            bool hover, pressed;
+            bool clicked = DoButton(rect, string.Empty, null, false, out hover, out pressed) || ConsumeActivation(widget, context);
+            if (clicked && widget.OnChange != null && !IsInputBlockedByDialog()) {
+                bool value = !widget.Value;
+                EnqueueCallback(delegate { widget.OnChange(value); });
             }
+            ThemeTokens theme = context.Theme.Tokens;
+            MuiRect track = Mdl2ControlChrome.SwitchBounds(ToMuiRect(rect));
+            MuiColor border = widget.Value ? Mdl2ControlChrome.SelectionColor(theme, GUI.enabled, hover, pressed) :
+                Mdl2ControlChrome.ControlBorderColor(theme, GUI.enabled, hover);
+            DrawCapsule(ToUnityRect(track), border);
+            if (!widget.Value) DrawCapsule(new Rect(track.X + 2f, track.Y + 2f, Mathf.Max(0f, track.Width - 4f), Mathf.Max(0f, track.Height - 4f)),
+                GUI.enabled ? theme.FieldBg : theme.ButtonDisabledBg);
+            MuiRect thumb = Mdl2ControlChrome.SwitchThumb(track, widget.Value);
+            DrawDisc(ToUnityRect(thumb), widget.Value ? theme.OnAccent : border);
+            Rect label = new Rect(track.Right + 12f, rect.y, Mathf.Max(0f, rect.xMax - track.Right - 12f), rect.height);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, label, GetContent(widget.Text), false, false, false, false);
         }
 
         private void RenderCheckboxAt(LayoutNode node, Checkbox widget, RenderContext context, Vector2 offset) {
@@ -878,23 +965,12 @@ namespace MaximumUI {
             Event current = Event.current;
             if ((inputEnabled && current != null && current.type == EventType.MouseDown && current.button == 0 && MouseOverVisibleRect(rect)) || ConsumeActivation(widget, context)) {
                 bool captured = !widget.Value;
-                if (widget.OnChange != null) MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                if (widget.OnChange != null) EnqueueCallback(delegate { widget.OnChange(captured); });
                 current.Use();
                 Input.ResetInputAxes();
             }
 
-            float boxSize = Mathf.Min(context.Theme.ToggleBox.fixedWidth, Mathf.Max(10f, rect.height - 4f));
-            Rect boxRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - boxSize) * 0.5f), boxSize, boxSize);
-            DrawStyle(context.Theme.ToggleBox, boxRect, GUIContent.none, false, false, widget.Value, false);
-            if (widget.Value) {
-                Rect checkRect = new Rect(boxRect.x + 3f, boxRect.y + 3f, Mathf.Max(1f, boxRect.width - 6f), Mathf.Max(1f, boxRect.height - 6f));
-                DrawStyle(context.Theme.ToggleCheck, checkRect, GUIContent.none, false, false, false, false);
-            }
-
-            if (!string.IsNullOrEmpty(widget.Text)) {
-                Rect labelRect = new Rect(boxRect.xMax + 5f, rect.y, Mathf.Max(1f, rect.xMax - boxRect.xMax - 5f), rect.height);
-                DrawStyle(context.Theme.Toggle, labelRect, GetContent(widget.Text), false, false, false, false);
-            }
+            DrawSelectionControl(rect, widget.Text, widget.Value, false, context);
         }
 
         private void RenderRadioButtonAt(LayoutNode node, RadioButton widget, RenderContext context, Vector2 offset) {
@@ -902,23 +978,12 @@ namespace MaximumUI {
             bool inputEnabled = GUI.enabled && !IsInputBlockedByDialog();
             Event current = Event.current;
             if ((inputEnabled && current != null && current.type == EventType.MouseDown && current.button == 0 && MouseOverVisibleRect(rect)) || ConsumeActivation(widget, context)) {
-                if (!widget.Selected && widget.OnSelect != null) MaximumUIRuntime.EnqueueCallback(widget.OnSelect);
+                if (!widget.Selected && widget.OnSelect != null) EnqueueCallback(widget.OnSelect);
                 current.Use();
                 Input.ResetInputAxes();
             }
 
-            float boxSize = Mathf.Min(context.Theme.ToggleBox.fixedWidth, Mathf.Max(10f, rect.height - 4f));
-            Rect boxRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - boxSize) * 0.5f), boxSize, boxSize);
-            DrawStyle(context.Theme.ToggleBox, boxRect, GUIContent.none, false, false, widget.Selected, false);
-            if (widget.Selected) {
-                Rect dotRect = new Rect(boxRect.x + 4f, boxRect.y + 4f, Mathf.Max(1f, boxRect.width - 8f), Mathf.Max(1f, boxRect.height - 8f));
-                DrawStyle(context.Theme.ToggleCheck, dotRect, GUIContent.none, false, false, false, false);
-            }
-
-            if (!string.IsNullOrEmpty(widget.Text)) {
-                Rect labelRect = new Rect(boxRect.xMax + 5f, rect.y, Mathf.Max(1f, rect.xMax - boxRect.xMax - 5f), rect.height);
-                DrawStyle(context.Theme.Toggle, labelRect, GetContent(widget.Text), false, false, false, false);
-            }
+            DrawSelectionControl(rect, widget.Text, widget.Selected, true, context);
         }
 
         private void RenderSegmentedControlAt(LayoutNode node, ISegmentedControlWidget widget, RenderContext context, Vector2 offset) {
@@ -939,7 +1004,7 @@ namespace MaximumUI {
                 if (DoButton(segmentRect, widget.GetSegmentText(item), context.Theme.TabButton, selected) && widget.SegmentOnChange != null && !IsInputBlockedByDialog()) {
                     object captured = item;
                     Delegate callback = widget.SegmentOnChange;
-                    MaximumUIRuntime.EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
+                    EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
                 }
             }
         }
@@ -950,7 +1015,7 @@ namespace MaximumUI {
             Rect sliderRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - sliderHeight) * 0.5f), rect.width, sliderHeight);
             float value = DoSlider(rect, sliderRect, widget.Value, widget.Min, widget.Max, context);
             if (!Mathf.Approximately(value, widget.Value) && widget.OnChange != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(value); });
+                EnqueueCallback(delegate { widget.OnChange(value); });
             }
         }
 
@@ -963,7 +1028,7 @@ namespace MaximumUI {
                 widget.Format, widget.OnChange != null, out next)) {
                 int captured = (int)next;
                 Action<int> callback = widget.OnChange;
-                if (callback != null) MaximumUIRuntime.EnqueueCallback(delegate { callback(captured); });
+                if (callback != null) EnqueueCallback(delegate { callback(captured); });
             }
         }
 
@@ -976,7 +1041,7 @@ namespace MaximumUI {
                 widget.Format, widget.OnChange != null, out next)) {
                 float captured = (float)next;
                 Action<float> callback = widget.OnChange;
-                if (callback != null) MaximumUIRuntime.EnqueueCallback(delegate { callback(captured); });
+                if (callback != null) EnqueueCallback(delegate { callback(captured); });
             }
         }
 
@@ -989,7 +1054,7 @@ namespace MaximumUI {
                 widget.Format, widget.OnChange != null, out next)) {
                 double captured = next;
                 Action<double> callback = widget.OnChange;
-                if (callback != null) MaximumUIRuntime.EnqueueCallback(delegate { callback(captured); });
+                if (callback != null) EnqueueCallback(delegate { callback(captured); });
             }
         }
 
@@ -1046,12 +1111,12 @@ namespace MaximumUI {
                 }
                 if (!focused && !state.IsEditing) {
                     DrawStyle(context.Theme.TextField, fieldRect, GetContent(FormatNumericValue(state.Value, kind, format)),
-                        MouseOverVisibleRect(fieldRect), false, false, false);
+                        !IsInputBlockedByDialog() && MouseOverVisibleRect(fieldRect), false, false, false);
                 }
 
                 int direction = 0;
-                if (DoButton(minusRect, "−", context.Theme.Button, false)) direction = -1;
-                if (DoButton(plusRect, "+", context.Theme.Button, false)) direction = 1;
+                if (DoIconButton(minusRect, Mdl2Icon.Remove, context.Theme.Button, false)) direction = -1;
+                if (DoIconButton(plusRect, Mdl2Icon.Add, context.Theme.Button, false)) direction = 1;
                 if (direction != 0 && NumericInputParser.IsFinite(step) && !IsInputBlockedByDialog()) {
                     double candidate = state.Value + direction * step;
                     if (double.IsPositiveInfinity(candidate)) candidate = double.MaxValue;
@@ -1084,7 +1149,7 @@ namespace MaximumUI {
             });
             if (changed && next != widget.Value && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 int captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -1097,7 +1162,7 @@ namespace MaximumUI {
             });
             if (changed && !Mathf.Approximately(next, widget.Value) && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 float captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -1106,15 +1171,16 @@ namespace MaximumUI {
             Rect valueRect = DrawNumericLabel(rect, widget.Label, context);
             Rect sliderRect;
             Rect textRect;
-            SplitSliderValueRect(valueRect, out sliderRect, out textRect);
+            string valueText = FormatInt(widget.Value, widget.Format);
+            SplitSliderValueRect(valueRect, valueText, context, out sliderRect, out textRect);
             int min = Math.Min(widget.Min, widget.Max);
             int max = Math.Max(widget.Min, widget.Max);
             float raw = DoSlider(valueRect, SliderTrackRect(sliderRect, context), widget.Value, min, max, context);
             int next = Mathf.Clamp(Mathf.RoundToInt(raw), min, max);
-            DrawStyle(context.Theme.Label, textRect, GetContent(FormatInt(widget.Value, widget.Format)), false, false, false, false);
+            DrawStyle(context.Theme.Label, textRect, GetContent(valueText), false, false, false, false);
             if (next != widget.Value && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 int captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -1123,12 +1189,13 @@ namespace MaximumUI {
             Rect valueRect = DrawNumericLabel(rect, widget.Label, context);
             Rect sliderRect;
             Rect textRect;
-            SplitSliderValueRect(valueRect, out sliderRect, out textRect);
+            string valueText = FormatFloat(widget.Value, widget.Format);
+            SplitSliderValueRect(valueRect, valueText, context, out sliderRect, out textRect);
             float value = DoSlider(valueRect, SliderTrackRect(sliderRect, context), widget.Value, widget.Min, widget.Max, context);
-            DrawStyle(context.Theme.Label, textRect, GetContent(FormatFloat(widget.Value, widget.Format)), false, false, false, false);
+            DrawStyle(context.Theme.Label, textRect, GetContent(valueText), false, false, false, false);
             if (!Mathf.Approximately(value, widget.Value) && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 float captured = value;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -1137,24 +1204,28 @@ namespace MaximumUI {
             Rect valueRect = DrawNumericLabel(rect, widget.Label, context);
             Rect sliderRect;
             Rect textRect;
-            SplitSliderValueRect(valueRect, out sliderRect, out textRect);
+            string valueText = widget.ValueDegrees.ToString("0") + " deg";
+            SplitSliderValueRect(valueRect, valueText, context, out sliderRect, out textRect);
             float value = DoSlider(valueRect, SliderTrackRect(sliderRect, context), widget.ValueDegrees, widget.MinDegrees, widget.MaxDegrees, context);
-            DrawStyle(context.Theme.Label, textRect, GetContent(widget.ValueDegrees.ToString("0") + " deg"), false, false, false, false);
+            DrawStyle(context.Theme.Label, textRect, GetContent(valueText), false, false, false, false);
             if (!Mathf.Approximately(value, widget.ValueDegrees) && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 float captured = value;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
         private void RenderProgressBarAt(LayoutNode node, ProgressBar widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
+            float trackHeight = Mathf.Min(4f, rect.height);
+            Rect track = new Rect(rect.x, rect.yMax - trackHeight, rect.width, trackHeight);
+            DrawFilledRect(track, ToUnityColor(context.Theme.Tokens.ButtonBg));
             float t = widget.Indeterminate ? 0.35f : Mathf.Clamp01(widget.Value);
-            Rect fillRect = new Rect(rect.x + 1f, rect.y + 1f, Mathf.Max(0f, (rect.width - 2f) * t), Mathf.Max(0f, rect.height - 2f));
-            DrawStyle(context.Theme.TabButton, fillRect, GUIContent.none, false, false, true, false);
+            DrawFilledRect(new Rect(track.x, track.y, track.width * t, track.height),
+                ToUnityColor(GUI.enabled ? context.Theme.Tokens.Accent : context.Theme.Tokens.TextDisabled));
             string text = widget.Text;
             if (string.IsNullOrEmpty(text)) text = ((int)(Mathf.Clamp01(widget.Value) * 100f)).ToString() + "%";
-            DrawStyle(context.Theme.CenterLabel, rect, GetContent(text), false, false, false, false);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                new Rect(rect.x, rect.y, rect.width, Mathf.Max(0f, rect.height - 8f)), GetContent(text), false, false, false, false);
         }
 
         private void RenderStatusBadgeAt(LayoutNode node, StatusBadge widget, RenderContext context, Vector2 offset) {
@@ -1166,13 +1237,12 @@ namespace MaximumUI {
 
         private void RenderLoadingIndicatorAt(LayoutNode node, LoadingIndicator widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            float size = Mathf.Min(10f, Mathf.Max(4f, rect.height - 6f));
-            float phase = Time.realtimeSinceStartup % 1f;
-            float x = rect.x + 3f + (widget.Indeterminate ? Mathf.Round(phase * 4f) : 0f);
-            Rect mark = new Rect(x, rect.y + Mathf.Max(0f, (rect.height - size) * 0.5f), size, size);
-            DrawFilledRect(mark, ToUnityColor(context.Theme.Tokens.Accent));
+            float radius = Mathf.Min(2f, rect.height * 0.5f);
+            for (int i = 0; i < 5; i++)
+                DrawDisc(new Rect(rect.x + 2f + i * 7f - radius, rect.center.y - radius, radius * 2f, radius * 2f),
+                    GUI.enabled ? context.Theme.Tokens.Accent : context.Theme.Tokens.TextDisabled);
             string text = string.IsNullOrEmpty(widget.Text) ? "Loading" : widget.Text;
-            DrawStyle(context.Theme.Label, new Rect(rect.x + 20f, rect.y, Mathf.Max(1f, rect.width - 20f), rect.height), GetContent(text), false, false, false, false);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, new Rect(rect.x + 44f, rect.y, Mathf.Max(0f, rect.width - 44f), rect.height), GetContent(text), false, false, false, false);
         }
 
         private void RenderImageAt(LayoutNode node, Image widget, RenderContext context, Vector2 offset) {
@@ -1202,7 +1272,7 @@ namespace MaximumUI {
                 DrawStyle(context.Theme.Label, new Rect(rect.x + imageSize + 8f, rect.y, Mathf.Max(1f, rect.width - imageSize - 10f), rect.height), GetContent(widget.Text), false, false, false, false);
             }
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
         }
 
@@ -1234,16 +1304,29 @@ namespace MaximumUI {
             string id = context.StateId(widget, "search");
             TextFieldState state = context.StateStore.GetOrCreate<TextFieldState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
-            Rect textRect = new Rect(rect.x + 18f, rect.y, Mathf.Max(1f, rect.width - 20f), rect.height);
-            DrawStyle(context.Theme.Label, new Rect(rect.x + 4f, rect.y, 14f, rect.height), GetContent("S"), false, false, false, false);
+            bool hasText = !string.IsNullOrEmpty(state.Focused && state.HasEditingValue ? state.EditingValue : widget.Value);
+            bool canClear = hasText && !HasTextInputFlag(widget.Flags, TextInputFlags.ReadOnly);
+            bool clearHovered = false, clearPressed = false;
+            Rect clearRect = new Rect(rect.xMax - 30f, rect.y + 2f, 28f, Mathf.Max(0f, rect.height - 4f));
+            if (canClear) {
+                bool clear = DoButton(clearRect, string.Empty, null, false, out clearHovered, out clearPressed);
+                if (clear) {
+                    if (string.IsNullOrEmpty(state.ControlName)) state.ControlName = id;
+                    state.EditingValue = string.Empty;
+                    state.HasEditingValue = true;
+                    GUI.FocusControl(state.ControlName);
+                    if (widget.OnEdit != null) EnqueueCallback(delegate { widget.OnEdit(string.Empty); });
+                    if (widget.OnChange != null) EnqueueCallback(delegate { widget.OnChange(string.Empty); });
+                }
+            }
             RenderTextInputCore(
-                textRect,
+                rect,
                 state,
                 id,
                 widget.Value,
                 widget.Placeholder,
                 widget.MaxLength,
-                context.Theme.TextField,
+                searchFieldStyle,
                 widget.Flags,
                 widget.CharFilter,
                 false,
@@ -1254,6 +1337,10 @@ namespace MaximumUI {
                 context,
                 TextInputKind.TextField,
                 '\0');
+            if (clearHovered || clearPressed) DrawFilledRect(clearRect,
+                ToUnityColor(clearPressed ? context.Theme.Tokens.ButtonActiveBg : context.Theme.Tokens.ButtonHoverBg));
+            DrawIcon(new Rect(rect.xMax - 28f, rect.y, 24f, rect.height),
+                string.IsNullOrEmpty(state.EditingValue) || HasTextInputFlag(widget.Flags, TextInputFlags.ReadOnly) ? Mdl2Icon.Search : Mdl2Icon.Close, NativeTextColor(context), 1f);
         }
 
         private void RenderTextAreaAt(LayoutNode node, TextArea widget, RenderContext context, Vector2 offset) {
@@ -1359,12 +1446,15 @@ namespace MaximumUI {
                 : ApplyTextInputFilter(next, flags, charFilter, maxLength);
 
             state.Focused = string.Equals(GUI.GetNameOfFocusedControl(), state.ControlName, StringComparison.Ordinal);
-            if (GUI.enabled && context.OwnsKeyboardInput && ((autoFocus && !state.AutoFocusApplied) ||
+            if (GUI.enabled && !IsInputBlockedByDialog() && context.OwnsKeyboardInput && ((autoFocus && !state.AutoFocusApplied) ||
                 (currentWidget != null && context.Navigation != null && context.Navigation.IsKeyboardFocused(currentWidget, context.Path) && !state.Focused))) {
                 GUI.FocusControl(state.ControlName);
                 state.AutoFocusApplied = true;
                 state.Focused = true;
             }
+            bool acceptsEditing = GUI.enabled && !HasTextInputFlag(flags, TextInputFlags.ReadOnly);
+            DrawStrokeRect(rect, ToUnityColor(Mdl2ControlChrome.FieldBorderColor(context.Theme.Tokens,
+                acceptsEditing, acceptsEditing && !IsInputBlockedByDialog() && MouseOverVisibleRect(rect), state.Focused && context.OwnsKeyboardInput && !IsInputBlockedByDialog())), 2f);
 
             if (state.Focused && !state.HasFocusStartValue) {
                 state.FocusStartValue = state.EditingValue ?? string.Empty;
@@ -1388,7 +1478,7 @@ namespace MaximumUI {
                     (kind != TextInputKind.TextArea || HasTextInputFlag(flags, TextInputFlags.EnterReturnsTrue))) {
                     if (onSubmit != null && !IsInputBlockedByDialog()) {
                         string capturedSubmit = next;
-                        MaximumUIRuntime.EnqueueCallback(delegate { onSubmit(capturedSubmit); });
+                        EnqueueCallback(delegate { onSubmit(capturedSubmit); });
                     }
                     handledKey = true;
                 }
@@ -1405,11 +1495,11 @@ namespace MaximumUI {
                 if (!IsInputBlockedByDialog()) {
                     if (onEdit != null) {
                         string capturedEdit = next;
-                        MaximumUIRuntime.EnqueueCallback(delegate { onEdit(capturedEdit); });
+                        EnqueueCallback(delegate { onEdit(capturedEdit); });
                     }
                     if (onChange != null) {
                         string captured = next;
-                        MaximumUIRuntime.EnqueueCallback(delegate { onChange(captured); });
+                        EnqueueCallback(delegate { onChange(captured); });
                     }
                 }
             }
@@ -1423,7 +1513,7 @@ namespace MaximumUI {
                 state.HasFocusStartValue = false;
                 if (onBlur != null) {
                     string capturedBlur = state.EditingValue ?? string.Empty;
-                    MaximumUIRuntime.EnqueueCallback(delegate { onBlur(capturedBlur); });
+                    EnqueueCallback(delegate { onBlur(capturedBlur); });
                 }
             }
             state.WasFocused = state.Focused;
@@ -1473,14 +1563,14 @@ namespace MaximumUI {
             state.Choices.Refresh(widget, widget.ListItems, state.Formatter, filter, contentRevision, context.CacheLayout);
             IList<object> values = state.Choices.Values;
 
-            float rowHeight = Mathf.Max(18f, context.Theme.FontSize + 8f);
+            float rowHeight = controlRowHeight;
             Rect listRect = rect;
             if (searchable != null) {
                 Rect filterRect = new Rect(rect.x + 2f, rect.y + 2f, Mathf.Max(1f, rect.width - 4f), rowHeight);
                 string nextFilter = GUI.TextField(filterRect, filter, context.Theme.TextField);
                 if (!string.Equals(nextFilter, filter, StringComparison.Ordinal) && searchable.ListOnFilterChange != null && !IsInputBlockedByDialog()) {
                     string capturedFilter = nextFilter ?? string.Empty;
-                    MaximumUIRuntime.EnqueueCallback(delegate { searchable.ListOnFilterChange(capturedFilter); });
+                    EnqueueCallback(delegate { searchable.ListOnFilterChange(capturedFilter); });
                 }
                 if (string.IsNullOrEmpty(filter) && !string.IsNullOrEmpty(searchable.ListFilterPlaceholder) && (Event.current == null || Event.current.type == EventType.Repaint)) {
                     DrawStyle(context.Theme.Label, filterRect, GetContent(searchable.ListFilterPlaceholder), false, false, false, false);
@@ -1501,7 +1591,7 @@ namespace MaximumUI {
                     if (next != selected) {
                         object captured = values[next];
                         Delegate callback = widget.ListOnChange;
-                        MaximumUIRuntime.EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
+                        EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
                     }
                     ConsumeKey();
                 }
@@ -1522,7 +1612,7 @@ namespace MaximumUI {
                     if (DoButton(rowRect, state.Choices.Labels[i], context.Theme.NavigationItem, selected) && widget.ListOnChange != null && !IsInputBlockedByDialog()) {
                         object captured = item;
                         Delegate callback = widget.ListOnChange;
-                        MaximumUIRuntime.EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
+                        EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
                     }
                 }
             } finally {
@@ -1534,7 +1624,7 @@ namespace MaximumUI {
             string id = context.StateId(node.Widget, "debug-lines");
             ScrollViewState state = context.StateStore.GetOrCreate<ScrollViewState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
-            float rowHeight = Mathf.Max(18f, context.Theme.FontSize + 8f);
+            float rowHeight = controlRowHeight;
             IList<string> lines = widget.GetDebugLines();
             int visibleRows = Mathf.Max(1, widget.VisibleRows);
             float contentHeight = rowHeight * Mathf.Max(visibleRows + 1, lines.Count + 1) + 4f;
@@ -1569,10 +1659,11 @@ namespace MaximumUI {
             ScrollViewState state = context.StateStore.GetOrCreate<ScrollViewState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
             ThemeTokens tokens = widget.Tokens ?? new ThemeTokens();
-            float rowHeight = Mathf.Max(18f, context.Theme.FontSize + 8f);
+            float rowHeight = controlRowHeight;
             int visibleRows = Mathf.Max(1, ThemeEditorTokens.VisibleRowCount(widget));
             int totalRows = Mathf.Max(1, ThemeEditorTokens.TotalRowCount(widget));
-            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, rect.width - 16f), rowHeight * (totalRows + 1) + 4f);
+            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, rect.width - 16f), rowHeight * (totalRows + (widget.ShowTitle ? 1 : 0)) + 4f);
+            float colorLabelWidth = ThemeEditorTokens.MeasureLabelWidth(widget, popupTextMeasure, Mathf.Max(0f, viewRect.width - 4f));
 
             if (Event.current == null || Event.current.type == EventType.Repaint) {
                 DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
@@ -1581,16 +1672,17 @@ namespace MaximumUI {
             state.Position = BeginScrollView(context, rect, state.Position, viewRect, false, totalRows > visibleRows);
             try {
                 Rect title = new Rect(2f, 2f, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
-                if (Event.current == null || Event.current.type == EventType.Repaint) {
-                    DrawStyle(context.Theme.TabButton, title, GetContent("Theme Editor"), false, false, true, false);
+                if (widget.ShowTitle && (Event.current == null || Event.current.type == EventType.Repaint)) {
+                    DrawStyle(context.Theme.Subheading, title, GetContent(widget.Title), false, false, false, false);
                 }
+                float contentTop = widget.ShowTitle ? title.yMax : 2f;
 
                 int row = 0;
                 if (widget.ShowColors) {
                     for (int i = 0; i < ThemeEditorTokens.GetColors(widget).Length; i++) {
                         ThemeColorToken token = ThemeEditorTokens.GetColors(widget)[i];
-                        Rect rowRect = new Rect(2f, title.yMax + row * rowHeight, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
-                        RenderThemeColorRow(context, widget, tokens, token, rowRect);
+                        Rect rowRect = new Rect(2f, contentTop + row * rowHeight, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
+                        RenderThemeColorRow(context, widget, tokens, token, rowRect, colorLabelWidth);
                         row++;
                     }
                 }
@@ -1598,7 +1690,7 @@ namespace MaximumUI {
                 if (widget.ShowScalars) {
                     for (int i = 0; i < ThemeEditorTokens.GetScalars(widget).Length; i++) {
                         ThemeScalarToken token = ThemeEditorTokens.GetScalars(widget)[i];
-                        Rect rowRect = new Rect(2f, title.yMax + row * rowHeight, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
+                        Rect rowRect = new Rect(2f, contentTop + row * rowHeight, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
                         RenderThemeScalarRow(context, widget, tokens, token, rowRect);
                         row++;
                     }
@@ -1610,10 +1702,10 @@ namespace MaximumUI {
             RegisterInputRegion(rect, true);
         }
 
-        private void RenderThemeColorRow(RenderContext context, ThemeEditor editor, ThemeTokens tokens, ThemeColorToken token, Rect rowRect) {
+        private void RenderThemeColorRow(RenderContext context, ThemeEditor editor, ThemeTokens tokens, ThemeColorToken token, Rect rowRect, float labelWidth) {
             MuiColor value;
             if (RenderColorEditCore(rowRect, ThemeEditorTokens.ColorName(token), tokens.GetColor(token),
-                true, ColorDisplayMode.Byte, true, context, out value) && !IsInputBlockedByDialog()) {
+                true, ColorDisplayMode.Byte, true, context, out value, labelWidth) && !IsInputBlockedByDialog()) {
                 ThemeTokens next = tokens.Clone();
                 next.SetColor(token, value);
                 ApplyThemeEdit(editor, next);
@@ -1632,27 +1724,27 @@ namespace MaximumUI {
                 DrawStyle(context.Theme.Label, valueRect, GetContent(value.ToString("0.##")), false, false, false, false);
             }
 
-            if (DoButton(minusRect, "-", context.Theme.Button, false) && !IsInputBlockedByDialog()) {
+            if (DoIconButton(minusRect, Mdl2Icon.Remove, context.Theme.Button, false) && !IsInputBlockedByDialog()) {
                 ApplyThemeScalarEdit(editor, tokens, token, value - Mathf.Max(0.1f, editor.ScalarStep));
             }
 
-            if (DoButton(plusRect, "+", context.Theme.Button, false) && !IsInputBlockedByDialog()) {
+            if (DoIconButton(plusRect, Mdl2Icon.Add, context.Theme.Button, false) && !IsInputBlockedByDialog()) {
                 ApplyThemeScalarEdit(editor, tokens, token, value + Mathf.Max(0.1f, editor.ScalarStep));
             }
         }
 
-        private static void ApplyThemeScalarEdit(ThemeEditor editor, ThemeTokens tokens, ThemeScalarToken token, float value) {
+        private void ApplyThemeScalarEdit(ThemeEditor editor, ThemeTokens tokens, ThemeScalarToken token, float value) {
             ThemeTokens next = tokens.Clone();
             next.SetScalar(token, ClampThemeScalar(token, value));
             ApplyThemeEdit(editor, next);
         }
 
-        private static void ApplyThemeEdit(ThemeEditor editor, ThemeTokens next) {
+        private void ApplyThemeEdit(ThemeEditor editor, ThemeTokens next) {
             if (editor == null || next == null) return;
 
             if (editor.OnChange != null) {
                 ThemeTokens captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { editor.OnChange(captured); });
+                EnqueueCallback(delegate { editor.OnChange(captured); });
             } else if (editor.Tokens != null) {
                 editor.Tokens.CopyFrom(next);
             }
@@ -1692,12 +1784,11 @@ namespace MaximumUI {
 
         private void RenderFoldoutAt(LayoutNode node, Foldout widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, Mathf.Max(20f, context.Theme.FontSize + 8f)));
-            string text = (widget.Open ? "[-] " : "[+] ") + widget.Label;
-            bool clicked = DoButton(headerRect, text, context.Theme.FoldoutHeader, widget.Open) || ConsumeActivation(widget, context);
+            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, controlRowHeight));
+            bool clicked = DoDisclosureButton(headerRect, widget.Label, widget.Open, context, widget.Framed) || ConsumeActivation(widget, context);
             if (clicked && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 bool open = !widget.Open;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(open); });
+                EnqueueCallback(delegate { widget.OnChange(open); });
             }
 
             if (widget.Open) RenderLayoutChildren(node, context, offset);
@@ -1705,11 +1796,11 @@ namespace MaximumUI {
 
         private void RenderCollapsingHeaderAt(LayoutNode node, CollapsingHeader widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, Mathf.Max(20f, context.Theme.FontSize + 8f)));
-            bool clicked = DoButton(headerRect, (widget.Open ? "[-] " : "[+] ") + widget.Label, context.Theme.FoldoutHeader, widget.Open) || ConsumeActivation(widget, context);
+            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, controlRowHeight));
+            bool clicked = DoDisclosureButton(headerRect, widget.Label, widget.Open, context, widget.Framed) || ConsumeActivation(widget, context);
             if (clicked && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 bool open = !widget.Open;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(open); });
+                EnqueueCallback(delegate { widget.OnChange(open); });
             }
 
             if (widget.Open) RenderLayoutChildren(node, context, offset);
@@ -1719,19 +1810,19 @@ namespace MaximumUI {
             if (!widget.Visible) return;
 
             Rect rect = OffsetRect(node.Rect, offset);
-            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, Mathf.Max(20f, context.Theme.FontSize + 8f)));
-            float closeSize = Mathf.Min(headerRect.height - 4f, 18f);
-            Rect closeRect = new Rect(headerRect.xMax - closeSize - 2f, headerRect.y + 2f, closeSize, closeSize);
-            Rect toggleRect = new Rect(headerRect.x, headerRect.y, Mathf.Max(1f, headerRect.width - closeSize - 4f), headerRect.height);
+            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, controlRowHeight));
+            float closeSize = Mathf.Min(headerRect.width, 32f);
+            Rect closeRect = new Rect(headerRect.xMax - closeSize, headerRect.y, closeSize, headerRect.height);
+            Rect toggleRect = new Rect(headerRect.x, headerRect.y, Mathf.Max(0f, headerRect.width - closeSize), headerRect.height);
 
-            bool clicked = DoButton(toggleRect, (widget.Open ? "[-] " : "[+] ") + widget.Label, context.Theme.FoldoutHeader, widget.Open) || ConsumeActivation(widget, context);
+            bool clicked = DoDisclosureButton(toggleRect, widget.Label, widget.Open, context, widget.Framed, headerRect) || ConsumeActivation(widget, context);
             if (clicked && widget.OnChange != null && !IsInputBlockedByDialog()) {
                 bool open = !widget.Open;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(open); });
+                EnqueueCallback(delegate { widget.OnChange(open); });
             }
 
-            if (DoButton(closeRect, "x", context.Theme.Button, false) && !IsInputBlockedByDialog()) {
-                if (widget.OnClose != null) MaximumUIRuntime.EnqueueCallback(widget.OnClose);
+            if (DoIconButton(closeRect, Mdl2Icon.Close, context.Theme.QuietButton, false) && !IsInputBlockedByDialog()) {
+                if (widget.OnClose != null) EnqueueCallback(widget.OnClose);
             }
 
             if (widget.Open) RenderLayoutChildren(node, context, offset);
@@ -1743,7 +1834,7 @@ namespace MaximumUI {
 
             string id = context.StateId(widget, "tabs");
             TabsState state = context.StateStore.GetOrCreate<TabsState>(id);
-            float headerHeight = Mathf.Max(20f, context.Theme.FontSize + 8f);
+            float headerHeight = controlRowHeight;
             List<Tab> tabs = state.VisibleTabs;
             List<TabItemButton> leadingButtons = state.LeadingButtons;
             List<TabItemButton> trailingButtons = state.TrailingButtons;
@@ -1780,7 +1871,7 @@ namespace MaximumUI {
                 if (KeyboardNavigation.MoveSelection(selected, tabs.Count, Event.current.keyCode, 1, out next)) {
                     if (next != selected) {
                         int captured = next;
-                        MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                        EnqueueCallback(delegate { widget.OnChange(captured); });
                     }
                     ConsumeKey();
                 }
@@ -1802,7 +1893,7 @@ namespace MaximumUI {
                 if (tab.Closable) {
                     float closeSize = Mathf.Min(headerHeight - 4f, 18f);
                     Rect closeRect = new Rect(tabRect.xMax - closeSize - 2f, tabRect.y + 2f, closeSize, closeSize);
-                    if (DoButton(closeRect, "x", context.Theme.Button, false)) {
+                    if (DoIconButton(closeRect, Mdl2Icon.Close, context.Theme.QuietButton, false)) {
                         closeTriggered = true;
                         CloseTab(widget, tab, i);
                     }
@@ -1819,7 +1910,7 @@ namespace MaximumUI {
                 if (!closeTriggered && DoButton(labelRect, title, context.Theme.TabButton, i == selected) && !state.Dragging) {
                     int captured = i;
                     if (captured != selected && widget.OnChange != null && !IsInputBlockedByDialog()) {
-                        MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                        EnqueueCallback(delegate { widget.OnChange(captured); });
                     }
                 }
 
@@ -1834,7 +1925,7 @@ namespace MaximumUI {
                 int from;
                 int to;
                 if (state.CompleteDrag(dropTarget, acceptsInput && widget.OnReorder != null, out from, out to)) {
-                    MaximumUIRuntime.EnqueueCallback(delegate { widget.OnReorder(from, to); });
+                    EnqueueCallback(delegate { widget.OnReorder(from, to); });
                     if (current.type != EventType.Used) current.Use();
                 }
             }
@@ -1853,10 +1944,18 @@ namespace MaximumUI {
             string id = context.StateId(widget, "menubar");
             MenuBarState state = context.StateStore.GetOrCreate<MenuBarState>(id);
             state.Seen = true;
+            bool ownerEnabled = state.PopupOwner.Capture(ownerAncestors, modelRootEnabled) && modelEnabled;
+            if (!ownerEnabled || (state.Open && !RefreshMenuOwnerPath(widget, state))) {
+                state.Open = false;
+                state.OpenIndex = -1;
+                state.PopupOwner.Invalidate();
+            }
+            bool beginOwner = false;
             Rect rect = OffsetRect(node.Rect, offset);
 
             if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
+                DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+                DrawStrokeRect(rect, ToUnityColor(context.Theme.Tokens.Border), 1f);
             }
 
             float x = rect.x + 2f;
@@ -1864,39 +1963,47 @@ namespace MaximumUI {
                 Menu menu = widget.Children[i] as Menu;
                 if (menu == null) continue;
 
-                float width = Mathf.Max(44f, menu.Title.Length * context.Theme.FontSize * 0.55f + 18f);
+                float width = Mathf.Max(44f, context.Theme.Label.CalcSize(GetContent(menu.Title)).x + 20f);
                 Rect menuRect = new Rect(x, rect.y + 2f, width, Mathf.Max(1f, rect.height - 4f));
                 bool selected = state.Open && state.OpenIndex == i;
-                if (DoButton(menuRect, menu.Title, context.Theme.TabButton, selected) && !IsInputBlockedByDialog()) {
+                bool oldEnabled = GUI.enabled;
+                GUI.enabled = GUI.enabled && menu.Enabled;
+                bool clicked = DoButton(menuRect, string.Empty, context.Theme.TabButton, selected);
+                DrawStyle(GUI.enabled ? context.Theme.CenterLabel : disabledCenterLabel, menuRect, GetContent(menu.Title), false, false, false, false);
+                if (clicked && !IsInputBlockedByDialog()) {
                     if (selected) {
                         state.Open = false;
                         state.OpenIndex = -1;
+                        state.PopupOwner.Close();
                     } else {
                         context.CloseMenus();
                         context.HideOtherComboBoxes(null);
                         state.Open = true;
                         state.OpenIndex = i;
+                        beginOwner = true;
                         state.Anchor = ToUnityRect(coordinates.ToScreen(ToMuiRect(menuRect)));
                         state.ModalDialog = currentDialog;
                         context.ActiveMenuBar = state;
                     }
-                } else if (!context.SuppressInput && state.Open && Event.current != null && MouseOverVisibleRect(menuRect)) {
-                    if (state.OpenIndex != i) state.SubmenuPath.Clear();
+                } else if (GUI.enabled && !context.SuppressInput && state.Open && Event.current != null && MouseOverVisibleRect(menuRect)) {
+                    if (state.OpenIndex != i) { state.SubmenuPath.Clear(); beginOwner = true; }
                     state.OpenIndex = i;
                     state.Anchor = ToUnityRect(coordinates.ToScreen(ToMuiRect(menuRect)));
                 }
                 if (state.Open && state.OpenIndex == i) state.Anchor = ToUnityRect(coordinates.ToScreen(ToMuiRect(menuRect)));
-
+                GUI.enabled = oldEnabled;
                 x += width + 2f;
             }
 
+            if (state.Open && !RefreshMenuOwnerPath(widget, state)) { state.Open = false; state.OpenIndex = -1; }
+            if (state.Open && (beginOwner || !state.PopupOwner.Open)) state.PopupOwner.BeginOpen();
             if (state.Open && state.OpenIndex >= 0 && state.OpenIndex < widget.Children.Count) {
                 Menu menu = widget.Children[state.OpenIndex] as Menu;
                 if (menu != null) {
                     context.Overlay.Register(new OverlayRequest {
                         SortOrder = 1200,
                         Render = delegate(RenderContext renderContext) {
-                            DrawPopup(renderContext, state.ModalDialog, delegate { DrawMenuPopup(renderContext, state, menu); });
+                            DrawPopup(renderContext, state.ModalDialog, delegate { DrawMenuPopup(renderContext, state, menu); }, state.PopupOwner);
                         }
                     });
                 }
@@ -1908,6 +2015,7 @@ namespace MaximumUI {
         private void DrawMenuPopup(RenderContext context, MenuBarState state, Menu menu) {
             Event current = Event.current;
             if (!state.Open) return;
+            if (!state.PopupOwner.IsEnabled) { state.Open = false; state.OpenIndex = -1; state.PopupOwner.Invalidate(); return; }
             for (int i = 0; i < state.SubmenuPath.Count; i++) {
                 int index = state.SubmenuPath[i];
                 Menu child = index >= 0 && index < menu.Children.Count ? menu.Children[index] as Menu : null;
@@ -1921,29 +2029,15 @@ namespace MaximumUI {
                 return;
             }
 
-            float itemHeight = Mathf.Max(20f, context.Theme.FontSize + 8f);
-            float width = 120f;
-            float height = 4f;
-            if (state.SubmenuPath.Count > 0) height += itemHeight;
-            for (int i = 0; i < menu.Children.Count; i++) {
-                MenuItem item = menu.Children[i] as MenuItem;
-                MenuSeparator separator = menu.Children[i] as MenuSeparator;
-                if (item != null) {
-                    string text = (item.Checked ? "[x] " : "    ") + item.Text;
-                    if (!string.IsNullOrEmpty(item.Shortcut)) text += "    " + item.Shortcut;
-                    width = Mathf.Max(width, text.Length * context.Theme.FontSize * 0.55f + 18f);
-                    height += itemHeight;
-                } else if (separator != null) {
-                    width = Mathf.Max(width, separator.Text.Length * context.Theme.FontSize * 0.55f + 36f);
-                    height += string.IsNullOrEmpty(separator.Text) ? 8f : itemHeight;
-                } else if (menu.Children[i] is Menu) {
-                    Menu childMenu = (Menu)menu.Children[i];
-                    width = Mathf.Max(width, childMenu.Title.Length * context.Theme.FontSize * 0.55f + 32f);
-                    height += itemHeight;
-                }
+            bool hasBack = state.SubmenuPath.Count > 0;
+            PopupLayout popup = PopupGeometry.Menu(ToMuiRect(state.Anchor), new MuiRect(0f, 0f, Screen.width, Screen.height),
+                menu, hasBack, controlRowHeight, popupTextMeasure);
+            state.PopupRect = ToUnityRect(popup.Bounds);
+            if (!ReferenceEquals(state.PopupMenu, menu)) {
+                state.PopupMenu = menu;
+                state.ScrollPosition = Vector2.zero;
             }
-
-            state.PopupRect = ClampOverlayRect(new Rect(state.Anchor.x, state.Anchor.yMax + 2f, width, Mathf.Max(itemHeight, height)));
+            state.ScrollPosition.y = popup.ClampScroll(state.ScrollPosition.y);
             if (GUI.enabled && current != null && current.type == EventType.MouseDown && !MouseOverVisibleRect(state.PopupRect) && !MouseOverVisibleRect(state.Anchor)) {
                 state.Open = false;
                 state.OpenIndex = -1;
@@ -1951,62 +2045,121 @@ namespace MaximumUI {
                 return;
             }
 
-            Color oldColor = GUI.color;
-            GUI.color = WithAlpha(oldColor, context.Theme.WindowOpacity);
-            try {
-                DrawStyle(context.Theme.Dropdown, state.PopupRect, GUIContent.none, false, false, false, false);
-            } finally {
-                GUI.color = oldColor;
-            }
-
+            DrawFilledRect(state.PopupRect, WithAlpha(ToUnityColor(context.Theme.Tokens.DropdownBg), context.Theme.WindowOpacity));
+            DrawStrokeRect(state.PopupRect, ToUnityColor(context.Theme.Tokens.ControlBorder), 1f);
             GUI.BeginGroup(state.PopupRect);
             coordinates.PushGroup(ToMuiRect(state.PopupRect));
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = GUI.enabled && menu.Enabled;
             try {
-                float y = 2f;
-                if (state.SubmenuPath.Count > 0) {
-                    if (DoButton(new Rect(2f, y, Mathf.Max(1f, state.PopupRect.width - 4f), itemHeight), "‹ Back", context.Theme.ComboBoxItem, false))
-                        state.SubmenuPath.RemoveAt(state.SubmenuPath.Count - 1);
-                    y += itemHeight;
+                if (popup.Scrollable) {
+                    Rect viewport = new Rect(popup.ScrollViewport.X - popup.Bounds.X, popup.ScrollViewport.Y - popup.Bounds.Y,
+                        popup.ScrollViewport.Width, popup.ScrollViewport.Height);
+                    state.ScrollPosition = BeginScrollView(context, viewport, state.ScrollPosition,
+                        new Rect(0f, 0f, popup.ContentViewport.Width, popup.ContentHeight), false, false);
                 }
-                for (int i = 0; i < menu.Children.Count; i++) {
-                    MenuItem item = menu.Children[i] as MenuItem;
-                    MenuSeparator separator = menu.Children[i] as MenuSeparator;
-                    Menu childMenu = menu.Children[i] as Menu;
-                    if (item != null) {
-                        Rect row = new Rect(2f, y, Mathf.Max(1f, state.PopupRect.width - 4f), itemHeight);
-                        string text = (item.Checked ? "[x] " : "    ") + item.Text;
-                        if (!string.IsNullOrEmpty(item.Shortcut)) text += "    " + item.Shortcut;
-                        bool oldEnabled = GUI.enabled;
-                        GUI.enabled = GUI.enabled && item.Enabled;
-                        bool clicked = DoButton(row, text, context.Theme.ComboBoxItem, false);
-                        GUI.enabled = oldEnabled;
-                        if (clicked && item.OnClick != null && !IsInputBlockedByDialog()) {
-                            Action action = item.OnClick;
-                            state.Open = false;
-                            state.OpenIndex = -1;
-                            MaximumUIRuntime.EnqueueCallback(action);
-                        }
-                        y += itemHeight;
-                    } else if (separator != null) {
-                        if (string.IsNullOrEmpty(separator.Text)) {
-                            DrawStyle(context.Theme.Separator, new Rect(6f, y + 3f, Mathf.Max(1f, state.PopupRect.width - 12f), 1f), GUIContent.none, false, false, false, false);
-                            y += 8f;
-                        } else {
-                            DrawStyle(context.Theme.CenterLabel, new Rect(4f, y, Mathf.Max(1f, state.PopupRect.width - 8f), itemHeight), GetContent(separator.Text), false, false, false, false);
-                            y += itemHeight;
-                        }
-                    } else if (childMenu != null) {
-                        Rect row = new Rect(2f, y, Mathf.Max(1f, state.PopupRect.width - 4f), itemHeight);
-                        if (DoButton(row, childMenu.Title + "  ›", context.Theme.ComboBoxItem, false) && !IsInputBlockedByDialog()) state.SubmenuPath.Add(i);
-                        y += itemHeight;
+                try {
+                    if (hasBack) {
+                        Rect back = MenuPopupLocalRect(popup.Row(0, 0f), popup);
+                        bool hover, active;
+                        if (DoButton(back, string.Empty, null, false, out hover, out active))
+                            state.SubmenuPath.RemoveAt(state.SubmenuPath.Count - 1);
+                        DrawMenuRowBackground(back, context, hover, active);
+                        DrawIcon(ToUnityRect(PopupGeometry.MenuIconBounds(ToMuiRect(back))), Mdl2Icon.ChevronLeft, NativeTextColor(context), 1f);
+                        DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, ToUnityRect(PopupGeometry.MenuTextBounds(ToMuiRect(back), 0f, false)),
+                            GetContent("Back"), false, false, false, false);
                     }
-                }
+                    float rowY = popup.ContentViewport.Y + (hasBack ? popup.RowHeight : 0f);
+                    for (int i = 0; i < menu.Children.Count; i++) {
+                        Widget child = menu.Children[i];
+                        float rowHeight = PopupGeometry.MenuRowHeight(child, popup.RowHeight);
+                        Rect row = MenuPopupLocalRect(new MuiRect(popup.ContentViewport.X, rowY, popup.ContentViewport.Width, rowHeight), popup);
+                        rowY += rowHeight;
+                        if (child == null) continue;
+                        MenuItem item = child as MenuItem;
+                        MenuSeparator separator = child as MenuSeparator;
+                        Menu childMenu = child as Menu;
+                        bool oldEnabled = GUI.enabled;
+                        GUI.enabled = GUI.enabled && child.Enabled;
+                        try {
+                            if (item != null) {
+                                bool hover, active;
+                                bool clicked = DoButton(row, string.Empty, null, false, out hover, out active);
+                                DrawMenuRowBackground(row, context, hover, active);
+                                if (item.Checked) DrawIcon(ToUnityRect(PopupGeometry.MenuIconBounds(ToMuiRect(row))), Mdl2Icon.Check, NativeTextColor(context), 1.5f);
+                                float shortcutWidth = string.IsNullOrEmpty(item.Shortcut) ? 0f : MeasurePopupText(item.Shortcut) + 16f;
+                                DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                                    ToUnityRect(PopupGeometry.MenuTextBounds(ToMuiRect(row), shortcutWidth, false)), GetContent(item.Text), false, false, false, false);
+                                if (shortcutWidth > 0f) DrawStyle(GUI.enabled ? popupShortcutStyle : disabledRightLabel,
+                                    ToUnityRect(PopupGeometry.MenuShortcutBounds(ToMuiRect(row), shortcutWidth)), GetContent(item.Shortcut), false, false, false, false);
+                                if (clicked && item.OnClick != null && !IsInputBlockedByDialog()) {
+                                    Action action = item.OnClick;
+                                    state.Open = false;
+                                    state.OpenIndex = -1;
+                                    state.PopupOwner.Close();
+                                    EnqueueCallback(action, item);
+                                }
+                            } else if (separator != null) {
+                                if (string.IsNullOrEmpty(separator.Text))
+                                    DrawFilledRect(new Rect(row.x + 4f, row.y + 3f, Mathf.Max(0f, row.width - 8f), 1f), ToUnityColor(context.Theme.Tokens.Separator));
+                                else DrawStyle(context.Theme.MutedLabel, ToUnityRect(PopupGeometry.Inset(ToMuiRect(row), 10f, 0f, 10f, 0f)),
+                                    GetContent(separator.Text), false, false, false, false);
+                            } else if (childMenu != null) {
+                                bool hover, active;
+                                bool clicked = DoButton(row, string.Empty, null, false, out hover, out active);
+                                DrawMenuRowBackground(row, context, hover, active);
+                                DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                                    ToUnityRect(PopupGeometry.MenuTextBounds(ToMuiRect(row), 0f, true)), GetContent(childMenu.Title), false, false, false, false);
+                                DrawIcon(ToUnityRect(PopupGeometry.MenuIconBounds(ToMuiRect(row), true)), Mdl2Icon.ChevronRight, NativeTextColor(context), 1f);
+                                if (clicked && !IsInputBlockedByDialog()) state.SubmenuPath.Add(i);
+                            }
+                        } finally { GUI.enabled = oldEnabled; }
+                    }
+                } finally { if (popup.Scrollable) EndScrollView(); }
             } finally {
+                GUI.enabled = previousEnabled;
                 coordinates.Pop();
                 GUI.EndGroup();
             }
 
             RegisterInputRegion(state.PopupRect, state.Open, true);
+        }
+
+        private static Rect MenuPopupLocalRect(MuiRect rect, PopupLayout popup) {
+            MuiRect origin = popup.Scrollable ? popup.ContentViewport : popup.Bounds;
+            return new Rect(rect.X - origin.X, rect.Y - origin.Y, rect.Width, rect.Height);
+        }
+
+        private bool RefreshMenuOwnerPath(MenuBar widget, MenuBarState state) {
+            Menu menu = state.OpenIndex >= 0 && state.OpenIndex < widget.Children.Count ? widget.Children[state.OpenIndex] as Menu : null;
+            if (menu == null) { state.PopupOwner.Invalidate(); return false; }
+            int first = ownerAncestors.Count;
+            try {
+                ownerAncestors.Add(menu);
+                for (int i = 0; i < state.SubmenuPath.Count; i++) {
+                    int index = state.SubmenuPath[i];
+                    Menu child = index >= 0 && index < menu.Children.Count ? menu.Children[index] as Menu : null;
+                    if (child == null) break;
+                    menu = child;
+                    ownerAncestors.Add(menu);
+                }
+                return state.PopupOwner.CapturePopupPath(ownerAncestors, first, ownerAncestors.Count - first);
+            } finally { ownerAncestors.RemoveRange(first, ownerAncestors.Count - first); }
+        }
+
+        private static void DrawMenuRowBackground(Rect row, RenderContext context, bool hover, bool active) {
+            DrawFilledRect(row, ToUnityColor(PopupPresentation.RowBackground(context.Theme.Tokens, GUI.enabled, hover, false, active)));
+        }
+
+        private float MeasurePopupText(string text) {
+            return layoutTheme == null ? ThemeTypography.EstimateTextWidth(text, ThemeTypography.DefaultFontSize)
+                : layoutTheme.Label.CalcSize(GetContent(text)).x;
+        }
+
+        private float MeasureTooltipTextHeight(string text, float width) {
+            if (layoutTheme == null) return 20f;
+            return Mathf.Max(0f, layoutTheme.HelpBox.CalcHeight(GetContent(text), width + PopupGeometry.TooltipHorizontalPadding * 2f) -
+                PopupGeometry.TooltipVerticalPadding * 2f);
         }
 
         private void RenderSelectableAt(LayoutNode node, Selectable widget, RenderContext context, Vector2 offset) {
@@ -2026,38 +2179,44 @@ namespace MaximumUI {
                         Range = range,
                         DoubleClick = doubleClick
                     };
-                    MaximumUIRuntime.EnqueueCallback(delegate { widget.OnSelect(request); });
+                    EnqueueCallback(delegate { widget.OnSelect(request); });
                 }
 
                 if (widget.OnChange != null) {
-                    MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                    EnqueueCallback(delegate { widget.OnChange(captured); });
                 }
 
                 if (doubleClick && widget.AllowDoubleClick && widget.OnDoubleClick != null) {
-                    MaximumUIRuntime.EnqueueCallback(widget.OnDoubleClick);
+                    EnqueueCallback(widget.OnDoubleClick);
                 }
             }
         }
 
         private void RenderTreeNodeAt(LayoutNode node, TreeNode widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, Mathf.Max(20f, context.Theme.FontSize + 8f)));
+            Rect headerRect = new Rect(rect.x, rect.y, rect.width, Mathf.Min(rect.height, controlRowHeight));
             float arrowWidth = Mathf.Min(22f, headerRect.height);
             Rect arrowRect = new Rect(headerRect.x, headerRect.y, arrowWidth, headerRect.height);
             Rect labelRect = new Rect(headerRect.x + arrowWidth, headerRect.y, Mathf.Max(1f, headerRect.width - arrowWidth), headerRect.height);
             bool clicked = false;
             bool toggled = false;
-            string prefix = widget.Leaf ? (widget.Bullet ? "* " : "- ") : (widget.Open ? "v" : ">");
-
-            if (widget.Leaf) {
-                clicked = DoButton(headerRect, prefix + " " + widget.Label, context.Theme.FoldoutHeader, widget.Selected);
-            } else if (widget.OpenOnArrow) {
-                toggled = DoButton(arrowRect, prefix, context.Theme.FoldoutHeader, widget.Open);
-                clicked = DoButton(labelRect, widget.Label, context.Theme.FoldoutHeader, widget.Selected);
+            bool hover, active;
+            if (!widget.Leaf && widget.OpenOnArrow) {
+                bool arrowHover, arrowActive;
+                toggled = DoButton(arrowRect, string.Empty, null, false, out arrowHover, out arrowActive);
+                clicked = DoButton(labelRect, string.Empty, null, false, out hover, out active);
+                hover = hover || arrowHover;
+                active = active || arrowActive;
             } else {
-                clicked = DoButton(headerRect, prefix + " " + widget.Label, context.Theme.FoldoutHeader, widget.Selected);
-                toggled = clicked;
+                clicked = DoButton(headerRect, string.Empty, null, false, out hover, out active);
+                toggled = !widget.Leaf && clicked;
             }
+            DrawDisclosureChrome(headerRect, widget.Framed, widget.Selected, hover, active, context);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, labelRect, GetContent(widget.Label), false, false, false, false);
+            if (!widget.Leaf)
+                DrawIcon(arrowRect, widget.Open ? Mdl2Icon.ChevronDown : Mdl2Icon.ChevronRight, NativeTextColor(context), 1f);
+            else if (widget.Bullet)
+                DrawDisc(new Rect(arrowRect.center.x - 2f, arrowRect.center.y - 2f, 4f, 4f), NativeTextColor(context));
 
             Event current = Event.current;
             if (ConsumeActivation(widget, context)) {
@@ -2075,20 +2234,31 @@ namespace MaximumUI {
             if (!IsInputBlockedByDialog()) {
                 if (toggled && widget.OnOpenChange != null) {
                     bool open = !widget.Open;
-                    MaximumUIRuntime.EnqueueCallback(delegate { widget.OnOpenChange(open); });
+                    EnqueueCallback(delegate { widget.OnOpenChange(open); });
                 }
-                if (clicked && widget.OnSelect != null) MaximumUIRuntime.EnqueueCallback(widget.OnSelect);
+                if (clicked && widget.OnSelect != null) EnqueueCallback(widget.OnSelect);
             }
 
-            if (widget.Open && !widget.Leaf) RenderLayoutChildren(node, context, offset);
+            if (widget.Open && !widget.Leaf) {
+                int children = LayoutEngine.FlowChildCount(node);
+                if (widget.DrawLines && children > 0 && Event.current != null && Event.current.type == EventType.Repaint) {
+                    Rect last = OffsetRect(node.Children[children - 1].Rect, offset);
+                    DrawGeometryLine(new MuiVec2(headerRect.x + 9f, headerRect.yMax),
+                        new MuiVec2(headerRect.x + 9f, last.y + Mathf.Min(controlRowHeight, last.height) * 0.5f), context.Theme.Tokens.Separator, 1f);
+                }
+                RenderLayoutChildren(node, context, offset);
+            }
         }
 
         private void RenderTreeLeafAt(LayoutNode node, TreeLeaf widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            string text = (widget.Bullet ? "* " : "- ") + widget.Label;
-            if ((DoButton(rect, text, context.Theme.FoldoutHeader, widget.Selected) || ConsumeActivation(widget, context)) && widget.OnSelect != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnSelect);
-            }
+            bool hover, active;
+            bool clicked = DoButton(rect, string.Empty, null, false, out hover, out active) || ConsumeActivation(widget, context);
+            if (clicked && widget.OnSelect != null && !IsInputBlockedByDialog()) EnqueueCallback(widget.OnSelect);
+            DrawDisclosureChrome(rect, widget.Framed, widget.Selected, hover, active, context);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                new Rect(rect.x + 24f, rect.y, Mathf.Max(0f, rect.width - 24f), rect.height), GetContent(widget.Label), false, false, false, false);
+            if (widget.Bullet) DrawDisc(new Rect(rect.x + 9f, rect.center.y - 2f, 4f, 4f), NativeTextColor(context));
         }
 
         private void RenderColorButtonAt(LayoutNode node, ColorButton widget, RenderContext context, Vector2 offset) {
@@ -2103,7 +2273,7 @@ namespace MaximumUI {
             DrawStyle(context.Theme.Label, new Rect(swatchRect.xMax + 6f, rect.y, Mathf.Max(1f, rect.xMax - swatchRect.xMax - 9f), rect.height), GetContent(text), false, false, false, false);
 
             if (clicked && widget.OnClick != null && !IsInputBlockedByDialog()) {
-                MaximumUIRuntime.EnqueueCallback(widget.OnClick);
+                EnqueueCallback(widget.OnClick);
             }
         }
 
@@ -2111,7 +2281,7 @@ namespace MaximumUI {
             MuiColor next;
             if (RenderColorEditCore(OffsetRect(node.Rect, offset), widget.Label, widget.Value, false, widget.DisplayMode, widget.ShowPreview, context, out next) && widget.OnChange != null) {
                 MuiColor captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -2119,7 +2289,7 @@ namespace MaximumUI {
             MuiColor next;
             if (RenderColorEditCore(OffsetRect(node.Rect, offset), widget.Label, widget.Value, true, widget.DisplayMode, widget.ShowPreview, context, out next) && widget.OnChange != null) {
                 MuiColor captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -2127,7 +2297,7 @@ namespace MaximumUI {
             MuiColor next;
             if (RenderColorPickerCore(OffsetRect(node.Rect, offset), widget.Label, widget.Value, false, widget.DisplayMode, widget.ShowPreview, context, out next) && widget.OnChange != null) {
                 MuiColor captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -2135,7 +2305,7 @@ namespace MaximumUI {
             MuiColor next;
             if (RenderColorPickerCore(OffsetRect(node.Rect, offset), widget.Label, widget.Value, true, widget.DisplayMode, widget.ShowPreview, context, out next) && widget.OnChange != null) {
                 MuiColor captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
@@ -2143,15 +2313,15 @@ namespace MaximumUI {
             MuiColor next;
             if (RenderColorEditCore(OffsetRect(node.Rect, offset), string.Empty, widget.Value, widget.ShowAlpha, widget.DisplayMode, true, context, out next) && widget.OnChange != null) {
                 MuiColor captured = next;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(captured); });
+                EnqueueCallback(delegate { widget.OnChange(captured); });
             }
         }
 
-        private bool RenderColorEditCore(Rect rect, string label, MuiColor value, bool alpha, ColorDisplayMode displayMode, bool showPreview, RenderContext context, out MuiColor next) {
+        private bool RenderColorEditCore(Rect rect, string label, MuiColor value, bool alpha, ColorDisplayMode displayMode, bool showPreview, RenderContext context, out MuiColor next, float fixedLabelWidth = 0f) {
             next = value;
             Rect contentRect = rect;
             if (!string.IsNullOrEmpty(label)) {
-                float labelWidth = Mathf.Min(72f, rect.width * 0.3f);
+                float labelWidth = fixedLabelWidth > 0f ? fixedLabelWidth : Mathf.Min(context.Theme.Label.CalcSize(GetContent(label)).x + 8f, rect.width * 0.4f);
                 Rect labelRect = new Rect(rect.x, rect.y, labelWidth, rect.height);
                 DrawStyle(context.Theme.Label, labelRect, GetContent(label), false, false, false, false);
                 contentRect = new Rect(labelRect.xMax + 6f, rect.y, Mathf.Max(1f, rect.xMax - labelRect.xMax - 6f), rect.height);
@@ -2171,7 +2341,7 @@ namespace MaximumUI {
             next = value;
             DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
 
-            float rowHeight = Mathf.Max(18f, Mathf.Min(24f, rect.height / (alpha ? 5f : 4f)));
+            float rowHeight = Mathf.Max(20f, Mathf.Min(controlRowHeight, (rect.height - 20f) / (alpha ? 5f : 4f)));
             Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, Mathf.Max(1f, rect.width - 8f), rowHeight);
             if (showPreview) {
                 Rect swatchRect = new Rect(headerRect.x, headerRect.y, Mathf.Min(44f, headerRect.height * 1.8f), headerRect.height);
@@ -2239,47 +2409,58 @@ namespace MaximumUI {
                 if (index == 0) x += 0.1f;
                 else if (index == 1) y += 0.1f;
                 else z += 0.1f;
-                MaximumUIRuntime.EnqueueCallback(delegate { widget.OnChange(x, y, z); });
+                EnqueueCallback(delegate { widget.OnChange(x, y, z); });
             }
         }
 
         private void RenderPlotLinesAt(LayoutNode node, PlotLines widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
-            if (widget.Values == null || widget.Values.Count == 0) return;
-
-            float min;
-            float max;
-            GetPlotRange(widget.Values, widget.HasRange, widget.Min, widget.Max, out min, out max);
-            float step = widget.Values.Count <= 1 ? rect.width : rect.width / (widget.Values.Count - 1);
-            for (int i = 0; i < widget.Values.Count; i++) {
-                float t = Normalize(widget.Values[i], min, max);
-                float x = rect.x + step * i;
-                float y = rect.yMax - t * rect.height;
-                DrawFilledRect(new Rect(x, y, 2f, 2f), ToUnityColor(context.Theme.Tokens.Accent));
+            DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+            DrawStrokeRect(rect, ToUnityColor(context.Theme.Tokens.Border), context.Theme.Tokens.BorderWidth);
+            if (widget.Values != null && widget.Values.Count > 0 && Event.current != null && Event.current.type == EventType.Repaint) {
+                MuiRect plot = PlotGeometry.ContentRect(ToMuiRect(rect));
+                float min, max;
+                PlotGeometry.Range(widget.Values, widget.HasRange, widget.Min, widget.Max, out min, out max);
+                MuiVec2 previous = new MuiVec2();
+                bool hasPrevious = false;
+                MuiColor color = GUI.enabled ? context.Theme.Tokens.Accent : context.Theme.Tokens.TextDisabled;
+                for (int i = 0; i < widget.Values.Count; i++) {
+                    MuiVec2 point;
+                    if (!PlotGeometry.TryPoint(widget.Values, i, plot, min, max, out point)) { hasPrevious = false; continue; }
+                    if (hasPrevious) DrawGeometryLine(previous, point, color, 1.5f);
+                    else if (widget.Values.Count == 1) DrawDisc(new Rect(point.X - 1.5f, point.Y - 1.5f, 3f, 3f), color);
+                    previous = point;
+                    hasPrevious = true;
+                }
             }
-            if (!string.IsNullOrEmpty(widget.OverlayText)) {
-                DrawStyle(context.Theme.CenterLabel, rect, GetContent(widget.OverlayText), false, false, false, false);
-            }
+            DrawPlotOverlay(rect, widget.OverlayText, context);
         }
 
         private void RenderPlotHistogramAt(LayoutNode node, PlotHistogram widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
-            DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
-            if (widget.Values == null || widget.Values.Count == 0) return;
+            DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+            DrawStrokeRect(rect, ToUnityColor(context.Theme.Tokens.Border), context.Theme.Tokens.BorderWidth);
+            if (widget.Values != null && widget.Values.Count > 0 && Event.current != null && Event.current.type == EventType.Repaint) {
+                MuiRect plot = PlotGeometry.ContentRect(ToMuiRect(rect));
+                float min, max;
+                PlotGeometry.Range(widget.Values, widget.HasRange, widget.Min, widget.Max, out min, out max);
+                float barWidth = plot.Width / widget.Values.Count;
+                MuiColor color = GUI.enabled ? context.Theme.Tokens.Accent : context.Theme.Tokens.TextDisabled;
+                for (int i = 0; i < widget.Values.Count; i++) {
+                    MuiVec2 point;
+                    if (!PlotGeometry.TryPoint(widget.Values, i, plot, min, max, out point)) continue;
+                    DrawFilledRect(new Rect(plot.X + i * barWidth, point.Y, Mathf.Max(0f, barWidth - Mathf.Min(1f, barWidth * 0.1f)), plot.Bottom - point.Y), ToUnityColor(color));
+                }
+            }
+            DrawPlotOverlay(rect, widget.OverlayText, context);
+        }
 
-            float min;
-            float max;
-            GetPlotRange(widget.Values, widget.HasRange, widget.Min, widget.Max, out min, out max);
-            float barWidth = Mathf.Max(1f, rect.width / widget.Values.Count);
-            for (int i = 0; i < widget.Values.Count; i++) {
-                float t = Normalize(widget.Values[i], min, max);
-                float height = rect.height * t;
-                DrawFilledRect(new Rect(rect.x + i * barWidth, rect.yMax - height, Mathf.Max(1f, barWidth - 1f), height), ToUnityColor(context.Theme.Tokens.Accent));
-            }
-            if (!string.IsNullOrEmpty(widget.OverlayText)) {
-                DrawStyle(context.Theme.CenterLabel, rect, GetContent(widget.OverlayText), false, false, false, false);
-            }
+        private void DrawPlotOverlay(Rect rect, string text, RenderContext context) {
+            if (string.IsNullOrEmpty(text) || Event.current == null || !GuiEventPolicy.ShouldPaint(Event.current.type)) return;
+            MuiRect backing = PlotGeometry.OverlayBounds(ToMuiRect(rect), MeasurePopupText(text),
+                ThemeTypography.LineHeight(context.Theme.Tokens, LabelRole.Body));
+            DrawFilledRect(ToUnityRect(backing), ToUnityColor(context.Theme.Tokens.FieldBg));
+            DrawStyle(GUI.enabled ? context.Theme.CenterLabel : disabledCenterLabel, rect, GetContent(text), false, false, false, false);
         }
 
         private void RenderDrawCanvasAt(LayoutNode node, DrawCanvas widget, RenderContext context, Vector2 offset) {
@@ -2373,6 +2554,12 @@ namespace MaximumUI {
             string label = combo.ComboLabel ?? string.Empty;
             string id = context.StateId(widget, "combo");
             ComboBoxState state = context.StateStore.GetOrCreate<ComboBoxState>(id);
+            bool ownerEnabled = state.PopupOwner.Capture(ownerAncestors, modelRootEnabled) && modelEnabled;
+            if (!ownerEnabled) {
+                if (state.Dropdown != null) state.Dropdown.Hide();
+                state.Open = false;
+                state.PopupOwner.Invalidate();
+            }
             if (state.Dropdown != null && !ReferenceEquals(state.Dropdown.Theme, context.Theme)) {
                 state.Dropdown.Hide();
                 state.Dropdown = null;
@@ -2393,25 +2580,34 @@ namespace MaximumUI {
 
             string selectedText = combo.GetComboText(combo.ComboValue);
             GUI.SetNextControlName(state.ControlName);
-            bool clicked = DoButton(buttonRect, selectedText + "  ▾", context.Theme.ComboBoxButton, state.Open) || (!state.Open && ConsumeActivation(widget, context));
+            bool hover, active;
+            bool clicked = DoButton(buttonRect, string.Empty, null, false, out hover, out active) || (!state.Open && ConsumeActivation(widget, context));
+            bool focused = context.Navigation != null && context.Navigation.IsKeyboardFocused(widget, node.Path);
+            ThemeTokens colors = context.Theme.Tokens;
+            DrawFilledRect(buttonRect, ToUnityColor(!GUI.enabled ? colors.ButtonDisabledBg : state.Open || focused || active ? colors.FieldActiveBg : hover ? colors.FieldHoverBg : colors.FieldBg));
+            DrawStrokeRect(buttonRect, ToUnityColor(Mdl2ControlChrome.FieldBorderColor(colors, GUI.enabled, hover, state.Open || focused)), 2f);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                new Rect(buttonRect.x + 8f, buttonRect.y, Mathf.Max(0f, buttonRect.width - 40f), buttonRect.height), GetContent(selectedText), false, false, false, false);
+            DrawIcon(new Rect(buttonRect.xMax - 28f, buttonRect.y, 24f, buttonRect.height), Mdl2Icon.ChevronDown, NativeTextColor(context), 1f);
             if (IsUsableLayoutRect(buttonRect) && coordinates.IsVisible(ToMuiRect(buttonRect))) {
                 state.ButtonRect = ToComboButtonStateRect(buttonRect);
                 state.HasButtonRect = true;
             }
 
-            if (clicked && !IsInputBlockedByDialog()) {
+            if (ownerEnabled && clicked && !IsInputBlockedByDialog()) {
                 if (state.Dropdown != null && state.Dropdown.Show) {
                     state.Dropdown.Hide();
                     state.Open = false;
                 } else {
                     OpenComboOverlay(widget, combo, context, state, true);
                 }
-            } else if (state.Dropdown != null && state.Dropdown.Show && state.HasButtonRect) {
+            } else if (ownerEnabled && state.Dropdown != null && state.Dropdown.Show && state.HasButtonRect) {
                 OpenComboOverlay(widget, combo, context, state, false);
             }
         }
 
         private void OpenComboOverlay(Widget widget, IComboBoxWidget combo, RenderContext context, ComboBoxState state, bool focus) {
+            if (!state.PopupOwner.IsEnabled || (focus && !state.PopupOwner.BeginOpen())) return;
             if (focus && popupDepth == 0) context.CloseMenus();
             ISearchableComboBoxWidget searchable = combo as ISearchableComboBoxWidget;
             string filter = state.FilterText ?? string.Empty;
@@ -2434,11 +2630,12 @@ namespace MaximumUI {
             state.Searchable = searchable != null;
             state.FilterPlaceholder = searchable == null ? string.Empty : searchable.ComboFilterPlaceholder;
             if (state.Callback == null) state.Callback = delegate(int index) {
-                if (index < 0 || index >= state.Choices.Values.Count) return;
+                if (!state.PopupOwner.IsEnabled || index < 0 || index >= state.Choices.Values.Count) return;
                 Delegate callback = state.Owner.ComboOnChange;
                 if (callback == null) return;
                 object selected = state.Choices.Values[index];
-                MaximumUIRuntime.EnqueueCallback(delegate { callback.DynamicInvoke(selected); });
+                state.PopupOwner.Close();
+                EnqueueCallback(state.PopupOwner.Guard(delegate { callback.DynamicInvoke(selected); }));
             };
 
             context.HideOtherComboBoxes(state);
@@ -2452,7 +2649,7 @@ namespace MaximumUI {
             if (searchable != null) {
                 string placeholder = state.FilterPlaceholder;
                 if (state.FilterChanged == null) state.FilterChanged = delegate(string value) {
-                    state.FilterText = value ?? string.Empty;
+                    if (state.PopupOwner.IsEnabled) state.FilterText = value ?? string.Empty;
                 };
                 state.Dropdown.Set(GetTopWindowRect(), buttonRect, state.Items, state.Callback, state.MaxVisibleItems, state.FilterText, state.FilterChanged, placeholder);
                 if (focus) state.Dropdown.Focus(state.FilterControlName, selectedIndex);
@@ -2472,13 +2669,15 @@ namespace MaximumUI {
         private void RenderDialog(Dialog widget, RenderContext context) {
             string id = context.StateId(widget, "dialog");
             string dialogPath = context.Path;
+            PopupOwnerState owner = context.StateStore.GetOrCreate<PopupOwnerState>(id + ":owner");
+            owner.Capture(ownerAncestors, modelRootEnabled);
             context.Overlay.Register(new OverlayRequest {
                 SortOrder = 1000,
                 ModalDialog = widget,
                 Render = delegate(RenderContext renderContext) {
-                    DrawDialogOverlay(renderContext, widget, id, dialogPath, false, delegate {
-                        if (widget.OnClose != null) MaximumUIRuntime.EnqueueCallback(widget.OnClose);
-                    });
+                    DrawDialogOverlay(renderContext, widget, id, dialogPath, true, delegate {
+                        if (widget.OnClose != null) EnqueueCallback(widget.OnClose);
+                    }, owner);
                 }
             });
         }
@@ -2548,7 +2747,7 @@ namespace MaximumUI {
             }
         }
 
-        private void DrawDialogOverlay(RenderContext context, Dialog dialog, string stateId, string dialogPath, bool drawBackdrop, Action close) {
+        private void DrawDialogOverlay(RenderContext context, Dialog dialog, string stateId, string dialogPath, bool drawBackdrop, Action close, PopupOwnerState owner = null) {
             DialogState state = context.StateStore.GetOrCreate<DialogState>(stateId);
             if (!state.Initialized) {
                 state.Rect = CenterRect(new Rect(0f, 0f, dialog.Width, dialog.Height));
@@ -2584,9 +2783,21 @@ namespace MaximumUI {
             Dialog oldDialog = currentDialog;
             Vector2 oldContentOffset = currentWindowContentOffset;
             bool oldEnabled = GUI.enabled;
+            bool oldModelEnabled = modelEnabled;
+            bool oldRootEnabled = modelRootEnabled;
+            int oldAncestorCount = ownerAncestors.Count;
+            if (owner != null) {
+                owner.AppendAncestorsTo(ownerAncestors);
+                modelRootEnabled = owner.RootEnabled;
+                modelEnabled = owner.IsEnabled;
+            } else {
+                ownerAncestors.Add(dialog);
+                modelEnabled = modelRootEnabled && dialog.Enabled;
+            }
             context.Path = dialogPath;
             currentDialog = dialog;
-            GUI.enabled = oldEnabled && acceptsInput;
+            GUI.enabled = GuiEventPolicy.ControlEnabled(oldEnabled, modelEnabled, !acceptsInput || context.SuppressInput,
+                current == null ? EventType.Layout : current.type);
             dialogDepth++;
             try {
                 DrawDialogFrame(context, dialog, state, stateId);
@@ -2599,6 +2810,9 @@ namespace MaximumUI {
                 currentDialog = oldDialog;
                 currentWindowContentOffset = oldContentOffset;
                 GUI.enabled = oldEnabled;
+                modelEnabled = oldModelEnabled;
+                modelRootEnabled = oldRootEnabled;
+                ownerAncestors.RemoveRange(oldAncestorCount, ownerAncestors.Count - oldAncestorCount);
                 context.Path = oldPath;
             }
 
@@ -2611,7 +2825,14 @@ namespace MaximumUI {
             GUI.color = WithAlpha(oldColor, context.Theme.WindowOpacity);
             try {
                 if (Event.current == null || Event.current.type == EventType.Repaint) {
-                    DrawStyle(context.Theme.Dialog, state.Rect, GetContent(dialog.Title), false, false, false, false);
+                    if (context.Theme.Dialog.fontSize == context.Theme.Heading.fontSize) {
+                        DrawStyle(context.Theme.Dialog, state.Rect, GUIContent.none, false, false, false, false);
+                        DrawStyle(context.Theme.Heading, ToUnityRect(ThemeTypography.DialogTitleBounds(ToMuiRect(state.Rect), context.Theme.Tokens)),
+                            GetContent(dialog.Title), false, false, false, false);
+                    } else {
+                        // Legacy themes keep their compact window-style title.
+                        DrawStyle(context.Theme.Dialog, state.Rect, GetContent(dialog.Title), false, false, false, false);
+                    }
                 }
             } finally {
                 GUI.color = oldColor;
@@ -2651,15 +2872,24 @@ namespace MaximumUI {
                 return false;
             }
             bool open = false;
+            bool invalidOwner = false;
             for (int i = 0; i < context.ComboBoxStates.Count; i++) {
                 ComboBoxState state = context.ComboBoxStates[i];
                 if (state.Dropdown == null || !state.Dropdown.Show) continue;
+                if (!state.PopupOwner.IsEnabled) {
+                    state.Dropdown.Hide();
+                    state.Open = false;
+                    state.PopupOwner.Invalidate();
+                    invalidOwner = true;
+                    continue;
+                }
                 bool dismiss = context.SuppressDialogs || (current != null &&
                     ((current.type == EventType.MouseDown && !MouseOverVisibleRect(state.Dropdown.Rect)) ||
                      (current.type == EventType.KeyDown && (current.keyCode == KeyCode.Escape || current.keyCode == KeyCode.Tab))));
                 if (dismiss) {
                     state.Dropdown.Hide();
                     state.Open = false;
+                    state.PopupOwner.Invalidate();
                     if (mayConsume && current != null && (current.type == EventType.MouseDown || current.type == EventType.KeyDown)) {
                         current.Use();
                         Input.ResetInputAxes();
@@ -2669,8 +2899,14 @@ namespace MaximumUI {
             if (open) return true;
             ContextMenuState contextMenu = context.ActiveContextMenu;
             MenuBarState menuBar = context.ActiveMenuBar;
+            if ((contextMenu != null && contextMenu.Open && !contextMenu.PopupOwner.IsEnabled) ||
+                (menuBar != null && menuBar.Open && !menuBar.PopupOwner.IsEnabled)) {
+                context.CloseMenus();
+                invalidOwner = true;
+            }
+            if (invalidOwner) CancelInput();
             bool menuOpen = (contextMenu != null && contextMenu.Open) || (menuBar != null && menuBar.Open);
-            if (!menuOpen) return false;
+            if (!menuOpen) return invalidOwner;
             Rect rect = contextMenu != null && contextMenu.Open ? contextMenu.Rect : menuBar.PopupRect;
             bool dismissMenu = current != null &&
                 ((current.type == EventType.MouseDown && !MouseOverVisibleRect(rect) &&
@@ -2684,16 +2920,27 @@ namespace MaximumUI {
             return true;
         }
 
-        private void DrawPopup(RenderContext context, Dialog owner, Action draw) {
+        private void DrawPopup(RenderContext context, Dialog owner, Action draw, PopupOwnerState popupOwner = null) {
             if (context.IsModalOpen && !ReferenceEquals(owner, context.InputDialog)) return;
             bool oldBlocked = popupBlocksInput;
             bool oldEnabled = GUI.enabled;
             Dialog oldDialog = currentDialog;
             int oldDepth = dialogDepth;
+            PopupOwnerState oldPopupOwner = currentPopupOwner;
+            bool oldModelEnabled = modelEnabled;
+            bool oldRootEnabled = modelRootEnabled;
+            int oldAncestorCount = ownerAncestors.Count;
+            currentPopupOwner = popupOwner;
+            if (popupOwner != null) {
+                popupOwner.AppendAncestorsTo(ownerAncestors);
+                modelRootEnabled = popupOwner.RootEnabled;
+                modelEnabled = popupOwner.IsEnabled;
+            }
             popupBlocksInput = context.HasOpenDropdown;
             currentDialog = owner;
             dialogDepth = owner == null ? 0 : 1;
-            GUI.enabled = oldEnabled && !context.SuppressInput && !popupBlocksInput;
+            GUI.enabled = GuiEventPolicy.ControlEnabled(oldEnabled, modelEnabled, context.SuppressInput || popupBlocksInput,
+                Event.current == null ? EventType.Layout : Event.current.type);
             popupDepth++;
             try { draw(); }
             finally {
@@ -2702,7 +2949,16 @@ namespace MaximumUI {
                 currentDialog = oldDialog;
                 dialogDepth = oldDepth;
                 GUI.enabled = oldEnabled;
+                currentPopupOwner = oldPopupOwner;
+                modelEnabled = oldModelEnabled;
+                modelRootEnabled = oldRootEnabled;
+                ownerAncestors.RemoveRange(oldAncestorCount, ownerAncestors.Count - oldAncestorCount);
             }
+        }
+
+        private void EnqueueCallback(Action callback, Widget actionSource = null) {
+            if (callback == null) return;
+            MaximumUIRuntime.EnqueueCallback(currentPopupOwner == null ? callback : currentPopupOwner.Guard(callback, actionSource ?? currentWidget));
         }
 
         private bool ConsumeActivation(Widget widget, RenderContext context) {
@@ -2790,10 +3046,16 @@ namespace MaximumUI {
         }
 
         private bool DoButton(Rect rect, string text, GUIStyle style, bool on) {
+            bool hover, active;
+            return DoButton(rect, text, style, on, out hover, out active);
+        }
+
+        private bool DoButton(Rect rect, string text, GUIStyle style, bool on, out bool hover, out bool active) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
             Event current = Event.current;
-            bool hover = current != null && MouseOverVisibleRect(rect);
-            bool active = GUIUtility.hotControl == controlId;
+            bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
+            hover = acceptsInput && current != null && MouseOverVisibleRect(rect);
+            active = acceptsInput && GUIUtility.hotControl == controlId;
             bool clicked = false;
 
             if (GUI.enabled && !IsInputBlockedByDialog() && current != null) {
@@ -2811,17 +3073,126 @@ namespace MaximumUI {
                 }
             }
 
-            if (current == null || current.type == EventType.Repaint) {
-                DrawStyle(style, rect, GetContent(text), hover, active, on, GUIUtility.keyboardControl == controlId);
+            if (style != null && (current == null || current.type == EventType.Repaint)) {
+                bool themedButton = layoutTheme != null && (ReferenceEquals(style, layoutTheme.Button) || ReferenceEquals(style, layoutTheme.PrimaryButton) ||
+                    ReferenceEquals(style, layoutTheme.QuietButton) || ReferenceEquals(style, layoutTheme.DangerButton));
+                if (!GUI.enabled && themedButton) {
+                    if (!ReferenceEquals(style, layoutTheme.QuietButton)) DrawFilledRect(rect, ToUnityColor(layoutTheme.Tokens.ButtonDisabledBg));
+                    // Draw the explicit disabled colors once; Unity's generic disabled
+                    // tint must not turn an accent button into a faded active button.
+                    GUI.enabled = true;
+                    try { DrawStyle(disabledButtonText, rect, GetContent(text), false, false, false, false); }
+                    finally { GUI.enabled = false; }
+                } else DrawStyle(style, rect, GetContent(text), hover, active, on, GUIUtility.keyboardControl == controlId);
             }
 
             return clicked;
         }
 
+        private bool DoIconButton(Rect rect, Mdl2Icon icon, GUIStyle style, bool on) {
+            bool hover, active;
+            bool clicked = DoButton(rect, string.Empty, style, on, out hover, out active);
+            DrawIcon(rect, icon, NativeTextColor(currentContext), icon == Mdl2Icon.More ? 2f : 1f);
+            return clicked;
+        }
+
+        private bool DoDisclosureButton(Rect rect, string label, bool open, RenderContext context, bool framed, Rect? backgroundRect = null) {
+            bool hover, active;
+            bool clicked = DoButton(rect, string.Empty, null, false, out hover, out active);
+            DrawDisclosureChrome(backgroundRect ?? rect, framed, false, hover, active, context);
+            DrawIcon(new Rect(rect.x + 4f, rect.y, 20f, rect.height), open ? Mdl2Icon.ChevronDown : Mdl2Icon.ChevronRight, NativeTextColor(context), 1f);
+            DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel,
+                new Rect(rect.x + 32f, rect.y, Mathf.Max(0f, rect.width - 36f), rect.height), GetContent(label), false, false, false, false);
+            return clicked;
+        }
+
+        private static void DrawDisclosureChrome(Rect rect, bool framed, bool selected, bool hover, bool active, RenderContext context) {
+            ThemeTokens theme = context.Theme.Tokens;
+            if (framed || selected || hover || active) {
+                MuiColor color = !GUI.enabled ? theme.ButtonDisabledBg : selected ? theme.SelectedBg : active ? theme.ButtonActiveBg : hover ? theme.ButtonHoverBg : theme.ButtonBg;
+                DrawFilledRect(rect, ToUnityColor(color));
+            }
+            if (framed) DrawStrokeRect(rect, ToUnityColor(theme.Border), 1f);
+        }
+
+        private static MuiColor NativeTextColor(RenderContext context) {
+            return GUI.enabled ? context.Theme.Tokens.Text : context.Theme.Tokens.TextDisabled;
+        }
+
+        private void DrawSelectionControl(Rect rect, string text, bool selected, bool radio, RenderContext context) {
+            ThemeTokens theme = context.Theme.Tokens;
+            MuiRect bounds = Mdl2ControlChrome.SelectionBounds(ToMuiRect(rect), theme.ToggleBoxSize);
+            Rect box = ToUnityRect(bounds);
+            bool hover = GUI.enabled && !IsInputBlockedByDialog() && MouseOverVisibleRect(rect);
+            MuiColor selectedColor = Mdl2ControlChrome.SelectionColor(theme, GUI.enabled, hover, false);
+            MuiColor border = Mdl2ControlChrome.ControlBorderColor(theme, GUI.enabled, hover);
+            MuiColor background = GUI.enabled ? theme.FieldBg : theme.ButtonDisabledBg;
+            if (radio) {
+                DrawDisc(box, selected ? selectedColor : border);
+                DrawDisc(new Rect(box.x + 2f, box.y + 2f, Mathf.Max(0f, box.width - 4f), Mathf.Max(0f, box.height - 4f)), background);
+                if (selected) DrawDisc(new Rect(box.x + 5f, box.y + 5f, Mathf.Max(0f, box.width - 10f), Mathf.Max(0f, box.height - 10f)), selectedColor);
+            } else {
+                DrawFilledRect(box, ToUnityColor(selected ? selectedColor : background));
+                if (selected) DrawIcon(box, Mdl2Icon.Check, theme.OnAccent, 1.5f);
+                else DrawStrokeRect(box, ToUnityColor(border), 2f);
+            }
+            if (!string.IsNullOrEmpty(text)) {
+                Rect label = new Rect(box.xMax + 8f, rect.y, Mathf.Max(0f, rect.xMax - box.xMax - 8f), rect.height);
+                DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, label, GetContent(text), false, false, false, false);
+            }
+        }
+
+        private void DrawDisc(Rect rect, MuiColor color) {
+            if (Event.current == null || !GuiEventPolicy.ShouldPaint(Event.current.type) || rect.width <= 0f || rect.height <= 0f) return;
+            if (selectionDisc == null) selectionDisc = Textures.Disc();
+            Color previous = GUI.color;
+            try {
+                GUI.color = ToUnityColor(color);
+                GUI.DrawTexture(rect, selectionDisc);
+            } finally { GUI.color = previous; }
+        }
+
+        private void DrawCapsule(Rect rect, MuiColor color) {
+            float diameter = Mathf.Min(rect.width, rect.height);
+            if (diameter <= 0f) return;
+            DrawDisc(new Rect(rect.x, rect.y, diameter, diameter), color);
+            DrawDisc(new Rect(rect.xMax - diameter, rect.y, diameter, diameter), color);
+            DrawFilledRect(new Rect(rect.x + diameter * 0.5f, rect.y, Mathf.Max(0f, rect.width - diameter), diameter), ToUnityColor(color));
+        }
+
+        private static void DrawIcon(Rect rect, Mdl2Icon icon, MuiColor color, float thickness) {
+            if (Event.current == null || !GuiEventPolicy.ShouldPaint(Event.current.type)) return;
+            MuiRect bounds = ToMuiRect(rect);
+            for (int i = 0; i < Mdl2IconGeometry.SegmentCount(icon); i++) {
+                MuiVec2 a, b;
+                Mdl2IconGeometry.Segment(icon, i, bounds, out a, out b);
+                DrawGeometryLine(a, b, color, thickness);
+            }
+        }
+
+        private static void DrawGeometryLine(MuiVec2 a, MuiVec2 b, MuiColor color, float thickness) {
+            float dx = b.X - a.X, dy = b.Y - a.Y;
+            float length = Mathf.Sqrt(dx * dx + dy * dy);
+            if (length <= 0f) return;
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColor = GUI.color;
+            try {
+                GUI.color = ToUnityColor(color);
+                GUIUtility.RotateAroundPivot(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, new Vector2(a.X, a.Y));
+                GUI.DrawTexture(new Rect(a.X, a.Y - thickness * 0.5f, length, thickness), Texture2D.whiteTexture);
+            } finally { GUI.matrix = previousMatrix; GUI.color = previousColor; }
+        }
+
+        private static void DrawKeyboardFocus(Rect rect, ThemeTokens theme) {
+            MuiRect inner = Mdl2ControlChrome.FocusBounds(ToMuiRect(rect));
+            DrawStrokeRect(ToUnityRect(inner), ToUnityColor(theme.FocusRing), 1f);
+            DrawStrokeRect(new Rect(inner.X + 1f, inner.Y + 1f, Mathf.Max(0f, inner.Width - 2f), Mathf.Max(0f, inner.Height - 2f)), ToUnityColor(theme.PanelBg), 1f);
+        }
+
         private Rect DrawNumericLabel(Rect rect, string label, RenderContext context) {
             if (string.IsNullOrEmpty(label)) return rect;
 
-            float labelWidth = Mathf.Min(82f, rect.width * 0.36f);
+            float labelWidth = Mathf.Min(Mathf.Max(82f, context.Theme.Label.CalcSize(GetContent(label)).x + 4f), rect.width * 0.5f);
             Rect labelRect = new Rect(rect.x, rect.y, labelWidth, rect.height);
             DrawStyle(context.Theme.Label, labelRect, GetContent(label), false, false, false, false);
             return new Rect(labelRect.xMax + 6f, rect.y, Mathf.Max(1f, rect.width - labelWidth - 6f), rect.height);
@@ -2830,8 +3201,9 @@ namespace MaximumUI {
         private bool DoNumericDrag(Rect rect, string valueText, RenderContext context, Action<float> onDelta) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
             Event current = Event.current;
-            bool hover = current != null && MouseOverVisibleRect(rect);
-            bool active = GUIUtility.hotControl == controlId;
+            bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
+            bool hover = acceptsInput && current != null && MouseOverVisibleRect(rect);
+            bool active = acceptsInput && GUIUtility.hotControl == controlId;
             bool changed = false;
 
             if (GUI.enabled && !IsInputBlockedByDialog() && current != null) {
@@ -2860,8 +3232,8 @@ namespace MaximumUI {
             return changed;
         }
 
-        private void SplitSliderValueRect(Rect rect, out Rect sliderRect, out Rect textRect) {
-            float textWidth = Mathf.Min(58f, Mathf.Max(42f, rect.width * 0.3f));
+        private void SplitSliderValueRect(Rect rect, string valueText, RenderContext context, out Rect sliderRect, out Rect textRect) {
+            float textWidth = Mathf.Min(Mathf.Max(58f, context.Theme.Label.CalcSize(GetContent(valueText)).x + 8f), rect.width * 0.45f);
             textRect = new Rect(rect.xMax - textWidth, rect.y, textWidth, rect.height);
             sliderRect = new Rect(rect.x, rect.y, Mathf.Max(1f, rect.width - textWidth - 6f), rect.height);
         }
@@ -2874,8 +3246,9 @@ namespace MaximumUI {
         private bool DoTextClick(Rect rect, out bool hover) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
             Event current = Event.current;
-            hover = current != null && MouseOverVisibleRect(rect);
-            bool active = GUIUtility.hotControl == controlId;
+            bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
+            hover = acceptsInput && current != null && MouseOverVisibleRect(rect);
+            bool active = acceptsInput && GUIUtility.hotControl == controlId;
             bool clicked = false;
 
             if (GUI.enabled && !IsInputBlockedByDialog() && current != null) {
@@ -2921,8 +3294,9 @@ namespace MaximumUI {
         private float DoSlider(Rect controlRect, Rect trackRect, float value, float min, float max, RenderContext context) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, controlRect);
             Event current = Event.current;
-            bool hover = current != null && MouseOverVisibleRect(controlRect);
-            bool active = GUIUtility.hotControl == controlId;
+            bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
+            bool hover = acceptsInput && current != null && MouseOverVisibleRect(controlRect);
+            bool active = acceptsInput && GUIUtility.hotControl == controlId;
             float next = value;
 
             if (HasNavigationKey(currentWidget, context) &&
@@ -2948,7 +3322,9 @@ namespace MaximumUI {
             }
 
             if (current == null || current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.HorizontalSlider, trackRect, GUIContent.none, hover, active, false, false);
+                ThemeTokens tokens = context.Theme.Tokens;
+                MuiColor selectedColor = Mdl2ControlChrome.SelectionColor(tokens, GUI.enabled, hover, active);
+                DrawFilledRect(trackRect, ToUnityColor(GUI.enabled ? tokens.ControlBorder : tokens.ButtonDisabledBg));
                 float t = max <= min ? 0f : Mathf.InverseLerp(min, max, next);
                 float thumbWidth = Mathf.Max(1f, context.Theme.HorizontalSliderThumb.fixedWidth);
                 float thumbHeight = Mathf.Max(trackRect.height, context.Theme.HorizontalSliderThumb.fixedHeight);
@@ -2957,7 +3333,8 @@ namespace MaximumUI {
                     controlRect.y + Mathf.Max(0f, (controlRect.height - thumbHeight) * 0.5f),
                     thumbWidth,
                     thumbHeight);
-                DrawStyle(context.Theme.HorizontalSliderThumb, thumbRect, GUIContent.none, hover, active, false, false);
+                DrawFilledRect(new Rect(trackRect.x, trackRect.y, Mathf.Max(0f, thumbRect.center.x - trackRect.x), trackRect.height), ToUnityColor(selectedColor));
+                DrawFilledRect(thumbRect, ToUnityColor(selectedColor));
             }
 
             return next;
@@ -2972,8 +3349,9 @@ namespace MaximumUI {
         private bool DoColorComponent(Rect rect, int component, float value, ColorDisplayMode displayMode, RenderContext context, out float next) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
             Event current = Event.current;
-            bool hover = current != null && MouseOverVisibleRect(rect);
-            bool active = GUIUtility.hotControl == controlId;
+            bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
+            bool hover = acceptsInput && current != null && MouseOverVisibleRect(rect);
+            bool active = acceptsInput && GUIUtility.hotControl == controlId;
             next = Mathf.Clamp01(value);
             bool changed = false;
 
@@ -2998,10 +3376,11 @@ namespace MaximumUI {
             }
 
             if (current == null || current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, rect, GUIContent.none, hover, active, false, false);
-                Rect fillRect = new Rect(rect.x + 1f, rect.y + 1f, Mathf.Max(0f, (rect.width - 2f) * Mathf.Clamp01(next)), Mathf.Max(0f, rect.height - 2f));
-                DrawFilledRect(fillRect, ToUnityColor(ComponentColor(component, next)));
-                DrawStyle(context.Theme.Label, new Rect(rect.x + 5f, rect.y, Mathf.Max(1f, rect.width - 10f), rect.height), GetContent(ComponentName(component) + " " + FormatColorComponent(next, displayMode)), false, false, false, false);
+                DrawFilledRect(rect, ToUnityColor(!GUI.enabled ? context.Theme.Tokens.ButtonDisabledBg : active ? context.Theme.Tokens.FieldActiveBg : hover ? context.Theme.Tokens.FieldHoverBg : context.Theme.Tokens.FieldBg));
+                DrawStrokeRect(rect, ToUnityColor(Mdl2ControlChrome.FieldBorderColor(context.Theme.Tokens, GUI.enabled, hover, active)), 2f);
+                Rect fillRect = new Rect(rect.x + 2f, rect.yMax - 5f, Mathf.Max(0f, (rect.width - 4f) * Mathf.Clamp01(next)), Mathf.Min(3f, rect.height));
+                DrawFilledRect(fillRect, ToUnityColor(GUI.enabled ? ComponentColor(component, next) : context.Theme.Tokens.TextDisabled));
+                DrawStyle(GUI.enabled ? context.Theme.CenterLabel : disabledCenterLabel, new Rect(rect.x + 4f, rect.y, Mathf.Max(0f, rect.width - 8f), Mathf.Max(0f, rect.height - 3f)), GetContent(ComponentName(component) + " " + FormatColorComponent(next, displayMode)), false, false, false, false);
             }
 
             return changed && !Mathf.Approximately(next, Mathf.Clamp01(value));
@@ -3045,7 +3424,7 @@ namespace MaximumUI {
             if (button == null) return;
             if (DoButton(rect, button.Text, context.Theme.TabButton, false) && button.OnClick != null && !IsInputBlockedByDialog()) {
                 Action action = button.OnClick;
-                MaximumUIRuntime.EnqueueCallback(action);
+                EnqueueCallback(action);
             }
         }
 
@@ -3056,16 +3435,16 @@ namespace MaximumUI {
             return title;
         }
 
-        private static void CloseTab(Tabs tabs, Tab tab, int tabIndex) {
+        private void CloseTab(Tabs tabs, Tab tab, int tabIndex) {
             if (tab != null && tab.OnClose != null) {
                 Action action = tab.OnClose;
-                MaximumUIRuntime.EnqueueCallback(action);
+                EnqueueCallback(action);
                 return;
             }
 
             if (tabs != null && tabs.OnClose != null) {
                 int captured = tabIndex;
-                MaximumUIRuntime.EnqueueCallback(delegate { tabs.OnClose(captured); });
+                EnqueueCallback(delegate { tabs.OnClose(captured); });
             }
         }
 
@@ -3316,35 +3695,6 @@ namespace MaximumUI {
             return text.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static void GetPlotRange(System.Collections.Generic.IList<float> values, bool hasRange, float explicitMin, float explicitMax, out float min, out float max) {
-            if (hasRange) {
-                min = explicitMin;
-                max = explicitMax;
-                if (max <= min) max = min + 1f;
-                return;
-            }
-
-            min = values[0];
-            max = values[0];
-            for (int i = 1; i < values.Count; i++) {
-                if (values[i] < min) min = values[i];
-                if (values[i] > max) max = values[i];
-            }
-            if (max <= min) max = min + 1f;
-        }
-
-        private static float Normalize(float value, float min, float max) {
-            if (max <= min) return 0f;
-            return Mathf.Clamp01((value - min) / (max - min));
-        }
-
-        private static string ArrowText(ArrowDirection direction) {
-            if (direction == ArrowDirection.Left) return "<";
-            if (direction == ArrowDirection.Right) return ">";
-            if (direction == ArrowDirection.Up) return "^";
-            return "v";
-        }
-
         private static bool HasVisibleTableColumns(Table table) {
             for (int i = 0; i < table.Children.Count; i++) {
                 TableColumn column = table.Children[i] as TableColumn;
@@ -3434,20 +3784,12 @@ namespace MaximumUI {
             return Mathf.Max(1f, value);
         }
 
-        private static float GetTableHeaderHeight(Table table, RenderContext context) {
+        private float GetTableHeaderHeight(Table table, RenderContext context) {
             if (table != null && table.HeaderHeight > 0f) return table.HeaderHeight;
-            if (context != null && context.Theme != null) return Mathf.Max(20f, context.Theme.FontSize + 8f);
+            if (context != null && context.Theme != null) return controlRowHeight;
             return 22f;
         }
 
-        private static string FormatColumnTitle(TableColumn column) {
-            if (column == null) return string.Empty;
-
-            string title = column.Title ?? string.Empty;
-            if (column.SortDirection == TableSortDirection.Ascending) return title + " ^";
-            if (column.SortDirection == TableSortDirection.Descending) return title + " v";
-            return title;
-        }
 
         private static TableSortDirection NextSortDirection(TableSortDirection direction) {
             if (direction == TableSortDirection.Ascending) return TableSortDirection.Descending;
@@ -3510,7 +3852,7 @@ namespace MaximumUI {
                 (current.type == EventType.MouseDown || current.type == EventType.MouseDrag);
             bool clicked = acceptsInput && hovered && current != null && current.type == EventType.MouseUp && current.button == 0;
             if (IsNavigationFocusable(widget)) {
-                if (context.Navigation != null && !context.SuppressInput) context.Navigation.Register(widget, node.Path, screenRect, GUI.enabled && widget.Enabled);
+                if (context.Navigation != null && !context.SuppressInput) context.Navigation.Register(widget, node.Path, screenRect, acceptsInput && widget.Enabled);
                 if (context.Query != null && coordinates.IsVisible(ToMuiRect(rect))) context.Query.RecordInputRegion(coordinates.ClipToScreen(ToMuiRect(rect)));
                 if (!context.SuppressInput && GUI.enabled && context.Navigation != null && hovered && current != null && current.type == EventType.MouseDown && current.button == 0) {
                     context.Navigation.FocusPointer(widget, node.Path);
@@ -3569,7 +3911,7 @@ namespace MaximumUI {
         }
 
         internal static float WindowTitleHeight(Window widget, RenderContext context) {
-            return Mathf.Max(widget.FoldedHeight, Mathf.Max(context.Theme.FontSize + 12f, context.Theme.WindowContentPadding.top - 8f));
+            return Mathf.Max(widget.FoldedHeight, context.Theme.TitleBarHeight);
         }
 
         private static bool AnyMouseButtonDown() {
@@ -3587,7 +3929,7 @@ namespace MaximumUI {
                    widget is ArrowButton ||
                    widget is ImageButton ||
                    widget is TextLink ||
-                   widget is Toggle ||
+                   widget is Toggle || widget is ToggleSwitch ||
                    widget is Checkbox ||
                    widget is RadioButton ||
                    widget is ISegmentedControlWidget ||

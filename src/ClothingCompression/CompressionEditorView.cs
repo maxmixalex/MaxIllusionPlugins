@@ -76,7 +76,7 @@ namespace ClothingCompression {
             int coordinate = controller.CoordinateIndex;
             content.Add(new VirtualList(entries.Length, 32f, index => {
                 DeformationEntry entry = entries[index];
-                return new Selectable((entry.Enabled ? "● " : "○ ") + CompressionEditorSupport.FormatEntryLabel(index, entry),
+                return new Selectable((entry.Enabled ? string.Empty : "已停用 ") + CompressionEditorSupport.FormatEntryLabel(index, entry),
                     ReferenceEquals(entry, controller.Selected), value => {
                         if (!value || !CanEdit(controller, coordinate, null)) return;
                         ActionFor(controller, delegate {

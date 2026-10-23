@@ -37,8 +37,16 @@ jobs:
       - name: Prepare output directories
         run: mkdir -p artifacts/logs artifacts/previews
 
-      - name: Check packaging rules
-        run: python3 -m unittest discover -s scripts/tests -p 'test_package*.py' -v 2>&1 | tee artifacts/logs/packaging-tests.log
+      - name: Install typography and rasterization tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y inkscape fonts-noto-cjk python3-pil
+
+      - name: Install pinned Segoe-compatible preview fonts
+        run: python3 scripts/prepare_preview_fonts.py 2>&1 | tee artifacts/logs/preview-fonts.log
+
+      - name: Check packaging and Gallery coverage rules
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v 2>&1 | tee artifacts/logs/tooling-tests.log
 
       - name: Restore public compilation references
         run: dotnet restore MaxIllusionPlugins.sln -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/restore.log
@@ -52,8 +60,11 @@ jobs:
       - name: Build actual UI preview exporter
         run: dotnet build tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/preview-build.log
 
-      - name: Export Metro Gallery and plugin previews
-        run: dotnet run --project tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release --no-build -- bin/Release/MaximumUIGallery/KK_MaximumUIGallery.dll artifacts/previews 2>&1 | tee artifacts/logs/previews.log
+      - name: Export every Gallery page, state and plugin preview
+        run: dotnet run --project tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release --no-build -- bin/Release/MaximumUIGallery/KK_MaximumUIGallery.dll artifacts/previews --require-shaped 2>&1 | tee artifacts/logs/previews.log
+
+      - name: Render Gallery and verify text and scroll coverage
+        run: python3 scripts/render_gallery.py artifacts/previews --strict 2>&1 | tee artifacts/logs/gallery-render.log
 
       - name: Package installable plugins
         run: python3 scripts/package.py --configuration Release --output artifacts/packages 2>&1 | tee artifacts/logs/packages.log
@@ -69,11 +80,12 @@ jobs:
 
       - name: Upload real UI drawing previews
         id: previews
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: maximumui-previews-${{ github.run_number }}
           path: artifacts/previews/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Upload build and test logs

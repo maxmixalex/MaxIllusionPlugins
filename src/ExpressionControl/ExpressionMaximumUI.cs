@@ -14,7 +14,7 @@ namespace ExpressionControl {
             if (!MaximumUIRuntime.IsMounted(MaximumUiMountId)) {
                 MaximumUIRuntime.EnsureHost();
                 MaximumUIRuntime.Mount(MaximumUiMountId, maximumView, new MountOptions {
-                    Visible = false, BuildEveryFrame = false, Theme = MaximumTheme.MetroDark,
+                    Visible = false, BuildEveryFrame = false, Theme = MaximumTheme.MetroLight,
                     SortOrder = 340, SoftMouseCapture = true, SoftKeyboardCapture = true
                 });
             }
