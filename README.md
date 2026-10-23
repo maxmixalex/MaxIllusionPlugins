@@ -15,8 +15,8 @@
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
 | [MaximumUIGallery](src/MaximumUIGallery/README.md) | MaximumUI 控件、布局、对话框和调试工具的游戏内示例 | 默认 `F8` |
-| [MaximumUI.Tests](src/MaximumUI.Tests/README.md) | MaximumUI 布局、输入、选择、绘制及导航的无界面断言测试 | `scripts/Test-MaximumUI.ps1` |
-| [Common](src/Common/README.md) | 构建版本号与日志辅助代码 | 共享库 |
+| [MaximumUI.Tests](src/MaximumUI.Tests/README.md) | MaximumUI 布局、输入、选择、绘制及导航的无界面断言测试 | `scripts/test.py` / `scripts/Test-All.ps1` |
+| [Common](src/Common/README.md) | 构建版本号、日志与原子 XML 读写辅助代码 | 共享库 |
 
 各项目的实际版本见对应 `.csproj` 和插件版本常量。ExpressionControl、JuiceControl、AccessoryBatchManager、ClothingCompression 和 MultiTeamH 当前使用各自的 UI 实现；MaximumUI 的主要示例使用者是 MaximumUIGallery。
 
@@ -26,7 +26,7 @@
 
 ```sh
 dotnet restore MaxIllusionPlugins.sln
-dotnet build MaxIllusionPlugins.sln -c Release --no-restore
+dotnet build MaxIllusionPlugins.sln -c Release --no-restore -m:1 -nodeReuse:false
 ```
 
 只开发一个项目时可以单独构建，例如：
@@ -35,23 +35,29 @@ dotnet build MaxIllusionPlugins.sln -c Release --no-restore
 dotnet build src/MultiTeamH/MultiTeamH.csproj -c Release
 ```
 
-使用 PowerShell 7 执行现有 MaximumUI 无界面测试：
+执行所有回归测试（Python 3 或 PowerShell 7 二选一；脚本默认会先构建解决方案）：
 
 ```sh
-pwsh -NoProfile -File scripts/Test-MaximumUI.ps1
+python scripts/test.py
+pwsh -NoProfile -File scripts/Test-All.ps1
 ```
 
-详细构建、输出、调试及验证方式见 [开发说明](docs/Development.md)。
+已完成构建时可传 `--no-build` / `-NoBuild`；增加 `--benchmark` / `-Benchmark` 可执行 MaximumUI 的托管构建与布局策略微基准。`tests/` 中的三个插件回归宿主直接编译相关生产源码，仅替换游戏和外部插件边界。MaximumUI.Runner 执行原有 `net461` 断言程序集的真实 `Main`；单独执行 `dotnet test` 不会运行这些断言。
+
+详细构建、输出、测试边界见 [开发说明](docs/Development.md)，本次修复及基准见 [2026-10-23 审计记录](docs/Audit-2026-10-23.md)。
 
 ## 游戏内使用
 
 运行插件需要已安装对应游戏、BepInEx 5 和各项目说明中的运行依赖。按需要从 `bin/Release/<项目名>/` 选择插件 DLL，放入游戏的 `BepInEx/plugins/`；有项目引用时也需带上对应库。MaximumUI Gallery 需同时提供 `MaximumUI.dll`。
 
-`bin/Release/KK/` 是构建汇总目录，不等于经过筛选的发布包；不要把测试程序集当作插件安装。角色卡、存档、游戏和第三方运行依赖不随本源码仓库分发。
+ClothingCompression、ExpressionControl、JuiceControl 等引用 Common 的项目需要随附本次构建的 `MaxIllusionPlugins.Common.dll`。MaximumUI 仍只由独立 Gallery 演示，未接入上述功能插件。
+
+`bin/Release/KK/` 是构建汇总目录，不等于经过筛选的发布包。测试工程已禁止向此目录复制主产物，但旧构建留下的文件不会自动删除；不要把测试程序集当作插件安装。角色卡、存档、游戏和第三方运行依赖不随本源码仓库分发。
 
 ## 开发资料
 
 - [工作区开发说明](docs/Development.md)
+- [全仓审计、回归证据与待游戏内验证事项](docs/Audit-2026-10-23.md)
 - [MaximumUI 设计与 API 长文档](MaximumUI.md)（具体接口以当前源码为准）
 - [MultiTeamH 开发交接与最后已知验证状态](docs/MultiTeamH-Handoff.md)
 - [MultiTeamH 依赖版本、公开源码与本地参考包索引](docs/MultiTeamH-Dependencies.md)
