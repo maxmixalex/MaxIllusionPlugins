@@ -87,7 +87,7 @@ namespace ClothingCompression {
         private CompressionLibrary data;
         private Exception readFailure;
 
-        internal CompressionLibraryStore() : this(System.IO.Path.Combine(Paths.ConfigPath, "ClothingCompression.xml")) { }
+        internal CompressionLibraryStore() : this(System.IO.Path.Combine(Paths.ConfigPath, "MaxMixAlex.ClothingCompression.xml")) { }
 
         internal CompressionLibraryStore(string path) {
             if (string.IsNullOrEmpty(path)) throw new ArgumentException("A library path is required.", "path");
