@@ -56,6 +56,10 @@ namespace MultiTeamH {
         private ManualLogSource log;
         private bool initialized;
         private bool shuttingDown;
+        private bool initializationCompleted;
+        private int launchRevision;
+        private ChaControl createdFemale;
+        private ChaControl createdMale;
         private Button avatarButton;
         private bool addedAvatarButton;
         private GameObject parallelFlagObject;
@@ -242,14 +246,22 @@ namespace MultiTeamH {
             log = logger;
             Status = "正在创建独立的第二队…";
             Sessions.Add(this);
-            StartCoroutine(InitializeAfterFrame());
+            launchRevision = MultiTeamSelection.Revision;
+            StartCoroutine(CoroutineGuard.Run(InitializeAfterFrame(), delegate(Exception ex) {
+                Status = "创建第二队失败，请查看日志";
+                log.LogError("MultiTeamH initialization failed: " + ex);
+            }, delegate {
+                if (initializationCompleted || shuttingDown) return;
+                Shutdown(false);
+                Destroy(this);
+            }));
         }
 
         private IEnumerator InitializeAfterFrame() {
             long initializationStarted = DiagnosticProbe.Start();
             if (!IsSupportedScene()) {
                 Status = "仅支持一般自由 H（1F1M）";
-                MultiTeamSelection.Clear();
+                MultiTeamSelection.Complete(launchRevision);
                 yield break;
             }
 
@@ -272,11 +284,11 @@ namespace MultiTeamH {
             ChaFile.CopyChaFile(maleFile, secondMaleData.chaCtrl ? secondMaleData.chaCtrl.chaFile : secondMaleData.charFile);
             Manager.Character manager = Singleton<Manager.Character>.Instance;
             long characterLoadStarted = DiagnosticProbe.Start();
-            ChaControl female = manager.CreateFemale(parent, 0, femaleFile, true);
+            ChaControl female = createdFemale = manager.CreateFemale(parent, 0, femaleFile, true);
             // BetterPenetration indexes its DanAgents by ChaInfo.chaID.
             // Reusing the first man's ID makes team 2's Lookat_dan drive the
             // first man's agent, even though the native controllers differ.
-            ChaControl male = manager.CreateMale(0, parent, 1, maleFile, true);
+            ChaControl male = createdMale = manager.CreateMale(0, parent, 1, maleFile, true);
             if (female == null || male == null) {
                 Status = "创建第二队失败，请查看日志";
                 log.LogError("MultiTeamH could not create the independent second pair.");
@@ -288,7 +300,9 @@ namespace MultiTeamH {
                 " secondary=" + male.chaID);
             manager.loading.Load(0, female, false);
             manager.loading.Load(0, male, false);
-            yield return new WaitUntil(delegate { return manager.loading.IsEnd(female) && manager.loading.IsEnd(male); });
+            // Poll inside the guarded iterator so loading exceptions are caught
+            // by the same rollback path instead of escaping a WaitUntil callback.
+            while (!manager.loading.IsEnd(female) || !manager.loading.IsEnd(male)) yield return null;
             DiagnosticProbe.Info("initial-load charactersMs=" + DiagnosticProbe.ElapsedMs(characterLoadStarted).ToString("0.0"));
             secondFemaleData.SetRoot(female.gameObject);
             secondMaleData.SetRoot(male.gameObject);
@@ -329,7 +343,8 @@ namespace MultiTeamH {
             BindAvatarSwitch();
             ApplyVisibility();
             UpdateStatus();
-            MultiTeamSelection.Complete();
+            initializationCompleted = true;
+            MultiTeamSelection.Complete(launchRevision);
             log.LogInfo("MultiTeamH initialized two independent 1F1M teams.");
             DiagnosticProbe.Info("initial-load totalMs=" + DiagnosticProbe.ElapsedMs(initializationStarted).ToString("0.0"));
             LogRuntimeState("initialized");
@@ -815,7 +830,23 @@ namespace MultiTeamH {
                 Status = "请先结束多人动作再切换队伍";
                 return;
             }
-            StartCoroutine(SwitchRoutine(index));
+            int previous = ActiveTeam;
+            StartCoroutine(CoroutineGuard.Run(SwitchRoutine(index), delegate(Exception ex) {
+                log.LogError("MultiTeamH failed to switch to team " + (index + 1) + ": " + ex);
+                Status = "切换失败，请查看日志";
+                // Binding may fail before or after ActiveTeam is changed. Keep
+                // the logical focus and the native shared context consistent.
+                int failedTeam = ActiveTeam;
+                ActiveTeam = previous;
+                try {
+                    BindTeam(teams[previous]);
+                    BreastmilkCompat.FocusChanged(this, failedTeam, previous);
+                    if (teamCameras[previous] != null) teamCameras[previous].Restore();
+                    ApplyVisibility();
+                } catch (Exception recoveryError) {
+                    log.LogError("MultiTeamH could not fully restore the previous team: " + recoveryError);
+                }
+            }, delegate { IsSwitching = false; }));
         }
 
         private IEnumerator SwitchRoutine(int index) {
@@ -852,7 +883,7 @@ namespace MultiTeamH {
             oldTeam.CaptureModeUi(Proc.sprite);
             ProbeActionBubble(oldTeam.Flags.mode, "switch-saved-team-" + (oldIndex + 1));
             newTeam.Capture(newTeam.Flags);
-            try {
+            {
                 // TeamSwitching finishes an in-progress CyNoVR kiss and restores
                 // the camera from before it started. Save that stable camera,
                 // rather than the unfinished kiss camera.
@@ -895,11 +926,6 @@ namespace MultiTeamH {
                 postSwitchCameraProbeUntilFrame = Time.frameCount + 30;
                 postSwitchCameraProbeLastFrame = -1;
                 postSwitchCameraRepairCount = 0;
-            } catch (Exception ex) {
-                log.LogError("MultiTeamH failed to bind team " + (index + 1) + ": " + ex);
-                Status = "切换失败，请查看日志";
-                IsSwitching = false;
-                yield break;
             }
             yield return null;
             if (teamCameras[index] != null) DiagnosticProbe.Info("team-switch-target-next-frame team=" + (index + 1) +
@@ -2365,23 +2391,34 @@ namespace MultiTeamH {
             // HCtrl runs outside HSceneProc.Update too. Its background pass
             // must begin with that team's widgets, otherwise its finish-button
             // writes are applied on top of the focused team's bubble state.
-            teams[target].RestoreModeUi(Proc.sprite, false);
-            teams[target].RestoreHandUi(Proc.sprite);
-            return true;
+            try {
+                teams[target].RestoreModeUi(Proc.sprite, false);
+                teams[target].RestoreHandUi(Proc.sprite);
+                return true;
+            } catch {
+                // The caller cannot mark its UI scope as entered until we
+                // return. Roll back a partially applied snapshot here.
+                try { focused.RestoreModeUi(Proc.sprite); }
+                finally { focused.RestoreHandUi(Proc.sprite); }
+                throw;
+            }
         }
 
         internal void EndExternalUiPass(int target, bool started) {
             if (!started || !initialized || Proc == null || Proc.sprite == null || target < 0 || target >= teams.Length ||
                 teams[target] == null || teams[ActiveTeam] == null) return;
-            string change = teams[ActiveTeam].DescribeModeUiDifference();
-            if (change != null && Time.realtimeSinceStartup - lastExternalUiWriteLog >= 2f) {
-                lastExternalUiWriteLog = Time.realtimeSinceStartup;
-                DiagnosticProbe.Info("background-external-ui-write team=" + (target + 1) + " " + change);
+            try {
+                string change = teams[ActiveTeam].DescribeModeUiDifference();
+                if (change != null && Time.realtimeSinceStartup - lastExternalUiWriteLog >= 2f) {
+                    lastExternalUiWriteLog = Time.realtimeSinceStartup;
+                    DiagnosticProbe.Info("background-external-ui-write team=" + (target + 1) + " " + change);
+                }
+                teams[target].CaptureModeUi(Proc.sprite);
+                teams[target].CaptureHandUi(Proc.sprite);
+            } finally {
+                try { teams[ActiveTeam].RestoreModeUi(Proc.sprite); }
+                finally { teams[ActiveTeam].RestoreHandUi(Proc.sprite); }
             }
-            teams[target].CaptureModeUi(Proc.sprite);
-            teams[target].CaptureHandUi(Proc.sprite);
-            teams[ActiveTeam].RestoreModeUi(Proc.sprite);
-            teams[ActiveTeam].RestoreHandUi(Proc.sprite);
         }
 
         internal static void RestoreSharedCursorLock(bool wasLocked, string source) {
@@ -2475,9 +2512,9 @@ namespace MultiTeamH {
                     log.LogError("Parallel HSceneProc.Update failed for team " + (backgroundIndex + 1) + ": " + detail);
                 }
             } finally {
-                BreastmilkCompat.LeaveParallelTeam(this, backgroundIndex);
                 IsParallelPass = false;
                 SuppressCameraLoads = false;
+                BreastmilkCompat.LeaveParallelTeam(this, backgroundIndex);
                 RestoreSharedCursorLock(focusedCursorLock, "parallel-h-scene");
                 if (focus != null) {
                     BindLightweightContext(focus);
@@ -3542,20 +3579,41 @@ namespace MultiTeamH {
             }
         }
 
-        internal void Shutdown() {
+        internal void Shutdown(bool stopCoroutines = true) {
             if (shuttingDown) return;
             shuttingDown = true;
-            BreastmilkCompat.SessionEnded(this);
-            StopAllCoroutines();
+            try { BreastmilkCompat.SessionEnded(this); }
+            catch (Exception ex) { if (log != null) log.LogWarning("Could not restore Breastmilk state on exit: " + ex.Message); }
+            if (stopCoroutines) StopAllCoroutines();
+            IsSwitching = false;
+            ExpressionControlCompat.SessionEnded(this);
             Sessions.Remove(this);
             RestoreOriginalContextForExit();
             HSceneOptionsCompat.Reset();
+            if (Sessions.Count == 0) RuntimeModCompat.SessionEnded();
             if (avatarButton != null) avatarButton.onClick.RemoveListener(SwitchFromAvatar);
             if (addedAvatarButton && avatarButton != null) Destroy(avatarButton);
             if (parallelFlagObject != null) Destroy(parallelFlagObject);
             if (inactiveHeroinePanel != null) { inactiveHeroinePanel.Dispose(); inactiveHeroinePanel = null; }
             initialized = false;
-            MultiTeamSelection.Clear();
+            if (!initializationCompleted) {
+                // A previous session can finish while the next selection is
+                // already pending. It must never clear the newer launch.
+                MultiTeamSelection.Complete(launchRevision);
+                RemoveFailedCharacter(createdFemale);
+                RemoveFailedCharacter(createdMale);
+            }
+        }
+
+        private void RemoveFailedCharacter(ChaControl character) {
+            if (character == null) return;
+            try {
+                if (!Singleton<Manager.Character>.IsInstance() ||
+                    !Singleton<Manager.Character>.Instance.DeleteChara(character)) Destroy(character.gameObject);
+            } catch (Exception ex) {
+                if (log != null) log.LogWarning("Could not remove a partially created MultiTeamH character: " + ex.Message);
+                Destroy(character.gameObject);
+            }
         }
 
         private void RestoreOriginalContextForExit() {

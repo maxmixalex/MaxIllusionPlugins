@@ -43,9 +43,14 @@ namespace MultiTeamH {
             feraField = AccessTools.Field(type, "isFeraAction");
             updateStateField = AccessTools.Field(type, "updateState");
             hFlagField = AccessTools.Field(type, "hFrag");
+            if (femaleListField == null || hFlagField == null) {
+                log.LogWarning("ExpressionControl compatibility was not applied because its character list or H context field was not found.");
+                return;
+            }
             harmony.Patch(proc,
                 prefix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(BeforeProc)),
-                postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterProc)));
+                postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterProc)),
+                finalizer: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(FinalizeProc)));
             harmony.Patch(updateFemale,
                 postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterUpdateFemale)));
             patched = true;
@@ -62,10 +67,10 @@ namespace MultiTeamH {
             DiagnosticProbe.OnceInfo("expression-target-" + active.GetInstanceID(), "expression-target female=" + active.gameObject.name +
                 " flags=" + (targetFlags == null ? "null" : targetFlags.GetInstanceID().ToString()));
 
-            SwitchExpressionState(__instance, active);
-            object originalFlag = hFlagField == null ? null : hFlagField.GetValue(null);
-            if (hFlagField != null) hFlagField.SetValue(null, targetFlags);
-            if (femaleListField == null) return;
+            // Resolve and filter first. Unsupported/temporarily missing data must
+            // not change the process-wide H context without a restoration scope.
+            if (femaleListField == null || hFlagField == null) return;
+            object originalFlag = hFlagField.GetValue(null);
             IList original = femaleListField.GetValue(__instance) as IList;
             if (original == null) return;
             IList filtered = Activator.CreateInstance(original.GetType()) as IList;
@@ -74,11 +79,16 @@ namespace MultiTeamH {
             for (int i = 0; i < original.Count; i++) {
                 object data = original[i];
                 ChaControl female = GetFemale(data);
-                if (female == null || !session.ContainsFemale(female)) filtered.Add(data);
-                else if (female == active && !activeAdded) { filtered.Add(data); activeAdded = true; }
+                if (female == null || !session.ContainsFemale(female)) {
+                    // The replay is only for the other managed team. Unmanaged
+                    // characters have already been advanced by the original call.
+                    if (forcedTeam < 0) filtered.Add(data);
+                } else if (female == active && !activeAdded) { filtered.Add(data); activeAdded = true; }
             }
             __state = new ProcScope { OriginalFemaleList = original, OriginalFlag = originalFlag, Session = session,
                 Target = target, IsTopLevel = forcedTeam < 0 };
+            SwitchExpressionState(__instance, active);
+            hFlagField.SetValue(null, targetFlags);
             femaleListField.SetValue(__instance, filtered);
             if (target >= 0 && target < lastListProbe.Length && UnityEngine.Time.realtimeSinceStartup - lastListProbe[target] >= 2f) {
                 lastListProbe[target] = UnityEngine.Time.realtimeSinceStartup;
@@ -91,12 +101,8 @@ namespace MultiTeamH {
         }
 
         private static void AfterProc(object __instance, MethodBase __originalMethod, ProcScope __state) {
-            if (__instance != null && __state != null && __state.OriginalFemaleList != null && femaleListField != null) {
-                femaleListField.SetValue(__instance, __state.OriginalFemaleList);
-            }
-            if (__state == null) return;
-            if (hFlagField != null) hFlagField.SetValue(null, __state.OriginalFlag);
-            if (!__state.IsTopLevel || __originalMethod == null) return;
+            RestoreProcContext(__instance, __state);
+            if (__state == null || !__state.IsTopLevel || __originalMethod == null) return;
             int other = 1 - __state.Target;
             if (__state.Session.GetFemaleObject(other) == null) return;
             try {
@@ -108,6 +114,38 @@ namespace MultiTeamH {
                 forcedTeam = -1;
                 if (hFlagField != null) hFlagField.SetValue(null, __state.OriginalFlag);
             }
+        }
+
+        private static Exception FinalizeProc(Exception __exception, object __instance, ProcScope __state) {
+            try { RestoreProcContext(__instance, __state); }
+            catch (Exception cleanupError) {
+                DiagnosticProbe.Warning("ExpressionControl context cleanup failed: " + cleanupError);
+                if (__exception == null) return cleanupError;
+            }
+            return __exception;
+        }
+
+        private static void RestoreProcContext(object instance, ProcScope state) {
+            if (state == null || state.Restored) return;
+            state.Restored = true;
+            try {
+                if (instance != null && state.OriginalFemaleList != null && femaleListField != null)
+                    femaleListField.SetValue(instance, state.OriginalFemaleList);
+            } finally {
+                if (hFlagField != null) hFlagField.SetValue(null, state.OriginalFlag);
+            }
+        }
+
+        internal static void SessionEnded(TeamSession session) {
+            if (session == null) return;
+            for (int i = 0; i < 2; i++) {
+                ChaControl female = session.GetFemaleObject(i);
+                if (ReferenceEquals(female, null)) continue;
+                States.Remove(female);
+                if (ReferenceEquals(lastActiveFemale, female)) lastActiveFemale = null;
+            }
+            forcedTeam = -1;
+            Array.Clear(lastListProbe, 0, lastListProbe.Length);
         }
 
         private static void AfterUpdateFemale(object __instance) {
@@ -181,6 +219,7 @@ namespace MultiTeamH {
             internal TeamSession Session;
             internal int Target;
             internal bool IsTopLevel;
+            internal bool Restored;
         }
 
         private sealed class ExpressionState {

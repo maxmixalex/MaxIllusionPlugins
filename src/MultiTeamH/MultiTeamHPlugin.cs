@@ -24,7 +24,7 @@ namespace MultiTeamH {
     public sealed class MultiTeamHPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MultiTeamH";
         public const string Name = "MultiTeamH";
-        public const string Version = "0.11.62";
+        public const string Version = "0.11.63";
 
         internal static MultiTeamHPlugin Instance { get; private set; }
         internal static ConfigEntry<bool> Enabled { get; private set; }
@@ -48,6 +48,7 @@ namespace MultiTeamH {
         private GUISkin panelSkin;
         private GUIStyle foldedWindowStyle;
         private bool mouseDownOnWindow;
+        private float nextFreeHDiscovery;
 
         private void Awake() {
             Instance = this;
@@ -87,6 +88,12 @@ namespace MultiTeamH {
 
         private void OnDestroy() {
             DisposeSession();
+            if (freeHMode != null) {
+                FreeHModeController old = freeHMode;
+                freeHMode = null;
+                old.Shutdown();
+                Destroy(old);
+            }
             if (harmony != null) harmony.UnpatchSelf();
             if (Instance == this) Instance = null;
         }
@@ -97,7 +104,12 @@ namespace MultiTeamH {
             // separate lifetimes.  A session can remain alive briefly while
             // the selection screen is already back, so never gate discovery
             // of its entry button on session == null.
-            if (freeHMode == null) DiscoverFreeHScene();
+            if (freeHMode == null && Time.realtimeSinceStartup >= nextFreeHDiscovery) {
+                // Scene hooks attach immediately. This is only a fallback for
+                // already-loaded menus; a global object scan must not run at FPS.
+                nextFreeHDiscovery = Time.realtimeSinceStartup + 1f;
+                DiscoverFreeHScene();
+            }
             if (ToggleWindowKey.Value.IsDown() || Input.GetKeyDown(KeyCode.KeypadMinus)) showWindow = !showWindow;
             if (session != null && SwitchTeamKey.Value.IsDown()) session.SwitchTo(1 - session.ActiveTeam);
         }
@@ -113,17 +125,22 @@ namespace MultiTeamH {
                 Color oldColor = GUI.color;
                 Color oldBackground = GUI.backgroundColor;
                 Color oldContent = GUI.contentColor;
-                GUI.skin = panelSkin;
-                GUI.color = Color.white;
-                GUI.backgroundColor = new Color(1f, 1f, 1f, 0.82f);
-                GUI.contentColor = Color.black;
-                windowRect.height = windowMinimized ? 20f : 420f;
-                windowRect = GUI.Window(68150240, windowRect, DrawWindow, Name + " " + Version,
-                    windowMinimized ? foldedWindowStyle : panelSkin.window);
-                GUI.skin = oldSkin;
-                GUI.color = oldColor;
-                GUI.backgroundColor = oldBackground;
-                GUI.contentColor = oldContent;
+                bool oldEnabled = GUI.enabled;
+                try {
+                    GUI.skin = panelSkin;
+                    GUI.color = Color.white;
+                    GUI.backgroundColor = new Color(1f, 1f, 1f, 0.82f);
+                    GUI.contentColor = Color.black;
+                    windowRect.height = windowMinimized ? 20f : 420f;
+                    windowRect = GUI.Window(68150240, windowRect, DrawWindow, Name + " " + Version,
+                        windowMinimized ? foldedWindowStyle : panelSkin.window);
+                } finally {
+                    GUI.skin = oldSkin;
+                    GUI.color = oldColor;
+                    GUI.backgroundColor = oldBackground;
+                    GUI.contentColor = oldContent;
+                    GUI.enabled = oldEnabled;
+                }
                 windowRect.x = Mathf.Clamp(windowRect.x, 0f, Mathf.Max(0f, Screen.width - windowRect.width));
                 windowRect.y = Mathf.Clamp(windowRect.y, 0f, Mathf.Max(0f, Screen.height - 24f));
                 HandleWindowMouseInput();
@@ -240,7 +257,10 @@ namespace MultiTeamH {
         }
 
         internal void FreeHModeEnded(FreeHModeController ended) {
-            if (freeHMode == ended) freeHMode = null;
+            if (freeHMode == ended) {
+                freeHMode = null;
+                nextFreeHDiscovery = 0f;
+            }
         }
 
         internal void SessionEnded(TeamSession ended) {
@@ -661,19 +681,6 @@ namespace MultiTeamH {
         }
     }
 
-    [HarmonyPatch(typeof(HSprite), "InitHeroine")]
-    internal static class NativeThreePPortraitHook {
-        [HarmonyPrefix]
-        private static void PreserveTeamPortrait(HSprite __instance) {
-            TeamSession.DetachManagedPortraitBeforeNative3P(__instance);
-        }
-
-        [HarmonyPostfix]
-        private static void RestoreTeamPortrait(HSprite __instance) {
-            TeamSession.RestoreManagedPortraitAfterNative3P(__instance);
-        }
-    }
-
     [HarmonyPatch]
     internal static class BackgroundSpriteBoolWriteHooks {
         private static IEnumerable<MethodBase> TargetMethods() {
@@ -726,18 +733,6 @@ namespace MultiTeamH {
     internal static class SpecialActionLabelHooks {
         private static void Postfix(HSprite __instance) {
             if (TeamSession.IsManagedSprite(__instance)) TeamSession.DecorateSpecialActionLabels(__instance);
-        }
-    }
-
-    [HarmonyPatch(typeof(HSprite), "CreateMotionList")]
-    internal static class SpecialActionMenuBuildHooks {
-        private static void Prefix(HSprite __instance, ref HFlag.EMode __state) {
-            if (TeamSession.IsManagedSprite(__instance)) DiagnosticProbe.Info("CreateMotionList-enter");
-            if (!TeamSession.BeginSpecialMenuBuild(__instance, out __state)) __state = (HFlag.EMode)(-1);
-        }
-
-        private static void Postfix(HSprite __instance, HFlag.EMode __state) {
-            if ((int)__state >= 0) TeamSession.EndSpecialMenuBuild(__instance, __state);
         }
     }
 
