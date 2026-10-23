@@ -133,21 +133,46 @@ namespace MaximumUI.Tests {
             if (method == null) return;
             Func<long> bytes = (Func<long>)Delegate.CreateDelegate(typeof(Func<long>), method);
             MenuBar bar = new MenuBar(); Menu menu = new Menu("File"); bar.Add(menu);
-            Widget[] chain = { new Panel(), new VStack(), bar };
-            Widget[] menuPath = { menu };
+            // Match ImguiRenderer's reused ownerAncestors list, including its menu path.
+            System.Collections.Generic.List<Widget> chain = new System.Collections.Generic.List<Widget> { new Panel(), new VStack(), bar };
+            System.Collections.Generic.List<Widget> menuPath = new System.Collections.Generic.List<Widget> { menu };
             PopupOwnerState state = new PopupOwnerState();
-            System.Collections.Generic.List<Widget> restored = new System.Collections.Generic.List<Widget>(chain.Length);
-            for (int i = 0; i < 10; i++) { state.Capture(chain, true); state.CapturePopupPath(menuPath, 0, 1); restored.Clear(); state.AppendAncestorsTo(restored); }
+            System.Collections.Generic.List<Widget> restored = new System.Collections.Generic.List<Widget>(chain.Count);
+            const int iterations = 10000;
+            long[] allocated = new long[3];
+            int[] valid = new int[3], versions = new int[3], restoredCounts = new int[3];
+            state.Capture(chain, true);
+            state.CapturePopupPath(menuPath, 0, 1);
             state.BeginOpen();
-            int version = state.Version, valid = 0;
-            long before = bytes();
-            for (int i = 0; i < 10000; i++) {
+            int version = state.Version;
+            // Warm the allocation counter and the complete open-popup workload before
+            // measuring. Every subsequent batch must pass; no minimum or retry is used.
+            bytes();
+            int warmValid = CaptureStableOwnerBatch(state, chain, menuPath, restored, iterations);
+            bytes();
+            for (int batch = 0; batch < allocated.Length; batch++) {
+                long before = bytes();
+                valid[batch] = CaptureStableOwnerBatch(state, chain, menuPath, restored, iterations);
+                allocated[batch] = bytes() - before;
+                versions[batch] = state.Version;
+                restoredCounts[batch] = restored.Count;
+            }
+            Assert(warmValid == iterations && state.Open, "The complete warmup must preserve the open popup and its valid owner.");
+            for (int batch = 0; batch < allocated.Length; batch++)
+                Assert(valid[batch] == iterations && versions[batch] == version && restoredCounts[batch] == chain.Count && allocated[batch] == 0,
+                    "Stable popup-owner capture must preserve its generation and reuse bounded ancestor storage in every batch; measured " +
+                    allocated[0] + ", " + allocated[1] + ", " + allocated[2] + " bytes; batch " + batch + ": valid=" + valid[batch] +
+                    ", version=" + versions[batch] + "/" + version + ", restored=" + restoredCounts[batch] + "/" + chain.Count + ".");
+        }
+
+        private static int CaptureStableOwnerBatch(PopupOwnerState state, System.Collections.Generic.List<Widget> chain,
+            System.Collections.Generic.List<Widget> menuPath, System.Collections.Generic.List<Widget> restored, int iterations) {
+            int valid = 0;
+            for (int i = 0; i < iterations; i++) {
                 if (state.Capture(chain, true) && state.CapturePopupPath(menuPath, 0, 1) && state.IsEnabled) valid++;
                 restored.Clear(); state.AppendAncestorsTo(restored);
             }
-            long allocated = bytes() - before;
-            Assert(valid == 10000 && state.Version == version && restored.Count == chain.Length && allocated == 0,
-                "Stable popup-owner capture must preserve its generation and reuse bounded ancestor storage; measured " + allocated + " bytes.");
+            return valid;
         }
 
         private static void PopupInputOwnershipDoesNotDisableBackgroundAppearance() {
