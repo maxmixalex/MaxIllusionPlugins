@@ -43,42 +43,9 @@ namespace ExpressionControl
 				this.currentProgram = this.xml.programs[0].DeepClone<ExpressionControl.Program>();
 			}
 		}
-		public void LateUpdate()
-		{
-			bool keyState = this.hotkey[ExpressionControl.hotkeyShowGUI].GetKeyState();
-			if (keyState)
-			{
-				bool flag = this.gui == null;
-				if (flag)
-				{
-					this.gui = new GUIMgr(ExpressionControl.WINDOW_ID, new Rect(0f, 0f, 20f, 50f), ExpressionControlPlugin.Name + ExpressionControlPlugin.Version);
-				}
-				this.gui.show = !this.gui.show;
-				this.UpdateFemale();
-			}
-			this.Proc();
-		}
-		public void OnGUI()
-		{
-			bool flag = this.gui != null && this.gui.show;
-			if (flag)
-			{
-				Color oldColor = GUI.color;
-				Color oldContent = GUI.contentColor;
-				Color oldBackground = GUI.backgroundColor;
-				bool oldEnabled = GUI.enabled;
-				try { this.gui.Draw(); }
-				finally
-				{
-					GUI.color = oldColor;
-					GUI.contentColor = oldContent;
-					GUI.backgroundColor = oldBackground;
-					GUI.enabled = oldEnabled;
-				}
-			}
-		}
 		public void ReStart()
 		{
+			this.pendingGuiToggle = false;
 			ExpressionControl.studioScene = FindObjectOfType<StudioScene>();
 			bool flag = ExpressionControl.studioScene == null;
 			if (flag)
@@ -124,7 +91,7 @@ namespace ExpressionControl
 					}
 				}
 				this.UpdateFemale();
-				ExpressionControl.hFrag = FindObjectOfType<HFlag>();
+				ExpressionControl.hFrag = ExpressionControl.hsceneProc.flags ?? FindObjectOfType<HFlag>();
 			}
 		}
 		public void Proc()
@@ -330,37 +297,6 @@ namespace ExpressionControl
 		private bool UnitHasValidExpression(ExpressionControl.Program.Unit unit)
 		{
 			return unit != null && unit.expressionGuids != null && this.xml != null && this.xml.expressions != null && unit.expressionGuids.Any((string guid) => this.xml.expressions.Any((ExpressionControl.Expression x) => x.guid == guid));
-		}
-		private void UpdateHState()
-		{
-			bool flag = ExpressionControl.hsceneProc == null || this.updateState;
-			if (!flag)
-			{
-				bool flag2 = this.nowMotion != ExpressionControl.hsceneProc.flags.nowAnimStateName;
-				if (flag2)
-				{
-					this.nowMotion = ExpressionControl.hsceneProc.flags.nowAnimStateName;
-					bool flag3 = this.nowMotion.Contains("Orgasm_Start") || this.nowMotion.Contains("S_IN_Start") || this.nowMotion.Contains("F_IN_Start") || (ExpressionControl.hFrag != null && (ExpressionControl.hFrag.mode == HFlag.EMode.masturbation || ExpressionControl.hFrag.mode == HFlag.EMode.lesbian) && this.nowMotion == "Orgasm");
-					if (flag3)
-					{
-						int num = this.orgazumCount + 1;
-						this.orgazumCount = num;
-						bool flag4 = num > 10;
-						if (flag4)
-						{
-							this.orgazumCount = 10;
-						}
-					}
-					bool flag5 = this.nowHAction != ExpressionControl.hsceneProc.flags.nowAnimationInfo.nameAnimation;
-					if (flag5)
-					{
-						this.nowHAction = ExpressionControl.hsceneProc.flags.nowAnimationInfo.nameAnimation;
-						this.isFeraAction = (this.nowHAction.Contains("舐め") || this.nowHAction.Contains("フェラ") || this.nowHAction.Contains("咥え"));
-						this.UpdateFemale();
-					}
-					this.updateState = true;
-				}
-			}
 		}
 		public bool IsIgnoreSetFace(int _idFace, ChaControl _chara, int _voiceKind, int _action, FaceListCtrl __instance, GlobalMethod.FloatBlend ___blendEye, GlobalMethod.FloatBlend ___blendMouth)
 		{

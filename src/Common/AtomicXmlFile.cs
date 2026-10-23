@@ -14,7 +14,12 @@ namespace MaxIllusionPlugins.Common {
                 XmlResolver = null
             };
             using (XmlReader reader = XmlReader.Create(path, settings)) {
-                return (T)new XmlSerializer(typeof(T)).Deserialize(reader);
+                T value = (T)new XmlSerializer(typeof(T)).Deserialize(reader);
+                // Deserialize may stop at a comment after the root. Consume the
+                // whole document before accepting it, so malformed trailing data
+                // or a second root cannot silently become a writable empty model.
+                while (reader.Read()) { }
+                return value;
             }
         }
 

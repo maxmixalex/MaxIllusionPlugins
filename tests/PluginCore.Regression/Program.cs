@@ -47,6 +47,14 @@ internal static class Program {
             Run("Juice XML normalizes null preset entries", JuiceNormalization);
             Run("Malformed Juice XML is reported and never reset on disk", JuiceMalformedIsPreserved);
             Run("Failed Juice path switch keeps old presets read-only until recovery", JuiceFailedPathSwitch);
+            Run("Juice accepts a legacy nil root without rewriting it", XmlCompatibilityTests.JuiceNilRoot);
+            Run("Expression accepts a nil root with its default shortcut", XmlCompatibilityTests.ExpressionNilRoot);
+            Run("XML BOMs, UTF-16 and empty roots remain compatible", XmlCompatibilityTests.EncodingsAndEmptyRoots);
+            Run("Empty, malformed and unsafe XML remains protected", XmlCompatibilityTests.InvalidDocumentsPreserveStore);
+            Run("Failed Expression reload also blocks subsequent saves", XmlCompatibilityTests.FailedExpressionReloadBlocksSave);
+            Run("XML paths containing Unicode and URI punctuation stay literal", XmlCompatibilityTests.LiteralFileNames);
+            Run("XML diagnostics expose the inner parser cause and location", XmlCompatibilityTests.DiagnosticCause);
+            ExpressionRuntimeRegression.Run(Run);
             Run("Absent optional plugin discovery is cached", MissingPluginDiscoveryCached);
             Run("Incompatible optional plugin discovery is cached", IncompatiblePluginDiscoveryCached);
             Run("Optional API overloads resolve by actual call signature", OverloadedPluginApi);

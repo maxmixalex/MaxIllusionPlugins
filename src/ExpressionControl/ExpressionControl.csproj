@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>ExpressionControl</Product>
     <AssemblyTitle>ExpressionControl</AssemblyTitle>
-    <Version>0.2.7.19</Version>
-    <AssemblyVersion>0.2.7.19</AssemblyVersion>
+    <Version>0.2.7.20</Version>
+    <AssemblyVersion>0.2.7.20</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />

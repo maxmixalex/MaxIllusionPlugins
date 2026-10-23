@@ -23,8 +23,10 @@ namespace JuiceControl {
                 return created;
             }
 
-            PresetXml loaded = AtomicXmlFile.Read<PresetXml>(path);
-            if (loaded == null) throw new InvalidDataException("Preset XML is empty.");
+            // The original loader accepted an explicitly nil root as an empty
+            // preset library. XmlSerializer returns null for this valid XML form;
+            // empty/truncated/invalid documents still throw from the reader.
+            PresetXml loaded = AtomicXmlFile.Read<PresetXml>(path) ?? new PresetXml();
             loaded.Normalize();
             return loaded;
         }

@@ -6,6 +6,7 @@
     <NoWarn>$(NoWarn);CS0649</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/MultiTeamH/BackgroundClimax.cs" Link="Production/BackgroundClimax.cs" />
     <Compile Include="../../src/MultiTeamH/MultiTeamSelection.cs" Link="Production/MultiTeamSelection.cs" />
     <Compile Include="../../src/MultiTeamH/NativeUiHooks.cs" Link="Production/NativeUiHooks.cs" />
     <Compile Include="../../src/MultiTeamH/BreastmilkCompat.cs" Link="Production/BreastmilkCompat.cs" />

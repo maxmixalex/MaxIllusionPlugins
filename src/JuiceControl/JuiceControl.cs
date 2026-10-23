@@ -9,6 +9,7 @@ using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
 using KKAPI.Utilities;
+using MaxIllusionPlugins.Common;
 using UnityEngine;
 
 [assembly: System.Reflection.AssemblyFileVersion(JuiceControl.JuiceControl.Version)]
@@ -23,7 +24,7 @@ namespace JuiceControl {
     [BepInPlugin(GUID, "JuiceControl", Version)]
     public class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.1.3";
+        public const string Version = "0.1.4";
 
         private const int WindowId = 68150210;
         private const int ComboWindowId = WindowId + 1;
@@ -80,6 +81,8 @@ namespace JuiceControl {
         private string groupPresetName = string.Empty;
         private ChaControl selectedCharacter;
         private string statusText = string.Empty;
+        private string presetLoadError = string.Empty;
+        private Vector2 presetErrorScroll;
         private Rect characterDropdownAnchor;
         private Rect characterPresetDropdownAnchor;
         private Rect groupPresetDropdownAnchor;
@@ -257,7 +260,8 @@ namespace JuiceControl {
                 return;
             }
 
-            effectScrollPosition = GUILayout.BeginScrollView(effectScrollPosition, GUILayout.Height(Mathf.Max(160f, windowRect.height - 430f)));
+            float errorHeight = string.IsNullOrEmpty(presetLoadError) ? 0f : 100f;
+            effectScrollPosition = GUILayout.BeginScrollView(effectScrollPosition, GUILayout.Height(Mathf.Max(120f, windowRect.height - 430f - errorHeight)));
 
             for (int i = 0; i < SiruParts.Length; i++) {
                 SiruPartInfo partInfo = SiruParts[i];
@@ -363,6 +367,13 @@ namespace JuiceControl {
         private void DrawPresetPanel(List<CharacterEntry> characters) {
             if (!presetStore.CanSave) {
                 GUILayout.Label("当前 XML 载入失败：仍可应用已载入预设；修复并重载后才能保存。", ui.LabelStyle);
+                if (!string.IsNullOrEmpty(presetLoadError)) {
+                    // The normal one-line status bar cannot display a source path
+                    // and parser error. Keep them visible even after other actions.
+                    presetErrorScroll = GUILayout.BeginScrollView(presetErrorScroll, GUILayout.Height(90f));
+                    GUILayout.Label(presetLoadError, ui.WrappedLabelStyle);
+                    GUILayout.EndScrollView();
+                }
             }
             DrawCharacterPresetSelector();
             DrawCharacterPresetToolbar();
@@ -1206,14 +1217,21 @@ namespace JuiceControl {
             nameDialogMode = NameDialogMode.None;
             nameDialogPreset = null;
             nameDialogCharacter = null;
+            string path = null;
             try {
-                string path = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
+                path = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
                 presetStore.Load(path);
             } catch (Exception ex) {
-                statusText = "载入预设 XML 失败，保留当前预设: " + ex.Message;
-                Logger.LogWarning(statusText);
+                statusText = "载入预设 XML 失败；详情见预设面板。";
+                presetLoadError = XmlFileDiagnostics.Describe(ex) + "\n文件: " + (path ?? "(路径配置无效)") +
+                    "\n请修复文件后点击「重载XML」。";
+                presetErrorScroll = Vector2.zero;
+                // Keep the complete exception (including serializer inner errors
+                // and the source path) available without enabling debug logging.
+                Logger.LogWarning("Could not load preset XML: " + (path ?? "(invalid configured path)") + "\n" + ex);
                 return false;
             }
+            presetLoadError = string.Empty;
             selectedCharacterPresetIndex = ClampIndex(selectedCharacterPresetIndex, presetXml.CharacterPresets.Count);
             selectedGroupPresetIndex = ClampIndex(selectedGroupPresetIndex, presetXml.GroupPresets.Count);
             characterPresetName = HasCharacterPreset() ? GetCurrentCharacterPresetName() : string.Empty;

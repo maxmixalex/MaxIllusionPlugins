@@ -4,9 +4,13 @@
 dotnet run --project tests/PluginCore.Regression/PluginCore.Regression.csproj -c Release
 ```
 
-此控制台宿主直接链接生产文件，不复制被测算法：`AtomicXmlFile`、`ExpressionModels`、`ExpressionRules`、`ExpressionProgramEditing`、`FemaleDataExpressionState`、`XmlMgr`、`ShortCutKeyMgr`、`Utl`、`PresetModels`、`PresetStore`、`SkinEffectsBridge`。失败返回非零退出码。
+此控制台宿主直接链接生产文件，不复制被测算法：`AtomicXmlFile`、`XmlFileDiagnostics`、`ExpressionModels`、`ExpressionRules`、`ExpressionProgramEditing`、`ExpressionWindowLifecycle`、`ExpressionHSceneState`、`FemaleDataExpressionState`、`XmlMgr`、`ShortCutKeyMgr`、`Utl`、`PresetModels`、`PresetStore`、`SkinEffectsBridge`。失败返回非零退出码。
 
-28 项回归覆盖原子替换及备份、注入写入/序列化失败、旧 XML 的标识和角色映射、空集合和缺失 ID、损坏文件保留、DTD 拒绝、全部表情状态筛选、空/过期随机候选、单元选择权重、删除程序后编辑器重选、嘴形和嘴开合独立锁定、取消快捷键、土耳其语区域设置、插值完成回调、场景间人物查找、可选插件缺失/不兼容的负缓存，以及反射 API 的重载解析。
+回归覆盖原子替换及备份、注入写入/序列化失败、旧 XML 的标识和角色映射、空集合和缺失 ID、损坏文件保留、DTD 拒绝、全部表情状态筛选、空/过期随机候选、单元选择权重、删除程序后编辑器重选、嘴形和嘴开合独立锁定、取消快捷键、土耳其语区域设置、插值完成回调、场景间人物查找、可选插件缺失/不兼容的负缓存，以及反射 API 的重载解析。
+
+XML 兼容回归另覆盖 Juice/Expression 的合法 `xsi:nil` 根、空根、UTF-8（有/无 BOM）及 UTF-16（大小端）文档、含 Unicode/URI 标点的路径、解析错误位置，以及空文件/仅 BOM/非法字符/错误根/非法数值/根后尾随损坏的文件保护。Expression 重载失败后也禁止保存，成功重载或移除坏文件后显式重载可恢复。新增反例在前一版本上实际得到两项 `InvalidDataException`、一项坏文件可被覆盖、以及根后注释掩盖非法尾部的失败，再由当前实现通过；这不代表未提供的用户原始 XML 已被复现。
+
+表情运行时回归直接调用从原组件提取的 `LateUpdate`、`OnGUI` 和 `UpdateHState`，模拟 Unity 仅允许在 OnGUI 创建命名 GUIStyle 的边界，检查按键请求延迟、GUI 多事件不会重复切换、异常后的状态恢复、后台队伍的 H 标志绑定、缺失动作数据及高潮计数转换。测试 GUI 边界是明确替身，不能代替游戏内实际绘制测试。
 
 删除程序测试调用实际的 `XML_DeleteProgram`，覆盖首项、中间项、末项及最后一个程序，随后验证编辑器单元访问、独立编辑副本、角色引用和实际保存的 XML。锁定测试调用整个生产 `FemaleData.CheckExpression`，验证嘴形锁不干涉开合、开合锁与整体锁恢复角色/混合器/Studio 状态，以及忽略口型和正在插值时的既有例外。
 

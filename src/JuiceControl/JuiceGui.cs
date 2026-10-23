@@ -6,6 +6,7 @@ namespace JuiceControl {
         public readonly GUIStyle WindowStyle;
         public readonly GUIStyle FoldedWindowStyle;
         public readonly GUIStyle LabelStyle;
+        public readonly GUIStyle WrappedLabelStyle;
         public readonly GUIStyle CenterLabelStyle;
         public readonly GUIStyle ButtonStyle;
         public readonly GUIStyle ToggleStyle;
@@ -41,6 +42,10 @@ namespace JuiceControl {
                 alignment = TextAnchor.MiddleLeft
             };
             SetTextColor(LabelStyle, Color.black);
+            WrappedLabelStyle = new GUIStyle(LabelStyle) {
+                alignment = TextAnchor.UpperLeft,
+                wordWrap = true
+            };
 
             CenterLabelStyle = new GUIStyle(LabelStyle) {
                 alignment = TextAnchor.MiddleCenter

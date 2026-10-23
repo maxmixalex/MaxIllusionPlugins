@@ -7,9 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/Common/AtomicXmlFile.cs" Link="Production/AtomicXmlFile.cs" />
+    <Compile Include="../../src/Common/XmlFileDiagnostics.cs" Link="Production/XmlFileDiagnostics.cs" />
     <Compile Include="../../src/ExpressionControl/ExpressionModels.cs" Link="Production/ExpressionModels.cs" />
     <Compile Include="../../src/ExpressionControl/ExpressionRules.cs" Link="Production/ExpressionRules.cs" />
     <Compile Include="../../src/ExpressionControl/ExpressionProgramEditing.cs" Link="Production/ExpressionProgramEditing.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionWindowLifecycle.cs" Link="Production/ExpressionWindowLifecycle.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionHSceneState.cs" Link="Production/ExpressionHSceneState.cs" />
     <Compile Include="../../src/ExpressionControl/FemaleDataExpressionState.cs" Link="Production/FemaleDataExpressionState.cs" />
     <Compile Include="../../src/ExpressionControl/XmlMgr.cs" Link="Production/XmlMgr.cs" />
     <Compile Include="../../src/ExpressionControl/ShortCutKeyMgr.cs" Link="Production/ShortCutKeyMgr.cs" />

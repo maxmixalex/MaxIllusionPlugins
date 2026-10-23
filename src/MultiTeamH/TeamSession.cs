@@ -2490,6 +2490,17 @@ namespace MultiTeamH {
                     ResetTransitionMouth(team.Female);
                     DiagnosticProbe.Info("lesbian-partner-restored team=" + (backgroundIndex + 1));
                 }
+                // The background UI has been restored, so its finish preference
+                // belongs to this team. Submit a native click before its action
+                // runs; the normal Update consumes it and clears it afterward.
+                if (MultiTeamHPlugin.AutoBackgroundClimax.Value && Proc.sprite != null && Proc.sprite.IsSpriteAciotn() &&
+                    team.Female != null && team.Female.animBody != null) {
+                    bool outsideOnly = team.Flags.mode == HFlag.EMode.houshi && Proc.sprite != null &&
+                        Proc.sprite.houshi != null && Proc.sprite.houshi.tglAutoFinish != null && Proc.sprite.IsHoushiAutoFinish();
+                    BackgroundClimax.TryRequest(team.Flags, team.Female.getAnimatorStateInfo(0),
+                        team.Female.animBody.IsInTransition(0), true, backgroundIndex != ActiveTeam,
+                        MultiTeamHPlugin.BackgroundFinish.Value, outsideOnly);
+                }
                 updateMethod.Invoke(Proc, null);
                 team.Capture(team.Flags);
                 if (team.ClearHandForCurrentState()) MarkBackgroundHandUiDirty();

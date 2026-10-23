@@ -18,6 +18,10 @@ internal static class Program {
             Run("Expression cleanup is idempotent", ExpressionCleanupOnce);
             Run("Background expression replay excludes unmanaged characters", UnmanagedCharactersOnce);
             Run("Expression state removed when session ends", ExpressionSessionCleanup);
+            Run("Scoped character refresh preserves both teams and reapplies filtering", ScopedExpressionRefresh);
+            Run("Background character refresh does not replay unmanaged characters", BackgroundExpressionRefresh);
+            Run("Character refresh failure releases expression scope", FailedExpressionRefresh);
+            BackgroundClimaxRegression.Run(Run);
             Run("HCtrl partial prefix failure restores previous team", PartialHCtrlPrefixFailure);
             Run("HCtrl exception restores UI, cursor, context and saved state", HCtrlException);
             Run("HCtrl UI cleanup failure still restores scene context", UiCleanupFailure);
@@ -60,6 +64,7 @@ internal static class Program {
         var session = new TeamSession();
         TeamSession.Snapshot.Add(session);
         Set(Expressions, "forcedTeam", -1);
+        Set(Expressions, "activeProcScope", null);
         Set(Expressions, "lastActiveFemale", null);
         ((IDictionary)Get(Expressions, "States")).Clear();
         ExpressionHost.hFrag = new HFlag();
@@ -129,6 +134,40 @@ internal static class Program {
         Assert(((IDictionary)Get(Expressions, "States")).Count > 0, "test must create state");
         ExpressionControlCompat.SessionEnded(session);
         Assert(((IDictionary)Get(Expressions, "States")).Count == 0 && Get(Expressions, "lastActiveFemale") == null, "ended session retains characters");
+    }
+    static void ScopedExpressionRefresh() {
+        var session = Fresh(); var host = Host(session);
+        var original = host.femaleList;
+        var backgroundData = original[1];
+        var scope = BeginExpression(host);
+        Invoke(Expressions, "BeforeUpdateFemale", host);
+        Assert(ReferenceEquals(host.femaleList, original), "refresh must reuse both teams' existing state");
+        var refreshed = new List<ExpressionData>(host.femaleList) { new ExpressionData { female = new ChaControl() } };
+        host.femaleList = refreshed;
+        Invoke(Expressions, "AfterUpdateFemale", host);
+        Assert(host.femaleList.Count == 3 && !host.femaleList.Contains(backgroundData), "refresh reintroduced the other managed team into current Proc");
+        FinishExpression(null, host, scope);
+        Assert(ReferenceEquals(host.femaleList, refreshed) && ReferenceEquals(host.femaleList[1], backgroundData), "restoration lost refreshed characters or background settings");
+        Assert(Get(Expressions, "activeProcScope") == null, "completed scope leaked");
+    }
+    static void BackgroundExpressionRefresh() {
+        var session = Fresh(); var host = Host(session); var original = host.femaleList;
+        Set(Expressions, "forcedTeam", 1);
+        var scope = BeginExpression(host);
+        Invoke(Expressions, "BeforeUpdateFemale", host);
+        Assert(ReferenceEquals(original, host.femaleList), "background refresh cannot discard focused settings");
+        Invoke(Expressions, "AfterUpdateFemale", host);
+        Assert(host.femaleList.Count == 1 && host.femaleList[0].female == session.Females[1], "background refresh duplicated unowned processing");
+        FinishExpression(null, host, scope);
+        Assert(ReferenceEquals(host.femaleList, original), "background refresh leaked a filtered list");
+    }
+    static void FailedExpressionRefresh() {
+        var session = Fresh(); var host = Host(session); var original = host.femaleList;
+        var scope = BeginExpression(host);
+        Invoke(Expressions, "BeforeUpdateFemale", host);
+        var error = new InvalidOperationException("refresh failed");
+        Assert(FinishExpression(error, host, scope) == error && ReferenceEquals(host.femaleList, original), "failed refresh changed list or swallowed failure");
+        Assert(Get(Expressions, "activeProcScope") == null, "failed refresh retained Proc context");
     }
     static object BeginHCtrl(HCtrlHost host) {
         object[] args = { host, typeof(HCtrlHost).GetMethod("Update"), null };

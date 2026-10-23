@@ -12,6 +12,7 @@ namespace ExpressionControl
 	[XmlRoot("root")]
 	public class XmlMgr
 	{
+		private Exception readFailure;
 		public XmlMgr()
 		{
 			this.keyConfig = new XmlMgr.KeyConfig();
@@ -31,12 +32,16 @@ namespace ExpressionControl
 				}
 				else
 				{
-					this.Save(false);
+					// A missing file can be recreated by an explicit reload even after
+					// this instance previously rejected a malformed document.
+					new XmlMgr().Save(false);
 				}
 			}
 		}
 		public void Save(bool load)
 		{
+			if (this.readFailure != null)
+				throw new InvalidOperationException("Cannot save " + XmlMgr.GetFilePath() + " after a failed read. Repair the XML and reload it before saving.", this.readFailure);
 			if (load)
 			{
 				this.LoadFinish();
@@ -46,16 +51,26 @@ namespace ExpressionControl
 		}
 		public void Load()
 		{
-			this.EnsureFile();
-			XmlMgr xmlMgr = AtomicXmlFile.Read<XmlMgr>(XmlMgr.GetFilePath());
-			if (xmlMgr == null) throw new InvalidDataException("Expression preset XML is empty.");
-			// Normalize before publishing the new state. A failed reload leaves the
-			// currently selected presets and the original file intact.
-			xmlMgr.LoadFinish();
-			this.keyConfig = xmlMgr.keyConfig;
-			this.expressions = xmlMgr.expressions;
-			this.programs = xmlMgr.programs;
-			this.scenePresets = xmlMgr.scenePresets;
+			try
+			{
+				this.EnsureFile();
+				// A legal xsi:nil root is an explicit empty library, as for the
+				// other preset stores. Malformed or zero-byte files still fail.
+				XmlMgr xmlMgr = AtomicXmlFile.Read<XmlMgr>(XmlMgr.GetFilePath()) ?? new XmlMgr();
+				// Normalize before publishing the new state. A failed reload leaves
+				// the current presets intact and blocks subsequent writes.
+				xmlMgr.LoadFinish();
+				this.keyConfig = xmlMgr.keyConfig;
+				this.expressions = xmlMgr.expressions;
+				this.programs = xmlMgr.programs;
+				this.scenePresets = xmlMgr.scenePresets;
+				this.readFailure = null;
+			}
+			catch (Exception ex)
+			{
+				this.readFailure = ex;
+				throw;
+			}
 		}
 		private void LoadFinish()
 		{

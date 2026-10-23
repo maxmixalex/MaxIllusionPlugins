@@ -24,6 +24,7 @@ namespace MultiTeamH {
         private static bool patched;
         private static readonly float[] lastListProbe = new float[2];
         private static int forcedTeam = -1;
+        private static ProcScope activeProcScope;
 
         internal static void TryPatch(Harmony harmony, ManualLogSource log) {
             if (patched || harmony == null) return;
@@ -52,6 +53,7 @@ namespace MultiTeamH {
                 postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterProc)),
                 finalizer: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(FinalizeProc)));
             harmony.Patch(updateFemale,
+                prefix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(BeforeUpdateFemale)),
                 postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterUpdateFemale)));
             patched = true;
             log.LogInfo("MultiTeamH patched ExpressionControl at runtime; its DLL remains unmodified.");
@@ -73,20 +75,11 @@ namespace MultiTeamH {
             object originalFlag = hFlagField.GetValue(null);
             IList original = femaleListField.GetValue(__instance) as IList;
             if (original == null) return;
-            IList filtered = Activator.CreateInstance(original.GetType()) as IList;
+            IList filtered = FilterForTeam(original, session, active, forcedTeam < 0);
             if (filtered == null) return;
-            bool activeAdded = false;
-            for (int i = 0; i < original.Count; i++) {
-                object data = original[i];
-                ChaControl female = GetFemale(data);
-                if (female == null || !session.ContainsFemale(female)) {
-                    // The replay is only for the other managed team. Unmanaged
-                    // characters have already been advanced by the original call.
-                    if (forcedTeam < 0) filtered.Add(data);
-                } else if (female == active && !activeAdded) { filtered.Add(data); activeAdded = true; }
-            }
             __state = new ProcScope { OriginalFemaleList = original, OriginalFlag = originalFlag, Session = session,
-                Target = target, IsTopLevel = forcedTeam < 0 };
+                Target = target, IsTopLevel = forcedTeam < 0, Instance = __instance, PreviousScope = activeProcScope };
+            activeProcScope = __state;
             SwitchExpressionState(__instance, active);
             hFlagField.SetValue(null, targetFlags);
             femaleListField.SetValue(__instance, filtered);
@@ -132,7 +125,8 @@ namespace MultiTeamH {
                 if (instance != null && state.OriginalFemaleList != null && femaleListField != null)
                     femaleListField.SetValue(instance, state.OriginalFemaleList);
             } finally {
-                if (hFlagField != null) hFlagField.SetValue(null, state.OriginalFlag);
+                try { if (hFlagField != null) hFlagField.SetValue(null, state.OriginalFlag); }
+                finally { if (ReferenceEquals(activeProcScope, state)) activeProcScope = state.PreviousScope; }
             }
         }
 
@@ -145,16 +139,26 @@ namespace MultiTeamH {
                 if (ReferenceEquals(lastActiveFemale, female)) lastActiveFemale = null;
             }
             forcedTeam = -1;
+            if (activeProcScope != null && ReferenceEquals(activeProcScope.Session, session)) activeProcScope = null;
             Array.Clear(lastListProbe, 0, lastListProbe.Length);
+        }
+
+        private static void BeforeUpdateFemale(object __instance) {
+            ProcScope scope = activeProcScope;
+            if (scope == null || !ReferenceEquals(scope.Instance, __instance) || femaleListField == null) return;
+            // UpdateHState can refresh the character list from inside Proc. It
+            // must see all previous FemaleData objects to preserve each team's
+            // locks/programs instead of recreating the temporarily filtered team.
+            femaleListField.SetValue(__instance, scope.OriginalFemaleList);
         }
 
         private static void AfterUpdateFemale(object __instance) {
             if (__instance == null || femaleListField == null) return;
             IList list = femaleListField.GetValue(__instance) as IList;
             if (list == null) return;
-            // UpdateFemale appends to its list. MultiTeamH must call it again
-            // after the second character and lesbian slot bindings exist, so
-            // remove the stale managed entries it otherwise accumulates.
+            // Older character discovery can return repeated references after
+            // the second character / shared-action slots are rebound. Keep one
+            // managed entry before assigning its owning-team controllers.
             HashSet<ChaControl> seenManaged = new HashSet<ChaControl>();
             for (int i = list.Count - 1; i >= 0; i--) {
                 ChaControl female = GetFemale(list[i]);
@@ -178,6 +182,32 @@ namespace MultiTeamH {
                 SetFieldOrBackingField(data, "handCtrl", hand);
                 SetFieldOrBackingField(data, "voiceIndex", voiceIndex);
             }
+            ProcScope scope = activeProcScope;
+            if (scope != null && ReferenceEquals(scope.Instance, __instance)) {
+                IList filtered = FilterForTeam(list, scope.Session,
+                    scope.Session.GetFemaleObject(scope.Target), scope.IsTopLevel);
+                if (filtered != null) {
+                    scope.OriginalFemaleList = list;
+                    femaleListField.SetValue(__instance, filtered);
+                }
+            }
+        }
+
+        private static IList FilterForTeam(IList original, TeamSession session, ChaControl active, bool includeUnmanaged) {
+            IList filtered = Activator.CreateInstance(original.GetType()) as IList;
+            if (filtered == null) return null;
+            bool activeAdded = false;
+            for (int i = 0; i < original.Count; i++) {
+                object data = original[i];
+                ChaControl female = GetFemale(data);
+                if (female == null || !session.ContainsFemale(female)) {
+                    if (includeUnmanaged) filtered.Add(data);
+                } else if (female == active && !activeAdded) {
+                    filtered.Add(data);
+                    activeAdded = true;
+                }
+            }
+            return filtered;
         }
 
         private static void SwitchExpressionState(object instance, ChaControl active) {
@@ -220,6 +250,8 @@ namespace MultiTeamH {
             internal int Target;
             internal bool IsTopLevel;
             internal bool Restored;
+            internal object Instance;
+            internal ProcScope PreviousScope;
         }
 
         private sealed class ExpressionState {

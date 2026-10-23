@@ -15,13 +15,17 @@ plugin aggregation directory.
 
 The project links the actual production `ExpressionControlCompat.cs`,
 `RuntimeModCompat.cs`, `BreastmilkCompat.cs`, `HSceneOptionsCompat.cs`,
-`NativeUiHooks.cs`, `MultiTeamSelection.cs` and `CoroutineGuard.cs`; it does not maintain test copies
+`NativeUiHooks.cs`, `MultiTeamSelection.cs`, `BackgroundClimax.cs` and `CoroutineGuard.cs`; it does not maintain test copies
 of their implementations. `BoundaryStubs.cs` replaces only the external Unity,
 game, Harmony, logging, and `TeamSession` boundaries. Fault injection covers:
 
 - original expression processing failures, a missing character list, repeated
   cleanup, duplicate processing of unmanaged characters, and per-session cache
-  cleanup;
+  cleanup, character refresh inside a scoped pass preserving existing settings
+  and restoring the owning-team filter;
+- background automatic climax on finite, full male gauges, available inside /
+  outside finishes, native request fields, focused/locked/pending-action guards,
+  supported service/insertion states and actual Animator readiness;
 - HCtrl binding failures in the prefix, original method exceptions, UI cleanup
   failures, cursor restoration, independently saved plugin state, and idempotent
   postfix/finalizer cleanup;
@@ -48,6 +52,9 @@ This preserves the reference semantics used by Harmony-generated calls.
 These tests exercise compatibility logic and exception recovery, not Unity's
 rendering, player loop, scene lifetime or Harmony's detour generation. The plugin
 itself must also be compiled against its existing net35 game references.
+The automatic-climax tests run the production request selection, with an
+`AnimatorStateInfo.IsName` boundary substitute. They do not execute the game's
+finish animation, gauge update, audio or statistical counters.
 
 `CoroutineGuard` protects the supplied iterator's `MoveNext` and `Current` only.
 It does not drive nested iterators or a custom yield instruction's callbacks.

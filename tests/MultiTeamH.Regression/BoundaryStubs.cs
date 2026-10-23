@@ -86,7 +86,7 @@ namespace UnityEngine {
         public void SetPositionAndRotation(Vector3 p, Quaternion r) { position = p; rotation = r; }
     }
     public class Camera : Component { public Transform transform = new Transform(); }
-    public struct AnimatorStateInfo { public bool IsName(string name) { return false; } }
+    public struct AnimatorStateInfo { public string StateName; public bool IsName(string name) { return StateName == name; } }
     public abstract class CustomYieldInstruction { public abstract bool keepWaiting { get; } }
     public static class Time { public static int frameCount; public static float realtimeSinceStartup; }
 }
@@ -94,10 +94,17 @@ public class ChaControl : UnityEngine.Component {
     public UnityEngine.AnimatorStateInfo getAnimatorStateInfo(int layer) { return new UnityEngine.AnimatorStateInfo(); }
 }
 public class HFlag : UnityEngine.Object {
-    public enum EMode { aibu, houshi, sonyu, lesbian }
+    public enum EMode { none = -1, aibu, houshi, sonyu, masturbation, peeping, lesbian, houshi3P, sonyu3P }
+    public enum ClickKind { none, inside, outside, actionChange }
+    public enum FinishKind { none, inside, outside }
     public EMode mode;
+    public ClickKind click;
+    public FinishKind finish;
+    public float gaugeMale;
+    public bool isHSceneEnd, lockGugeMale, voiceWait;
     public string nowAnimStateName;
     public AnimationInfo nowAnimationInfo = new AnimationInfo();
+    public AnimationInfo selectAnimationListInfo;
     public CameraControl_Ver2 ctrlCamera;
 }
 public class HSprite {
@@ -105,7 +112,7 @@ public class HSprite {
     public int ModeRestores, PortraitRestores;
     public bool PortraitDetached;
 }
-public class AnimationInfo { public string nameAnimation; }
+public class AnimationInfo { public string nameAnimation; public int numCtrl; }
 public static class SaveData { public class Heroine { } public class Player { } }
 public class HandCtrl { public bool isKiss; }
 public class FaceListCtrl { }

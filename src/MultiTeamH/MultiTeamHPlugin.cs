@@ -24,7 +24,7 @@ namespace MultiTeamH {
     public sealed class MultiTeamHPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MultiTeamH";
         public const string Name = "MultiTeamH";
-        public const string Version = "0.11.63";
+        public const string Version = "0.11.64";
 
         internal static MultiTeamHPlugin Instance { get; private set; }
         internal static ConfigEntry<bool> Enabled { get; private set; }
@@ -34,6 +34,8 @@ namespace MultiTeamH {
         internal static ConfigEntry<KeyboardShortcut> ToggleWindowKey { get; private set; }
         internal static ConfigEntry<bool> DebugLogging { get; private set; }
         internal static ConfigEntry<bool> PreventMiddleClickAuto { get; private set; }
+        internal static ConfigEntry<bool> AutoBackgroundClimax { get; private set; }
+        internal static ConfigEntry<BackgroundClimaxFinish> BackgroundFinish { get; private set; }
         internal static ConfigEntry<string> RememberedFemaleCard { get; private set; }
         internal static ConfigEntry<string> RememberedMaleCard { get; private set; }
         internal static ConfigEntry<int> RememberedStage { get; private set; }
@@ -60,6 +62,10 @@ namespace MultiTeamH {
             if (ToggleWindowKey.Value.MainKey == KeyCode.F8) ToggleWindowKey.Value = new KeyboardShortcut(KeyCode.Minus);
             DebugLogging = Config.Bind("Debug", "Logging", false, "Write detailed rebinding messages to the BepInEx log.");
             PreventMiddleClickAuto = Config.Bind("Controls", "Prevent middle-click auto", true, "Prevent the native speed panel from enabling automatic motion through an accidental middle click.");
+            AutoBackgroundClimax = Config.Bind("Background teams", "Automatic climax", false,
+                "Request a native finish when a non-focused service/insertion team's male gauge reaches 100. Does not override gauge locks, transitions or pending actions.");
+            BackgroundFinish = Config.Bind("Background teams", "Climax finish", BackgroundClimaxFinish.Outside,
+                "Automatic climax finish location. Inside falls back to outside for service actions that do not expose an inside finish.");
             RememberedFemaleCard = Config.Bind("Team 2 cards", "Female card", string.Empty, "Last selected team 2 female card.");
             RememberedMaleCard = Config.Bind("Team 2 cards", "Male card", string.Empty, "Last selected team 2 male card.");
             RememberedStage = Config.Bind("Team 2 cards", "H stage", 0, "Last selected team 2 H stage.");
@@ -131,7 +137,7 @@ namespace MultiTeamH {
                     GUI.color = Color.white;
                     GUI.backgroundColor = new Color(1f, 1f, 1f, 0.82f);
                     GUI.contentColor = Color.black;
-                    windowRect.height = windowMinimized ? 20f : 420f;
+                    windowRect.height = windowMinimized ? 20f : 474f;
                     windowRect = GUI.Window(68150240, windowRect, DrawWindow, Name + " " + Version,
                         windowMinimized ? foldedWindowStyle : panelSkin.window);
                 } finally {
@@ -203,6 +209,14 @@ namespace MultiTeamH {
             }
 
             PreventMiddleClickAuto.Value = GUILayout.Toggle(PreventMiddleClickAuto.Value, "防止中键误触自动模式");
+            AutoBackgroundClimax.Value = GUILayout.Toggle(AutoBackgroundClimax.Value, "非焦点队伍侍奉 / 插入满槽自动高潮");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("自动结束方式", GUILayout.Width(100f));
+            if (GUILayout.Toggle(BackgroundFinish.Value == BackgroundClimaxFinish.Outside, "外部", GUI.skin.button))
+                BackgroundFinish.Value = BackgroundClimaxFinish.Outside;
+            if (GUILayout.Toggle(BackgroundFinish.Value == BackgroundClimaxFinish.Inside, "内部", GUI.skin.button))
+                BackgroundFinish.Value = BackgroundClimaxFinish.Inside;
+            GUILayout.EndHorizontal();
 
             GUILayout.Label("切换键: " + SwitchTeamKey.Value);
             if (GUILayout.Button("关闭窗口 (" + ToggleWindowKey.Value + ")")) showWindow = false;

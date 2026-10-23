@@ -113,7 +113,7 @@ namespace BepInEx.Bootstrap {
     }
 }
 namespace ExpressionControl {
-    public static class ExpressionControlPlugin { public const string Name = "ExpressionControl"; }
+    public static class ExpressionControlPlugin { public const string Name = "ExpressionControl", Version = "test"; }
 }
 namespace JuiceControl {
     internal static class JuiceControl { internal static void LogDebug(object value) { } }
