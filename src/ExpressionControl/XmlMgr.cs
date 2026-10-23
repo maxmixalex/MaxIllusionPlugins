@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Text;
 using System.Xml.Serialization;
 using BepInEx;
+using MaxIllusionPlugins.Common;
 namespace ExpressionControl
 {
 	[XmlRoot("root")]
@@ -15,6 +16,9 @@ namespace ExpressionControl
 		{
 			this.keyConfig = new XmlMgr.KeyConfig();
 			this.expressions = new List<ExpressionControl.Expression>();
+		}
+		private void EnsureFile()
+		{
 			string filePath = XmlMgr.GetFilePath();
 			bool flag = !File.Exists(filePath);
 			if (flag)
@@ -33,31 +37,25 @@ namespace ExpressionControl
 		}
 		public void Save(bool load)
 		{
-			XmlSerializer xmlSerializer = new XmlSerializer(typeof(XmlMgr));
-			string filePath = XmlMgr.GetFilePath();
-			XmlMgr.EnsureDirectory(filePath);
-			using (StreamWriter streamWriter = new StreamWriter(filePath, false, new UTF8Encoding(false)))
-			{
-				xmlSerializer.Serialize(streamWriter, this);
-			}
 			if (load)
 			{
 				this.LoadFinish();
 			}
+			string filePath = XmlMgr.GetFilePath();
+			AtomicXmlFile.Write(filePath, this);
 		}
 		public void Load()
 		{
-			XmlSerializer xmlSerializer = new XmlSerializer(typeof(XmlMgr));
-			XmlMgr xmlMgr;
-			using (StreamReader streamReader = new StreamReader(XmlMgr.GetFilePath(), new UTF8Encoding(false)))
-			{
-				xmlMgr = (XmlMgr)xmlSerializer.Deserialize(streamReader);
-			}
+			this.EnsureFile();
+			XmlMgr xmlMgr = AtomicXmlFile.Read<XmlMgr>(XmlMgr.GetFilePath());
+			if (xmlMgr == null) throw new InvalidDataException("Expression preset XML is empty.");
+			// Normalize before publishing the new state. A failed reload leaves the
+			// currently selected presets and the original file intact.
+			xmlMgr.LoadFinish();
 			this.keyConfig = xmlMgr.keyConfig;
 			this.expressions = xmlMgr.expressions;
 			this.programs = xmlMgr.programs;
 			this.scenePresets = xmlMgr.scenePresets;
-			this.LoadFinish();
 		}
 		private void LoadFinish()
 		{
@@ -73,12 +71,24 @@ namespace ExpressionControl
 			{
 				this.scenePresets = new List<ExpressionControl.ScenePreset>();
 			}
+			this.programs.RemoveAll(program => program == null);
+			foreach (ExpressionControl.Program program in this.programs)
+			{
+				if (program.units == null) program.units = new List<ExpressionControl.Program.Unit>();
+				program.units.RemoveAll(unit => unit == null);
+				foreach (ExpressionControl.Program.Unit unit in program.units)
+				{
+					if (unit.expressionGuids == null) unit.expressionGuids = new List<string>();
+				}
+			}
+			this.scenePresets.RemoveAll(preset => preset == null);
 			foreach (ExpressionControl.ScenePreset scenePreset in this.scenePresets)
 			{
 				if (scenePreset.roles == null)
 				{
 					scenePreset.roles = new List<ExpressionControl.SceneRolePreset>();
 				}
+				scenePreset.roles.RemoveAll(role => role == null);
 			}
 			bool flag = this.expressions == null;
 			if (flag)
@@ -87,6 +97,13 @@ namespace ExpressionControl
 			}
 			else
 			{
+				this.expressions.RemoveAll(expression => expression == null);
+				foreach (ExpressionControl.Expression expression in this.expressions)
+				{
+					// Missing IDs in hand-edited/legacy XML must not collapse unrelated
+					// expressions into one entry during de-duplication.
+					if (string.IsNullOrEmpty(expression.guid)) expression.guid = Guid.NewGuid().ToString();
+				}
 				this.expressions = this.expressions.Distinct(new XmlMgr.ExpressionComparer()).ToList<ExpressionControl.Expression>();
 			}
 		}
@@ -134,7 +151,7 @@ namespace ExpressionControl
 			}
 			public int GetHashCode(ExpressionControl.Expression p)
 			{
-				return p.guid.GetHashCode();
+				return p == null || p.guid == null ? 0 : p.guid.GetHashCode();
 			}
 		}
 	}

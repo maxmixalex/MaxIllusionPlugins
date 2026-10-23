@@ -40,35 +40,25 @@ namespace ExpressionControl
 		}
 		public static List<ChaControl> GetFemaleAll()
 		{
-			List<ChaControl> list = new List<ChaControl>();
-			List<ChaControl> charaList =
+			List<ChaControl> characters = new List<ChaControl>();
 #if KKS
-				Character.GetCharaList(1);
-			charaList.AddRange(Character.GetCharaList(0));
+			AddHighPolyCharacters(characters, Character.GetCharaList(1));
+			AddHighPolyCharacters(characters, Character.GetCharaList(0));
 #else
-                Singleton<Character>.Instance.GetCharaList(1);
-			charaList.AddRange(Singleton<Character>.Instance.GetCharaList(0));
+			Character manager = Singleton<Character>.Instance;
+			if (manager == null) return characters;
+			AddHighPolyCharacters(characters, manager.GetCharaList(1));
+			AddHighPolyCharacters(characters, manager.GetCharaList(0));
 #endif
-			bool flag = charaList == null || charaList.Count == 0;
-			List<ChaControl> result;
-			if (flag)
+			return characters;
+		}
+		private static void AddHighPolyCharacters(List<ChaControl> destination, List<ChaControl> source)
+		{
+			if (source == null) return;
+			foreach (ChaControl character in source)
 			{
-				Console.WriteLine(ExpressionControlPlugin.Name + ": no charactor");
-				result = list;
+				if (character != null && character.hiPoly && !destination.Contains(character)) destination.Add(character);
 			}
-			else
-			{
-				for (int i = 0; i <= charaList.Count - 1; i++)
-				{
-					bool hiPoly = charaList[i].hiPoly;
-					if (hiPoly)
-					{
-						list.Add(charaList[i]);
-					}
-				}
-				result = list;
-			}
-			return result;
 		}
 		internal static int GetPix(int i)
 		{
@@ -116,6 +106,7 @@ namespace ExpressionControl
 			bool flag = time <= 0f || source == dest;
 			if (flag)
 			{
+				callback(dest, true);
 				yield break;
 			}
 			float nowTime = time;

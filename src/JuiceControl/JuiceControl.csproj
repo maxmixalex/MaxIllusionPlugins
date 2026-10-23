@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>JuiceControl</Product>
     <AssemblyTitle>JuiceControl</AssemblyTitle>
-    <Version>0.1.2</Version>
-    <AssemblyVersion>0.1.2.0</AssemblyVersion>
+    <Version>0.1.3</Version>
+    <AssemblyVersion>0.1.3.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />

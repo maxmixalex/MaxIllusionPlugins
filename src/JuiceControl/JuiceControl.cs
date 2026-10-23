@@ -23,7 +23,7 @@ namespace JuiceControl {
     [BepInPlugin(GUID, "JuiceControl", Version)]
     public class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.1.2";
+        public const string Version = "0.1.3";
 
         private const int WindowId = 68150210;
         private const int ComboWindowId = WindowId + 1;
@@ -69,8 +69,11 @@ namespace JuiceControl {
         private NameDialogMode nameDialogMode;
         private string nameDialogText = string.Empty;
         private string nameDialogMessage = string.Empty;
-        private PresetXml presetXml;
-        private string presetPath;
+        private object nameDialogPreset;
+        private ChaControl nameDialogCharacter;
+        private readonly PresetStore presetStore = new PresetStore();
+        private PresetXml presetXml { get { return presetStore.Data; } }
+        private string presetPath { get { return presetStore.Path; } }
         private int selectedCharacterPresetIndex;
         private int selectedGroupPresetIndex;
         private string characterPresetName = string.Empty;
@@ -80,6 +83,8 @@ namespace JuiceControl {
         private Rect characterDropdownAnchor;
         private Rect characterPresetDropdownAnchor;
         private Rect groupPresetDropdownAnchor;
+        private int characterScanFrame = -1;
+        private List<CharacterEntry> cachedCharacters;
 
         private JuiceGui ui;
         private readonly Dictionary<ChaControl, Dictionary<string, int>> lockedEffectLevels = new Dictionary<ChaControl, Dictionary<string, int>>();
@@ -93,17 +98,27 @@ namespace JuiceControl {
             SkinEffectsIntegrationStatus = Config.Bind("Integration", "SkinEffects", "未检测", new ConfigDescription("Current SkinEffects integration status.", null, new ConfigurationManagerAttributes { Order = 0, ReadOnly = true }));
             DebugLogging = Config.Bind("Debug", "Logging", false, new ConfigDescription("Enable verbose logging.", null, new ConfigurationManagerAttributes { IsAdvanced = true }));
 
-            PresetFileName.SettingChanged += delegate { LoadPresets(); };
+            PresetFileName.SettingChanged += OnPresetFileChanged;
             LoadPresets();
             RefreshIntegrations(true);
         }
 
         private void OnDestroy() {
+            if (PresetFileName != null) PresetFileName.SettingChanged -= OnPresetFileChanged;
+            lockedEffectLevels.Clear();
+            cachedCharacters = null;
+            selectedCharacter = null;
             if (Instance == this) Instance = null;
         }
 
         private void Start() {
-            RefreshIntegrations(false);
+            // Awake can precede optional plugins' initialization. Retry once when
+            // all plugins have reached Start, then cache both hits and misses.
+            RefreshIntegrations(true);
+        }
+
+        private void OnPresetFileChanged(object sender, EventArgs args) {
+            LoadPresets();
         }
 
         private void Update() {
@@ -131,25 +146,29 @@ namespace JuiceControl {
             Color oldColor = GUI.color;
             Color oldContentColor = GUI.contentColor;
             Color oldBackgroundColor = GUI.backgroundColor;
-            GUI.color = Color.white;
-            GUI.contentColor = Color.black;
-            GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
+            bool oldEnabled = GUI.enabled;
+            try {
+                GUI.color = Color.white;
+                GUI.contentColor = Color.black;
+                GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
 
-            windowRect.width = Mathf.Max(windowRect.width, DefaultWindowWidth);
-            windowRect.height = windowFolded ? FoldedWindowHeight : Mathf.Max(windowRect.height, DefaultWindowHeight);
-            windowRect = GUI.Window(WindowId, windowRect, DrawWindow, "JuiceControl " + Version, windowFolded ? ui.FoldedWindowStyle : ui.WindowStyle);
-            windowRect = ClipWindowPosition(windowRect, !windowFolded);
+                windowRect.width = Mathf.Max(windowRect.width, DefaultWindowWidth);
+                windowRect.height = windowFolded ? FoldedWindowHeight : Mathf.Max(windowRect.height, DefaultWindowHeight);
+                windowRect = GUI.Window(WindowId, windowRect, DrawWindow, "JuiceControl " + Version, windowFolded ? ui.FoldedWindowStyle : ui.WindowStyle);
+                windowRect = ClipWindowPosition(windowRect, !windowFolded);
 
-            if (showNameDialog) {
-                nameDialogRect = GUI.Window(NameDialogWindowId, nameDialogRect, DrawNameDialog, "JuiceControl " + Version, ui.WindowStyle);
-                nameDialogRect = ClipPopupWindowPosition(nameDialogRect);
+                if (showNameDialog) {
+                    nameDialogRect = GUI.ModalWindow(NameDialogWindowId, nameDialogRect, DrawNameDialog, "JuiceControl " + Version, ui.WindowStyle);
+                    nameDialogRect = ClipPopupWindowPosition(nameDialogRect);
+                }
+
+                ui.DrawComboBox();
+            } finally {
+                GUI.color = oldColor;
+                GUI.contentColor = oldContentColor;
+                GUI.backgroundColor = oldBackgroundColor;
+                GUI.enabled = oldEnabled;
             }
-
-            ui.DrawComboBox();
-
-            GUI.color = oldColor;
-            GUI.contentColor = oldContentColor;
-            GUI.backgroundColor = oldBackgroundColor;
 
             ui.HandleMouseInput(windowRect, showNameDialog, nameDialogRect, ref mouseDownOnWindow);
         }
@@ -342,6 +361,9 @@ namespace JuiceControl {
         }
 
         private void DrawPresetPanel(List<CharacterEntry> characters) {
+            if (!presetStore.CanSave) {
+                GUILayout.Label("当前 XML 载入失败：仍可应用已载入预设；修复并重载后才能保存。", ui.LabelStyle);
+            }
             DrawCharacterPresetSelector();
             DrawCharacterPresetToolbar();
             DrawGroupPresetSelector();
@@ -383,11 +405,11 @@ namespace JuiceControl {
             GUILayout.BeginHorizontal();
             GUI.enabled = selectedCharacter != null && HasCharacterPreset();
             if (GUILayout.Button("应用选中", ui.ButtonStyle, GUILayout.Height(22f))) ApplyCurrentCharacterPresetToSelected();
-            GUI.enabled = selectedCharacter != null;
+            GUI.enabled = presetStore.CanSave && selectedCharacter != null;
             if (GUILayout.Button("新建保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.CreateCharacter, string.Empty);
-            GUI.enabled = selectedCharacter != null && HasCharacterPreset();
+            GUI.enabled = presetStore.CanSave && selectedCharacter != null && HasCharacterPreset();
             if (GUILayout.Button("覆盖保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.OverwriteCharacter, GetCurrentCharacterPresetName());
-            GUI.enabled = HasCharacterPreset();
+            GUI.enabled = presetStore.CanSave && HasCharacterPreset();
             if (GUILayout.Button("删除选中", ui.ButtonStyle, GUILayout.Height(22f))) DeleteCurrentCharacterPreset();
             GUI.enabled = true;
             GUILayout.EndHorizontal();
@@ -427,11 +449,11 @@ namespace JuiceControl {
             GUILayout.BeginHorizontal();
             GUI.enabled = characters.Count > 0 && HasGroupPreset();
             if (GUILayout.Button("应用选中", ui.ButtonStyle, GUILayout.Height(22f))) ApplyCurrentGroupPreset(characters);
-            GUI.enabled = characters.Count > 0;
+            GUI.enabled = presetStore.CanSave && characters.Count > 0;
             if (GUILayout.Button("新建保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.CreateGroup, string.Empty);
-            GUI.enabled = characters.Count > 0 && HasGroupPreset();
+            GUI.enabled = presetStore.CanSave && characters.Count > 0 && HasGroupPreset();
             if (GUILayout.Button("覆盖保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.OverwriteGroup, GetCurrentGroupPresetName());
-            GUI.enabled = HasGroupPreset();
+            GUI.enabled = presetStore.CanSave && HasGroupPreset();
             if (GUILayout.Button("删除选中", ui.ButtonStyle, GUILayout.Height(22f))) DeleteCurrentGroupPreset();
             GUI.enabled = true;
             GUILayout.EndHorizontal();
@@ -441,8 +463,8 @@ namespace JuiceControl {
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("打开XML", ui.ButtonStyle, GUILayout.Height(22f))) OpenPresetXml();
             if (GUILayout.Button("重载XML", ui.ButtonStyle, GUILayout.Height(22f))) {
-                LoadPresets();
-                statusText = "已重载预设 XML。";
+                if (LoadPresets()) statusText = "已重载预设 XML。";
+                RefreshIntegrations(true);
             }
             GUILayout.EndHorizontal();
         }
@@ -497,7 +519,11 @@ namespace JuiceControl {
         }
 
         private void OpenNameDialog(NameDialogMode mode, string defaultName) {
+            if (!CanEditPresets()) return;
             nameDialogMode = mode;
+            nameDialogPreset = mode == NameDialogMode.OverwriteCharacter ? (object)GetCurrentCharacterPreset()
+                : mode == NameDialogMode.OverwriteGroup ? GetCurrentGroupPreset() : null;
+            nameDialogCharacter = selectedCharacter;
             nameDialogText = defaultName ?? string.Empty;
             nameDialogMessage = string.Empty;
             showNameDialog = true;
@@ -512,11 +538,24 @@ namespace JuiceControl {
         private void CloseNameDialog() {
             showNameDialog = false;
             nameDialogMode = NameDialogMode.None;
+            nameDialogPreset = null;
+            nameDialogCharacter = null;
             nameDialogMessage = string.Empty;
             GUI.FocusControl(null);
         }
 
         private void ConfirmNameDialog() {
+            if (!CanEditPresets()) return;
+            // The modal normally prevents selection changes, but scene changes or
+            // external callbacks can still replace the character/preset underneath it.
+            bool characterMode = nameDialogMode == NameDialogMode.CreateCharacter || nameDialogMode == NameDialogMode.OverwriteCharacter;
+            bool changed = characterMode && (nameDialogCharacter == null || nameDialogCharacter != selectedCharacter);
+            changed |= nameDialogMode == NameDialogMode.OverwriteCharacter && !ReferenceEquals(nameDialogPreset, GetCurrentCharacterPreset());
+            changed |= nameDialogMode == NameDialogMode.OverwriteGroup && !ReferenceEquals(nameDialogPreset, GetCurrentGroupPreset());
+            if (changed) {
+                nameDialogMessage = statusText = "角色或预设选择已变化，请取消后重新打开保存窗口。";
+                return;
+            }
             bool saved = false;
             switch (nameDialogMode) {
                 case NameDialogMode.CreateCharacter:
@@ -569,6 +608,7 @@ namespace JuiceControl {
         }
 
         private bool CreateCharacterPresetFromSelected(string requestedName) {
+            if (!CanEditPresets()) return false;
             if (selectedCharacter == null) return false;
 
             string name = NormalizePresetName(requestedName, BuildUniqueCharacterPresetName());
@@ -585,12 +625,13 @@ namespace JuiceControl {
             presetXml.CharacterPresets.Add(preset);
             selectedCharacterPresetIndex = presetXml.CharacterPresets.Count - 1;
             characterPresetName = name;
-            presetXml.Save(presetPath);
+            presetStore.Save();
             statusText = "已新建汁液预设: " + name;
             return true;
         }
 
         private bool OverwriteCurrentCharacterPreset(string requestedName) {
+            if (!CanEditPresets()) return false;
             CharacterPreset preset = GetCurrentCharacterPreset();
             if (selectedCharacter == null || preset == null) return false;
 
@@ -605,12 +646,13 @@ namespace JuiceControl {
             preset.Name = name;
             preset.State = CaptureState(selectedCharacter);
             characterPresetName = name;
-            presetXml.Save(presetPath);
+            presetStore.Save();
             statusText = "已覆盖汁液预设: " + preset.Name;
             return true;
         }
 
         private bool CreateGroupPresetFromScene(List<CharacterEntry> characters, string requestedName) {
+            if (!CanEditPresets()) return false;
             if (characters.Count == 0) return false;
 
             string name = NormalizePresetName(requestedName, BuildUniqueGroupPresetName());
@@ -630,6 +672,7 @@ namespace JuiceControl {
         }
 
         private bool OverwriteCurrentGroupPreset(List<CharacterEntry> characters, string requestedName) {
+            if (!CanEditPresets()) return false;
             GroupPreset preset = GetCurrentGroupPreset();
             if (characters.Count == 0 || preset == null) return false;
 
@@ -659,7 +702,7 @@ namespace JuiceControl {
                 });
             }
 
-            presetXml.Save(presetPath);
+            presetStore.Save();
         }
 
         private string BuildUniqueCharacterPresetName() {
@@ -684,12 +727,11 @@ namespace JuiceControl {
 
         private void OpenPresetXml() {
             try {
-                if (presetXml != null) {
-                    presetXml.Save(presetPath);
-                }
-
-                Process.Start(presetPath);
-                statusText = "已打开 XML: " + presetPath;
+                // Opening a file must not overwrite external edits or a malformed
+                // file with an empty in-memory fallback.
+                string path = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
+                Process.Start(path);
+                statusText = "已打开 XML: " + path;
             } catch (Exception ex) {
                 statusText = "打开 XML 失败: " + ex.Message;
                 LogDebug(ex);
@@ -869,6 +911,7 @@ namespace JuiceControl {
         }
 
         private List<CharacterEntry> GetCharacters() {
+            if (cachedCharacters != null && characterScanFrame == Time.frameCount) return cachedCharacters;
             List<CharacterEntry> entries = new List<CharacterEntry>();
             HSceneProc hSceneProc = UnityEngine.Object.FindObjectOfType<HSceneProc>();
 
@@ -888,6 +931,8 @@ namespace JuiceControl {
                 AddCharacter(entries, allCharacters[i], "角色" + (entries.Count + 1));
             }
 
+            cachedCharacters = entries;
+            characterScanFrame = Time.frameCount;
             return entries;
         }
 
@@ -1026,6 +1071,9 @@ namespace JuiceControl {
                     SkinEffectsBridge.SetLevel(cha, effect, state.GetSkinEffectLevel(effect.Name));
                 }
             }
+            // A manual preset change should also become the value kept by active
+            // locks, rather than being undone by the next LateUpdate.
+            RefreshCurrentState(cha);
         }
 
         private CharaSkinState CaptureState(ChaControl cha) {
@@ -1076,24 +1124,26 @@ namespace JuiceControl {
         }
 
         private void DeleteCurrentCharacterPreset() {
+            if (!CanEditPresets()) return;
             if (!HasCharacterPreset()) return;
 
             string name = presetXml.CharacterPresets[selectedCharacterPresetIndex].Name;
             presetXml.CharacterPresets.RemoveAt(selectedCharacterPresetIndex);
             selectedCharacterPresetIndex = ClampIndex(selectedCharacterPresetIndex, presetXml.CharacterPresets.Count);
-            presetXml.Save(presetPath);
+            presetStore.Save();
             characterPresetName = GetCurrentCharacterPresetName();
             if (characterPresetName == "(无角色预设)") characterPresetName = string.Empty;
             statusText = "已删除角色预设: " + name;
         }
 
         private void DeleteCurrentGroupPreset() {
+            if (!CanEditPresets()) return;
             if (!HasGroupPreset()) return;
 
             string name = presetXml.GroupPresets[selectedGroupPresetIndex].Name;
             presetXml.GroupPresets.RemoveAt(selectedGroupPresetIndex);
             selectedGroupPresetIndex = ClampIndex(selectedGroupPresetIndex, presetXml.GroupPresets.Count);
-            presetXml.Save(presetPath);
+            presetStore.Save();
             groupPresetName = GetCurrentGroupPresetName();
             if (groupPresetName == "(无群体预设)") groupPresetName = string.Empty;
             statusText = "已删除群体预设: " + name;
@@ -1143,14 +1193,33 @@ namespace JuiceControl {
             return preset == null ? "(无群体预设)" : preset.Name;
         }
 
-        private void LoadPresets() {
-            presetPath = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
-            presetXml = PresetXml.Load(presetPath);
+        private bool CanEditPresets() {
+            if (presetStore.CanSave) return true;
+            nameDialogMessage = statusText = "当前配置的预设 XML 未成功载入，请修复并重载后再保存。";
+            return false;
+        }
+
+        private bool LoadPresets() {
+            presetStore.Invalidate();
+            // A dialog opened for the previous file must not save after a path switch.
+            showNameDialog = false;
+            nameDialogMode = NameDialogMode.None;
+            nameDialogPreset = null;
+            nameDialogCharacter = null;
+            try {
+                string path = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
+                presetStore.Load(path);
+            } catch (Exception ex) {
+                statusText = "载入预设 XML 失败，保留当前预设: " + ex.Message;
+                Logger.LogWarning(statusText);
+                return false;
+            }
             selectedCharacterPresetIndex = ClampIndex(selectedCharacterPresetIndex, presetXml.CharacterPresets.Count);
             selectedGroupPresetIndex = ClampIndex(selectedGroupPresetIndex, presetXml.GroupPresets.Count);
             characterPresetName = HasCharacterPreset() ? GetCurrentCharacterPresetName() : string.Empty;
             groupPresetName = HasGroupPreset() ? GetCurrentGroupPresetName() : string.Empty;
             LogDebug("Loaded presets from " + presetPath);
+            return true;
         }
 
         private static int ClampIndex(int index, int count) {
@@ -1164,7 +1233,8 @@ namespace JuiceControl {
         }
 
         private static string ResolvePresetPath(string configValue) {
-            string fileName = string.IsNullOrEmpty(configValue) ? DefaultPresetFileName : configValue.Trim();
+            string fileName = configValue == null ? string.Empty : configValue.Trim();
+            if (fileName.Length == 0) fileName = DefaultPresetFileName;
             return Path.IsPathRooted(fileName) ? fileName : Path.Combine(Paths.ConfigPath, fileName);
         }
 
@@ -1277,514 +1347,5 @@ namespace JuiceControl {
         private const string Base64TexInputActive = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAkElEQVR42uyXSw7AIAhEofFgev9DUWjxE+OyYhczCQuJybzMiiERoTqqrCObxzy658KYRqivZwZhWzKzLZhc/nGL1KvZ2DPpIkcYzx4OkrmSRJgv0pCLDovfVISPmP8hAQAAAAAAAAAAAAAAAADAAIo3o/CL+PHuhSX2NK91MPm7pbAbZEi7rPpgWD2vugUYAKxOtLWwqwjPAAAAAElFTkSuQmCC";
     }
 
-    internal static class SkinEffectsBridge {
-        private const string PluginGuid = "Marco.SkinEffects";
-        private const string ControllerTypeName = "KK_SkinEffects.SkinEffectsController";
-        private const string EffectKindTypeName = "KK_SkinEffects.SkinEffectKind";
-        private const string TextureLoaderTypeName = "KK_SkinEffects.TextureLoader";
-        private const string EffectIdPrefix = "skineffects:";
 
-        private static Type controllerType;
-        private static Type effectKindType;
-        private static Type textureLoaderType;
-        private static MethodInfo getEffectLevelMethod;
-        private static MethodInfo setEffectLevelMethod;
-        private static MethodInfo getTextureCountMethod;
-        private static bool initialized;
-
-        public static bool IsAvailable { get; private set; }
-        public static string StatusLabel { get; private set; } = "未安装";
-        public static string SourcePluginName { get { return "SkinEffects"; } }
-        public static string DisplayPrefix { get { return "[Ex]"; } }
-        public static readonly List<SkinEffectInfo> Effects = new List<SkinEffectInfo>();
-
-        public static string GetEffectId(SkinEffectInfo effect) {
-            return EffectIdPrefix + (effect == null ? string.Empty : effect.Name);
-        }
-
-        public static bool TryGetEffectName(string id, out string effectName) {
-            effectName = null;
-            if (string.IsNullOrEmpty(id) || !id.StartsWith(EffectIdPrefix, StringComparison.Ordinal)) return false;
-
-            effectName = id.Substring(EffectIdPrefix.Length);
-            return !string.IsNullOrEmpty(effectName);
-        }
-
-        public static void Refresh(bool force = false) {
-            if (initialized && !force) return;
-
-            ClearState();
-
-            Assembly skinEffectsAssembly;
-            if (!TryFindSkinEffectsAssembly(out skinEffectsAssembly)) return;
-
-            if (TryInitializeEnumApi(skinEffectsAssembly)) {
-                initialized = true;
-                IsAvailable = true;
-                StatusLabel = "已安装 (新API)";
-                return;
-            }
-
-            if (TryInitializeLegacyApi(skinEffectsAssembly)) {
-                initialized = true;
-                IsAvailable = true;
-                StatusLabel = "已安装 (旧API)";
-                return;
-            }
-
-            StatusLabel = "已安装但API不兼容";
-        }
-
-        public static SkinEffectInfo FindEffect(string name) {
-            for (int i = 0; i < Effects.Count; i++) {
-                if (string.Equals(Effects[i].Name, name, StringComparison.OrdinalIgnoreCase)) {
-                    return Effects[i];
-                }
-            }
-
-            return null;
-        }
-
-        public static int GetLevel(ChaControl cha, SkinEffectInfo effect) {
-            object controller = GetController(cha);
-            if (controller == null || effect == null) return 0;
-
-            try {
-                object value = effect.LevelProperty != null
-                    ? effect.LevelProperty.GetValue(controller, null)
-                    : getEffectLevelMethod.Invoke(controller, new[] { effect.EnumValue });
-                return Mathf.Clamp(Convert.ToInt32(value), 0, effect.MaxLevel);
-            } catch (Exception ex) {
-                JuiceControl.LogDebug("Failed to read SkinEffects level: " + ex);
-                return 0;
-            }
-        }
-
-        public static void SetLevel(ChaControl cha, SkinEffectInfo effect, int level) {
-            object controller = GetController(cha);
-            if (controller == null || effect == null) return;
-
-            try {
-                level = Mathf.Clamp(level, 0, effect.MaxLevel);
-                if (effect.LevelProperty != null) {
-                    effect.LevelProperty.SetValue(controller, level, null);
-                } else {
-                    setEffectLevelMethod.Invoke(controller, new object[] { effect.EnumValue, level, true });
-                }
-            } catch (Exception ex) {
-                JuiceControl.LogDebug("Failed to set SkinEffects level: " + ex);
-            }
-        }
-
-        private static void ClearState() {
-            initialized = false;
-            IsAvailable = false;
-            StatusLabel = "未安装";
-            Effects.Clear();
-            controllerType = null;
-            effectKindType = null;
-            textureLoaderType = null;
-            getEffectLevelMethod = null;
-            setEffectLevelMethod = null;
-            getTextureCountMethod = null;
-        }
-
-        private static bool TryFindSkinEffectsAssembly(out Assembly skinEffectsAssembly) {
-            skinEffectsAssembly = null;
-
-            try {
-                foreach (var pluginInfo in Chainloader.PluginInfos) {
-                    bool candidate = string.Equals(pluginInfo.Key, PluginGuid, StringComparison.OrdinalIgnoreCase) ||
-                        pluginInfo.Key.IndexOf("SkinEffects", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    if (pluginInfo.Value != null && pluginInfo.Value.Metadata != null) {
-                        candidate = candidate ||
-                            string.Equals(pluginInfo.Value.Metadata.GUID, PluginGuid, StringComparison.OrdinalIgnoreCase) ||
-                            pluginInfo.Value.Metadata.GUID.IndexOf("SkinEffects", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            pluginInfo.Value.Metadata.Name.IndexOf("Skin Effects", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            pluginInfo.Value.Metadata.Name.IndexOf("SkinEffects", StringComparison.OrdinalIgnoreCase) >= 0;
-                    }
-
-                    if (!candidate) {
-                        continue;
-                    }
-
-                    if (pluginInfo.Value == null || pluginInfo.Value.Instance == null) continue;
-
-                    Assembly assembly = pluginInfo.Value.Instance.GetType().Assembly;
-                    if (!IsSkinEffectsAssembly(assembly)) continue;
-
-                    skinEffectsAssembly = assembly;
-                    return true;
-                }
-            } catch (Exception ex) {
-                JuiceControl.LogDebug("Failed to inspect BepInEx plugin list for SkinEffects: " + ex);
-            }
-
-            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
-            for (int i = 0; i < assemblies.Length; i++) {
-                if (!IsSkinEffectsAssembly(assemblies[i])) continue;
-
-                skinEffectsAssembly = assemblies[i];
-                return true;
-            }
-
-            return false;
-        }
-
-        private static bool IsSkinEffectsAssembly(Assembly assembly) {
-            if (assembly == null) return false;
-
-            try {
-                return assembly.GetType(ControllerTypeName, false) != null;
-            } catch {
-                return false;
-            }
-        }
-
-        private static bool TryInitializeEnumApi(Assembly assembly) {
-            Type controller = assembly.GetType(ControllerTypeName, false);
-            Type effectKind = assembly.GetType(EffectKindTypeName, false);
-            Type textureLoader = assembly.GetType(TextureLoaderTypeName, false);
-            if (controller == null || effectKind == null || textureLoader == null) return false;
-
-            MethodInfo getLevel = controller.GetMethod("GetEffectLevel", BindingFlags.Instance | BindingFlags.Public);
-            MethodInfo setLevel = controller.GetMethod("SetEffectLevel", BindingFlags.Instance | BindingFlags.Public);
-            MethodInfo getTextureCount = textureLoader.GetMethod("GetTextureCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-            if (getLevel == null || setLevel == null || getTextureCount == null) return false;
-
-            controllerType = controller;
-            effectKindType = effectKind;
-            textureLoaderType = textureLoader;
-            getEffectLevelMethod = getLevel;
-            setEffectLevelMethod = setLevel;
-            getTextureCountMethod = getTextureCount;
-
-            Array values = Enum.GetValues(effectKindType);
-            for (int i = 0; i < values.Length; i++) {
-                object enumValue = values.GetValue(i);
-                int id = Convert.ToInt32(enumValue);
-                if (id < 0) continue;
-
-                string name = Enum.GetName(effectKindType, enumValue);
-                int maxLevel = GetTextureCount(enumValue);
-                if (maxLevel <= 0) maxLevel = GetFallbackMaxLevel(name);
-                Effects.Add(new SkinEffectInfo(name, GetDisplayName(name), enumValue, null, maxLevel));
-            }
-
-            return Effects.Count > 0;
-        }
-
-        private static bool TryInitializeLegacyApi(Assembly assembly) {
-            Type controller = assembly.GetType(ControllerTypeName, false);
-            Type textureLoader = assembly.GetType(TextureLoaderTypeName, false);
-            if (controller == null) return false;
-
-            controllerType = controller;
-            textureLoaderType = textureLoader;
-
-            AddLegacyEffect("BloodLevel", "处女血", "BldTexturesCount", 3);
-            AddLegacyEffect("PussyJuiceLevel", "爱液", "PussyJuiceTexturesCount", 3);
-            AddLegacyEffect("BukkakeLevel", "身体精液", "CumTexturesCount", 3);
-            AddLegacyEffect("AnalBukkakeLevel", "肛门精液", "AnalCumTexturesCount", 3);
-            AddLegacyEffect("SweatLevel", "汗水/湿身", "WetTexturesFaceCount", 3);
-            AddLegacyEffect("TearLevel", "扩展泪水", "TearTexturesCount", 3);
-            AddLegacyEffect("DroolLevel", "口水", "DroolTexturesCount", 3);
-            AddLegacyEffect("SalivaLevel", "唾液", "SalivaTexturesCount", 3);
-            AddLegacyEffect("CumInNoseLevel", "鼻内精液", "CumInNoseTexturesCount", 3);
-            AddLegacyEffect("ButtLevel", "臀部泛红", "ButtTexturesCount", 4);
-            AddLegacyEffect("BlushLevel", "扩展脸红", "BlushTexturesFaceCount", 4);
-
-            return Effects.Count > 0;
-        }
-
-        private static void AddLegacyEffect(string propertyName, string displayName, string textureCountPropertyName, int fallbackMaxLevel) {
-            PropertyInfo property = controllerType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
-            if (property == null || !property.CanRead || !property.CanWrite) return;
-
-            int maxLevel = GetTextureCount(textureCountPropertyName, fallbackMaxLevel);
-            Effects.Add(new SkinEffectInfo(propertyName, displayName, null, property, maxLevel));
-        }
-
-        private static object GetController(ChaControl cha) {
-            if (!IsAvailable || cha == null || controllerType == null) return null;
-            return cha.GetComponent(controllerType);
-        }
-
-        private static int GetTextureCount(object enumValue) {
-            try {
-                object value = getTextureCountMethod.Invoke(null, new[] { enumValue });
-                return Convert.ToInt32(value);
-            } catch {
-                return 0;
-            }
-        }
-
-        private static int GetTextureCount(string propertyName, int fallbackMaxLevel) {
-            if (textureLoaderType == null) return fallbackMaxLevel;
-
-            try {
-                PropertyInfo property = textureLoaderType.GetProperty(propertyName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                if (property == null) return fallbackMaxLevel;
-
-                object value = property.GetValue(null, null);
-                int maxLevel = Convert.ToInt32(value);
-                return maxLevel > 0 ? maxLevel : fallbackMaxLevel;
-            } catch {
-                return fallbackMaxLevel;
-            }
-        }
-
-        private static int GetFallbackMaxLevel(string effectName) {
-            switch (effectName) {
-                case "BlushBody":
-                case "BlushFace":
-                case "ButtBlushBody":
-                    return 4;
-                default:
-                    return 3;
-            }
-        }
-
-        private static string GetDisplayName(string effectName) {
-            switch (effectName) {
-                case "VirginBloodBody": return "处女血";
-                case "PussyJuiceBody": return "爱液";
-                case "PussyBukkakeBody": return "阴部内射";
-                case "AnalBukkakeBody": return "肛门内射";
-                case "WetBody": return "身体汗/湿";
-                case "WetFace": return "脸部汗/湿";
-                case "BlushBody": return "身体泛红";
-                case "BlushFace": return "脸部泛红";
-                case "ButtBlushBody": return "臀部泛红";
-                case "TearFace": return "扩展泪水";
-                case "DroolFace": return "口水";
-                case "SalivaFace": return "唾液";
-                case "CumInNoseFace": return "鼻内精液";
-                default: return effectName;
-            }
-        }
-    }
-
-    internal class SkinEffectInfo {
-        public readonly string Name;
-        public readonly string DisplayName;
-        public readonly object EnumValue;
-        public readonly PropertyInfo LevelProperty;
-        public readonly int MaxLevel;
-
-        public SkinEffectInfo(string name, string displayName, object enumValue, PropertyInfo levelProperty, int maxLevel) {
-            Name = name;
-            DisplayName = displayName;
-            EnumValue = enumValue;
-            LevelProperty = levelProperty;
-            MaxLevel = maxLevel;
-        }
-    }
-
-    [XmlRoot("JuiceControlPresets")]
-    public class PresetXml {
-        [XmlArray("CharacterPresets")]
-        [XmlArrayItem("Preset")]
-        public List<CharacterPreset> CharacterPresets = new List<CharacterPreset>();
-
-        [XmlArray("GroupPresets")]
-        [XmlArrayItem("Preset")]
-        public List<GroupPreset> GroupPresets = new List<GroupPreset>();
-
-        public static PresetXml Load(string path) {
-            try {
-                if (!File.Exists(path)) {
-                    PresetXml created = new PresetXml();
-                    created.Save(path);
-                    return created;
-                }
-
-                XmlSerializer serializer = new XmlSerializer(typeof(PresetXml));
-                using (StreamReader reader = new StreamReader(path, new UTF8Encoding(false))) {
-                    PresetXml loaded = serializer.Deserialize(reader) as PresetXml;
-                    if (loaded == null) return new PresetXml();
-                    if (loaded.CharacterPresets == null) loaded.CharacterPresets = new List<CharacterPreset>();
-                    if (loaded.GroupPresets == null) loaded.GroupPresets = new List<GroupPreset>();
-                    loaded.Normalize();
-                    return loaded;
-                }
-            } catch (Exception ex) {
-                JuiceControl.LogDebug("Failed to load presets: " + ex);
-                return new PresetXml();
-            }
-        }
-
-        public void Save(string path) {
-            string directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory)) {
-                Directory.CreateDirectory(directory);
-            }
-
-            XmlSerializer serializer = new XmlSerializer(typeof(PresetXml));
-            using (StreamWriter writer = new StreamWriter(path, false, new UTF8Encoding(false))) {
-                serializer.Serialize(writer, this);
-            }
-        }
-
-        private void Normalize() {
-            for (int i = 0; i < CharacterPresets.Count; i++) {
-                if (CharacterPresets[i].State == null) CharacterPresets[i].State = new CharaSkinState();
-                CharacterPresets[i].State.Normalize();
-            }
-
-            for (int i = 0; i < GroupPresets.Count; i++) {
-                if (GroupPresets[i].Characters == null) GroupPresets[i].Characters = new List<RolePreset>();
-                for (int j = 0; j < GroupPresets[i].Characters.Count; j++) {
-                    if (GroupPresets[i].Characters[j].State == null) GroupPresets[i].Characters[j].State = new CharaSkinState();
-                    GroupPresets[i].Characters[j].State.Normalize();
-                }
-            }
-        }
-
-        public CharacterPreset FindCharacterPreset(string name) {
-            for (int i = 0; i < CharacterPresets.Count; i++) {
-                if (string.Equals(CharacterPresets[i].Name, name, StringComparison.OrdinalIgnoreCase)) {
-                    return CharacterPresets[i];
-                }
-            }
-
-            return null;
-        }
-
-        public GroupPreset FindGroupPreset(string name) {
-            for (int i = 0; i < GroupPresets.Count; i++) {
-                if (string.Equals(GroupPresets[i].Name, name, StringComparison.OrdinalIgnoreCase)) {
-                    return GroupPresets[i];
-                }
-            }
-
-            return null;
-        }
-    }
-
-    public class CharacterPreset {
-        [XmlAttribute("name")]
-        public string Name = string.Empty;
-
-        [XmlElement("State")]
-        public CharaSkinState State = new CharaSkinState();
-    }
-
-    public class GroupPreset {
-        [XmlAttribute("name")]
-        public string Name = string.Empty;
-
-        [XmlElement("Character")]
-        public List<RolePreset> Characters = new List<RolePreset>();
-
-        public RolePreset FindRole(string role) {
-            for (int i = 0; i < Characters.Count; i++) {
-                if (string.Equals(Characters[i].Role, role, StringComparison.OrdinalIgnoreCase)) {
-                    return Characters[i];
-                }
-            }
-
-            return null;
-        }
-    }
-
-    public class RolePreset {
-        [XmlAttribute("role")]
-        public string Role = string.Empty;
-
-        [XmlAttribute("displayName")]
-        public string DisplayName = string.Empty;
-
-        [XmlElement("State")]
-        public CharaSkinState State = new CharaSkinState();
-    }
-
-    public class CharaSkinState {
-        [XmlAttribute("tear")]
-        public byte TearLevel;
-
-        [XmlAttribute("blush")]
-        public int BlushLevel;
-
-        [XmlArray("Siru")]
-        [XmlArrayItem("Part")]
-        public List<NamedLevel> Siru = new List<NamedLevel>();
-
-        [XmlArray("SkinEffects")]
-        [XmlArrayItem("Effect")]
-        public List<NamedLevel> SkinEffects = new List<NamedLevel>();
-
-        internal static CharaSkinState CreateMax(int siruMax, int tearMax, int blushMax, List<SkinEffectInfo> effects) {
-            CharaSkinState state = new CharaSkinState {
-                TearLevel = (byte)tearMax,
-                BlushLevel = blushMax
-            };
-
-            foreach (ChaFileDefine.SiruParts part in Enum.GetValues(typeof(ChaFileDefine.SiruParts))) {
-                state.SetSiruLevel(part, (byte)siruMax);
-            }
-
-            if (effects != null) {
-                for (int i = 0; i < effects.Count; i++) {
-                    state.SetSkinEffectLevel(effects[i].Name, effects[i].MaxLevel);
-                }
-            }
-
-            return state;
-        }
-
-        public byte GetSiruLevel(ChaFileDefine.SiruParts part) {
-            NamedLevel level = Find(Siru, part.ToString());
-            return level == null ? (byte)0 : (byte)Mathf.Clamp(level.Level, 0, byte.MaxValue);
-        }
-
-        public void SetSiruLevel(ChaFileDefine.SiruParts part, byte level) {
-            SetLevel(Siru, part.ToString(), level);
-        }
-
-        public int GetSkinEffectLevel(string name) {
-            NamedLevel level = Find(SkinEffects, name);
-            return level == null ? 0 : level.Level;
-        }
-
-        public void SetSkinEffectLevel(string name, int level) {
-            SetLevel(SkinEffects, name, level);
-        }
-
-        public void Normalize() {
-            if (Siru == null) Siru = new List<NamedLevel>();
-            if (SkinEffects == null) SkinEffects = new List<NamedLevel>();
-        }
-
-        private static NamedLevel Find(List<NamedLevel> levels, string name) {
-            if (levels == null) return null;
-
-            for (int i = 0; i < levels.Count; i++) {
-                if (levels[i] != null && string.Equals(levels[i].Name, name, StringComparison.OrdinalIgnoreCase)) {
-                    return levels[i];
-                }
-            }
-
-            return null;
-        }
-
-        private static void SetLevel(List<NamedLevel> levels, string name, int level) {
-            NamedLevel namedLevel = Find(levels, name);
-            if (namedLevel == null) {
-                namedLevel = new NamedLevel { Name = name };
-                levels.Add(namedLevel);
-            }
-
-            namedLevel.Level = level;
-        }
-    }
-
-    public class NamedLevel {
-        [XmlAttribute("name")]
-        public string Name = string.Empty;
-
-        [XmlAttribute("level")]
-        public int Level;
-    }
 }

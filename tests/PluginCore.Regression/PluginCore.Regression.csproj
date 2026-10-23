@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+    <NoWarn>$(NoWarn);CS0649;CS0618</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Common/AtomicXmlFile.cs" Link="Production/AtomicXmlFile.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionModels.cs" Link="Production/ExpressionModels.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionRules.cs" Link="Production/ExpressionRules.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionProgramEditing.cs" Link="Production/ExpressionProgramEditing.cs" />
+    <Compile Include="../../src/ExpressionControl/FemaleDataExpressionState.cs" Link="Production/FemaleDataExpressionState.cs" />
+    <Compile Include="../../src/ExpressionControl/XmlMgr.cs" Link="Production/XmlMgr.cs" />
+    <Compile Include="../../src/ExpressionControl/ShortCutKeyMgr.cs" Link="Production/ShortCutKeyMgr.cs" />
+    <Compile Include="../../src/ExpressionControl/Utl.cs" Link="Production/Utl.cs" />
+    <Compile Include="../../src/JuiceControl/PresetModels.cs" Link="Production/PresetModels.cs" />
+    <Compile Include="../../src/JuiceControl/PresetStore.cs" Link="Production/PresetStore.cs" />
+    <Compile Include="../../src/JuiceControl/SkinEffectsBridge.cs" Link="Production/SkinEffectsBridge.cs" />
+  </ItemGroup>
+</Project>

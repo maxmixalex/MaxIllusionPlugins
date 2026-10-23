@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Serialization;
@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ExpressionControl
 {
 	[DefaultExecutionOrder(9999)]
-	public class ExpressionControl : MonoBehaviour
+	public partial class ExpressionControl : MonoBehaviour
 	{
 		public void Start()
 		{
@@ -20,7 +20,15 @@ namespace ExpressionControl
 				ExpressionControl.isStudio = true;
 			}
 			this.xml = new XmlMgr();
-			this.xml.Load();
+			try { this.xml.Load(); }
+			catch (Exception ex)
+			{
+				// Keep a broken preset file available for repair and avoid running a
+				// partially initialized component on every following frame.
+				Debug.LogError("ExpressionControl: failed to load presets; fix the XML and reload the plugin. " + ex);
+				this.enabled = false;
+				return;
+			}
 			this.selectedScenePreset = this.xml.scenePresets.Count > 0 ? 0 : -1;
 			this.hotkey = ExpressionControlPlugin.hotkey;
 			this.hotkey.Set(ExpressionControl.hotkeyShowGUI, this.xml.keyConfig.showGUI);
@@ -55,7 +63,18 @@ namespace ExpressionControl
 			bool flag = this.gui != null && this.gui.show;
 			if (flag)
 			{
-				this.gui.Draw();
+				Color oldColor = GUI.color;
+				Color oldContent = GUI.contentColor;
+				Color oldBackground = GUI.backgroundColor;
+				bool oldEnabled = GUI.enabled;
+				try { this.gui.Draw(); }
+				finally
+				{
+					GUI.color = oldColor;
+					GUI.contentColor = oldContent;
+					GUI.backgroundColor = oldBackground;
+					GUI.enabled = oldEnabled;
+				}
 			}
 		}
 		public void ReStart()
@@ -306,40 +325,7 @@ namespace ExpressionControl
 		}
 		private bool UnitControlsPart(ExpressionControl.Program.Unit unit, ExpressionControl.ExpressionPart part)
 		{
-			bool flag = unit == null;
-			bool result;
-			if (flag)
-			{
-				result = false;
-			}
-			else
-			{
-				switch (part)
-				{
-				case ExpressionControl.ExpressionPart.morph:
-					result = unit.morph;
-					break;
-				case ExpressionControl.ExpressionPart.tear:
-					result = unit.tear;
-					break;
-				case ExpressionControl.ExpressionPart.hoho:
-					result = unit.hoho;
-					break;
-				case ExpressionControl.ExpressionPart.highlight:
-					result = unit.highlight;
-					break;
-				case ExpressionControl.ExpressionPart.eyeY:
-					result = unit.eyeY;
-					break;
-				case ExpressionControl.ExpressionPart.eyeSmall:
-					result = unit.eyeSmall;
-					break;
-				default:
-					result = false;
-					break;
-				}
-			}
-			return result;
+			return ExpressionRules.ControlsPart(unit, part);
 		}
 		private bool UnitHasValidExpression(ExpressionControl.Program.Unit unit)
 		{
@@ -664,52 +650,8 @@ namespace ExpressionControl
 		}
 		private string GetRandomExpressionGuid(List<ExpressionControl.Program.Unit> units, ExpressionControl.ExpressionPart part)
 		{
-			switch (part)
-			{
-			case ExpressionControl.ExpressionPart.morph:
-				units = (from x in units
-				where x.morph
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			case ExpressionControl.ExpressionPart.tear:
-				units = (from x in units
-				where x.tear
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			case ExpressionControl.ExpressionPart.hoho:
-				units = (from x in units
-				where x.hoho
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			case ExpressionControl.ExpressionPart.highlight:
-				units = (from x in units
-				where x.highlight
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			case ExpressionControl.ExpressionPart.eyeY:
-				units = (from x in units
-				where x.eyeY
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			case ExpressionControl.ExpressionPart.eyeSmall:
-				units = (from x in units
-				where x.eyeSmall
-				select x).ToList<ExpressionControl.Program.Unit>();
-				break;
-			}
-			bool flag = units.Count == 0;
-			string result;
-			if (flag)
-			{
-				result = null;
-			}
-			else
-			{
-				int index = UnityEngine.Random.Range(0, units.Count);
-				int index2 = UnityEngine.Random.Range(0, units[index].expressionGuids.Count);
-				result = units[index].expressionGuids[index2];
-			}
-			return result;
+			return ExpressionRules.ChooseExpressionGuid(units, part, this.xml == null ? null : this.xml.expressions,
+				count => UnityEngine.Random.Range(0, count));
 		}
 		private bool UnitMatchesMode(ExpressionControl.Program.Unit unit, ExpressionControl.FemaleData fd)
 		{
@@ -768,168 +710,24 @@ namespace ExpressionControl
 		}
 		private List<ExpressionControl.Program.Unit> GetMatchedUnits(ExpressionControl.FemaleData fd)
 		{
-			List<ExpressionControl.Program.Unit> list = new List<ExpressionControl.Program.Unit>();
-			bool flag = fd == null || fd.program == null;
-			List<ExpressionControl.Program.Unit> result;
-			if (flag)
+			List<ExpressionControl.Program.Unit> matched = new List<ExpressionControl.Program.Unit>();
+			if (fd == null || fd.program == null || fd.program.units == null) return matched;
+			foreach (ExpressionControl.Program.Unit unit in fd.program.units)
 			{
-				result = list;
-			}
-			else
-			{
-				bool flag2 = ExpressionControl.hFrag == null;
-				if (flag2)
+				if (unit == null) continue;
+				if (ExpressionControl.hFrag == null)
 				{
-					foreach (ExpressionControl.Program.Unit unit in fd.program.units)
-					{
-						bool idle = unit.idle;
-						if (idle)
-						{
-							list.Add(unit);
-						}
-					}
-					result = list;
+					if (unit.idle) matched.Add(unit);
+					continue;
 				}
-				else
+				if (!this.UnitMatchesMode(unit, fd) || !ExpressionRules.MatchesState(unit, fd.state)) continue;
+				if (this.orgazumCount >= unit.orgazumNumL && this.orgazumCount <= unit.orgazumNumH &&
+					ExpressionControl.hFrag.gaugeFemale >= unit.feelingL && ExpressionControl.hFrag.gaugeFemale <= unit.feelingH)
 				{
-					bool flag3 = fd.state == ExpressionControl.FemaleState.other;
-					if (flag3)
-					{
-						result = list;
-					}
-					else
-					{
-						foreach (ExpressionControl.Program.Unit unit2 in fd.program.units)
-						{
-							bool flag4 = !this.UnitMatchesMode(unit2, fd);
-							if (flag4)
-							{
-								continue;
-							}
-							bool flag10 = fd.state == ExpressionControl.FemaleState.idle;
-							if (flag10)
-							{
-								bool flag11 = !unit2.idle;
-								if (flag11)
-								{
-									continue;
-								}
-							}
-							else
-							{
-								bool flag12 = fd.state == ExpressionControl.FemaleState.kiss;
-								if (flag12)
-								{
-									bool flag13 = !unit2.kiss;
-									if (flag13)
-									{
-										continue;
-									}
-								}
-								else
-								{
-									bool flag14 = fd.state == ExpressionControl.FemaleState.loopW;
-									if (flag14)
-									{
-										bool flag15 = !unit2.loopW;
-										if (flag15)
-										{
-											continue;
-										}
-									}
-									else
-									{
-										bool flag16 = fd.state == ExpressionControl.FemaleState.loopS;
-										if (flag16)
-										{
-											bool flag17 = !unit2.loopS;
-											if (flag17)
-											{
-												continue;
-											}
-										}
-										else
-										{
-											bool flag18 = fd.state == ExpressionControl.FemaleState.spurtM;
-											if (flag18)
-											{
-												bool flag19 = !unit2.spurtM;
-												if (flag19)
-												{
-													continue;
-												}
-											}
-											else
-											{
-												bool flag20 = fd.state == ExpressionControl.FemaleState.spurtF;
-												if (flag20)
-												{
-													bool flag21 = !unit2.spurtF;
-													if (flag21)
-													{
-														continue;
-													}
-												}
-												else
-												{
-													bool flag22 = fd.state == ExpressionControl.FemaleState.orgazumM;
-													if (flag22)
-													{
-														bool flag23 = !unit2.orgazumM;
-														if (flag23)
-														{
-															continue;
-														}
-													}
-													else
-													{
-														bool flag24 = fd.state == ExpressionControl.FemaleState.orgazumF;
-														if (flag24)
-														{
-															bool flag25 = !unit2.orgazumF;
-															if (flag25)
-															{
-																continue;
-															}
-														}
-														else
-														{
-															bool flag26 = fd.state == ExpressionControl.FemaleState.afterOrgazumM;
-															if (flag26)
-															{
-																bool flag27 = !unit2.afterOrgazumM;
-																if (flag27)
-																{
-																	continue;
-																}
-															}
-															else
-															{
-																bool flag28 = fd.state == ExpressionControl.FemaleState.afterOrgazumF && !unit2.afterOrgazumF;
-																if (flag28)
-																{
-																	continue;
-																}
-															}
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-							bool flag29 = this.orgazumCount >= unit2.orgazumNumL && this.orgazumCount <= unit2.orgazumNumH && ExpressionControl.hFrag.gaugeFemale >= (float)unit2.feelingL && ExpressionControl.hFrag.gaugeFemale <= (float)unit2.feelingH;
-							if (flag29)
-							{
-								list.Add(unit2);
-							}
-						}
-						result = list;
-					}
+					matched.Add(unit);
 				}
 			}
-			return result;
+			return matched;
 		}
 		public void UpdateFemale()
 		{
@@ -1408,47 +1206,6 @@ namespace ExpressionControl
 				}
 			}
 			return result;
-		}
-		private bool XML_DeleteProgram()
-		{
-			for (int i = this.xml.programs.Count - 1; i >= 0; i--)
-			{
-				bool flag = this.xml.programs[i].guid == this.currentProgram.guid;
-				if (flag)
-				{
-					string deletedGuid = this.currentProgram.guid;
-					this.xml.programs.RemoveAt(i);
-					foreach (ExpressionControl.ScenePreset scenePreset in this.xml.scenePresets)
-					{
-						foreach (ExpressionControl.SceneRolePreset role in scenePreset.roles)
-						{
-							if (role.programGuid == deletedGuid) role.programGuid = string.Empty;
-						}
-					}
-					bool flag2 = this.xml.programs.Count == 0;
-					if (flag2)
-					{
-						this.currentProgram = new ExpressionControl.Program();
-						this.currentProgram.name = "- - -";
-						this.selectedProgramUnit = 0;
-					}
-					else
-					{
-						bool flag3 = i > 0;
-						if (flag3)
-						{
-							this.currentProgram = this.xml.programs[i - 1].DeepClone<ExpressionControl.Program>();
-						}
-						else
-						{
-							this.currentProgram = this.xml.programs[0].DeepClone<ExpressionControl.Program>();
-						}
-					}
-					this.xml.Save(true);
-					return true;
-				}
-			}
-			return false;
 		}
 		private string GetSceneRole(int index)
 		{
@@ -3134,236 +2891,7 @@ namespace ExpressionControl
 		private bool isSortExpressionModify;
 		private bool setInputFocus;
 		private int selectedScenePreset = -1;
-		[Serializable]
-		public class Expression
-		{
-			public Expression()
-			{
-			}
-			public Expression(string guid, string name)
-			{
-				this.guid = guid;
-				this.name = name;
-				this.blink = true;
-			}
-			public Expression(string guid, string name, ExpressionControl.Expression expression)
-			{
-				this.guid = guid;
-				this.name = name;
-				this.eyebrowPtn = expression.eyebrowPtn;
-				this.eyesPtn = expression.eyesPtn;
-				this.mouthPtn = expression.mouthPtn;
-				this.hideHighlight = expression.hideHighlight;
-				this.blink = expression.blink;
-				this.eyeOpen = expression.eyeOpen;
-				this.mouthOpen = expression.mouthOpen;
-				this.hohoAka = expression.hohoAka;
-				this.tearLv = expression.tearLv;
-				this.eyeY = expression.eyeY;
-				this.eyeSmall = expression.eyeSmall;
-			}
-			public Expression(ExpressionControl.Expression expression)
-			{
-				this.guid = expression.guid;
-				this.name = expression.name;
-				this.eyebrowPtn = expression.eyebrowPtn;
-				this.eyesPtn = expression.eyesPtn;
-				this.mouthPtn = expression.mouthPtn;
-				this.hideHighlight = expression.hideHighlight;
-				this.blink = expression.blink;
-				this.eyeOpen = expression.eyeOpen;
-				this.mouthOpen = expression.mouthOpen;
-				this.hohoAka = expression.hohoAka;
-				this.tearLv = expression.tearLv;
-				this.eyeY = expression.eyeY;
-				this.eyeSmall = expression.eyeSmall;
-			}
-			public Expression(ChaControl female, float eyeY = 0f, float eyeSmall = 0f)
-			{
-				this.guid = string.Empty;
-				this.name = "- - -";
-				this.eyebrowPtn = female.GetEyebrowPtn();
-				this.eyesPtn = female.GetEyesPtn();
-				this.mouthPtn = female.GetMouthPtn();
-				this.hideHighlight = female.fileStatus.hideEyesHighlight;
-				this.blink = female.GetEyesBlinkFlag();
-				this.eyeOpen = female.GetEyesOpenMax();
-				this.mouthOpen = female.GetMouthOpenMax();
-				this.hohoAka = female.fileStatus.hohoAkaRate;
-				this.tearLv = female.tearsLv;
-				this.eyeY = eyeY;
-				this.eyeSmall = eyeSmall;
-			}
-			public Expression(FaceListCtrl.FaceInfo faceInfo)
-			{
-				this.guid = string.Empty;
-				this.name = "- - -";
-				this.eyebrowPtn = faceInfo.eyebrow;
-				this.eyesPtn = faceInfo.eye;
-				this.mouthPtn = faceInfo.mouth;
-				this.hideHighlight = !faceInfo.highlight;
-				this.blink = !faceInfo.eyesblink;
-				this.eyeOpen = faceInfo.openMaxEye;
-				this.mouthOpen = faceInfo.openMinMouth;
-				this.hohoAka = faceInfo.cheek;
-				this.tearLv = (byte)faceInfo.tears;
-			}
-			[XmlAttribute("guid")]
-			public string guid = string.Empty;
-			[XmlAttribute("name")]
-			public string name = string.Empty;
-			[XmlAttribute("eyebrowPtn")]
-			public int eyebrowPtn;
-			[XmlAttribute("eyesPtn")]
-			public int eyesPtn;
-			[XmlAttribute("mouthPtn")]
-			public int mouthPtn;
-			[XmlAttribute("hideHighlight")]
-			public bool hideHighlight;
-			[XmlAttribute("blink")]
-			public bool blink;
-			[XmlAttribute("eyeOpen")]
-			public float eyeOpen;
-			[XmlAttribute("mouthOpen")]
-			public float mouthOpen;
-			[XmlAttribute("hohoAka")]
-			public float hohoAka;
-			[XmlAttribute("tearLv")]
-			public byte tearLv;
-			[XmlAttribute("eyeY")]
-			public float eyeY;
-			[XmlAttribute("eyeSmall")]
-			public float eyeSmall;
-		}
-		[Serializable]
-		public class Program
-		{
-			[XmlAttribute("guid")]
-			public string guid = string.Empty;
-			[XmlAttribute("name")]
-			public string name = "- - -";
-			[XmlAttribute("applyMouthOpen")]
-			public bool applyMouthOpen;
-			[XmlAttribute("ignoreMouthInFera")]
-			public bool ignoreMouthInFera;
-			[XmlAttribute("ignoreKiss")]
-			public bool ignoreKiss;
-			[XmlElement(Type = typeof(ExpressionControl.Program.Unit), ElementName = "unit")]
-			public List<ExpressionControl.Program.Unit> units = new List<ExpressionControl.Program.Unit>();
-			[Serializable]
-			public class Unit
-			{
-				[XmlAttribute("aibu")]
-				public bool aibu;
-				[XmlAttribute("houshi")]
-				public bool houshi;
-				[XmlAttribute("sounyuu")]
-				public bool sounyuu;
-				[XmlAttribute("fera")]
-				public bool fera;
-				[XmlAttribute("masturbation")]
-				public bool masturbation;
-				[XmlAttribute("lesbian")]
-				public bool lesbian;
-				[XmlAttribute("idle")]
-				public bool idle;
-				[XmlAttribute("kiss")]
-				public bool kiss;
-				[XmlAttribute("loopW")]
-				public bool loopW;
-				[XmlAttribute("loopS")]
-				public bool loopS;
-				[XmlAttribute("spurtM")]
-				public bool spurtM;
-				[XmlAttribute("spurtF")]
-				public bool spurtF;
-				[XmlAttribute("orgazumM")]
-				public bool orgazumM;
-				[XmlAttribute("orgazumF")]
-				public bool orgazumF;
-				[XmlAttribute("afterOrgazumM")]
-				public bool afterOrgazumM;
-				[XmlAttribute("afterOrgazumF")]
-				public bool afterOrgazumF;
-				[XmlAttribute("drinkVomitWait")]
-				public bool drinkVomitWait;
-				[XmlAttribute("feelingL")]
-				public int feelingL;
-				[XmlAttribute("feelingH")]
-				public int feelingH;
-				[XmlAttribute("orgazumNumL")]
-				public int orgazumNumL;
-				[XmlAttribute("orgazumNumH")]
-				public int orgazumNumH;
-				[XmlAttribute("morph")]
-				public bool morph;
-				[XmlAttribute("tear")]
-				public bool tear;
-				[XmlAttribute("hoho")]
-				public bool hoho;
-				[XmlAttribute("highlight")]
-				public bool highlight;
-				[XmlAttribute("eyeY")]
-				public bool eyeY;
-				[XmlAttribute("eyeSmall")]
-				public bool eyeSmall;
-				[XmlElement(Type = typeof(string), ElementName = "guid")]
-				public List<string> expressionGuids = new List<string>();
-			}
-		}
-		public enum PartType
-		{
-			eyebrow,
-			eyes,
-			mouth
-		}
-		public enum ExpressionPart
-		{
-			morph,
-			tear,
-			hoho,
-			highlight,
-			eyeY,
-			eyeSmall
-		}
-		public enum FemaleState
-		{
-			other,
-			idle,
-			kiss,
-			loopW,
-			loopS,
-			spurtM,
-			spurtF,
-			orgazumM,
-			orgazumF,
-			afterOrgazumM,
-			afterOrgazumF,
-			drinkVomitWait
-		}
-		[Serializable]
-		public class ScenePreset
-		{
-			[XmlAttribute("guid")]
-			public string guid = string.Empty;
-			[XmlAttribute("name")]
-			public string name = string.Empty;
-			[XmlElement("Role")]
-			public List<ExpressionControl.SceneRolePreset> roles = new List<ExpressionControl.SceneRolePreset>();
-		}
-		[Serializable]
-		public class SceneRolePreset
-		{
-			[XmlAttribute("role")]
-			public string role = string.Empty;
-			[XmlAttribute("displayName")]
-			public string displayName = string.Empty;
-			[XmlAttribute("programGuid")]
-			public string programGuid = string.Empty;
-			[XmlAttribute("programTimer")]
-			public float programTimer = 20f;
-		}
-		public class FemaleData
+		public partial class FemaleData
 		{
 			public MonoBehaviour instMono { get; private set; }
 			public FaceListCtrl faceListCtrl { get; private set; }
@@ -4248,185 +3776,6 @@ namespace ExpressionControl
 				{
 					this.program = program;
 				}
-			}
-			public bool CheckExpression(bool useLock)
-			{
-				bool result = false;
-				int num = this.female.GetEyebrowPtn();
-				bool flag = this.expressionRealtime.eyebrowPtn != num;
-				if (flag)
-				{
-					result = true;
-					bool flag2 = useLock && (this.lockExpression || this.lockEyebrowPtn);
-					if (flag2)
-					{
-						this.female.ChangeEyebrowPtn(this.expression.eyebrowPtn, false);
-						this.female.fbsCtrl.EyebrowCtrl.CalculateBlendShape();
-						this.female.ChangeEyebrowPtn(this.expression.eyebrowPtn, true);
-						this.expressionRealtime.eyebrowPtn = this.expression.eyebrowPtn;
-					}
-					else
-					{
-						this.expressionRealtime.eyebrowPtn = num;
-					}
-				}
-				num = this.female.GetEyesPtn();
-				bool flag3 = this.expressionRealtime.eyesPtn != num;
-				if (flag3)
-				{
-					result = true;
-					bool flag4 = useLock && (this.lockExpression || this.lockEyePtn);
-					if (flag4)
-					{
-						this.female.ChangeEyesPtn(this.expression.eyesPtn, false);
-						this.female.fbsCtrl.EyesCtrl.CalculateBlendShape();
-						this.female.ChangeEyesPtn(this.expression.eyesPtn, true);
-						this.expressionRealtime.eyesPtn = this.expression.eyesPtn;
-					}
-					else
-					{
-						this.expressionRealtime.eyesPtn = num;
-					}
-				}
-				num = this.female.GetMouthPtn();
-				bool flag5 = this.expressionRealtime.mouthPtn != num;
-				if (flag5)
-				{
-					result = true;
-					bool flag6 = !this.ignoreMouthLoad && useLock && (this.lockExpression || this.lockMouthPtn);
-					if (flag6)
-					{
-						this.female.ChangeMouthPtn(this.expression.mouthPtn, false);
-						this.female.fbsCtrl.MouthCtrl.CalculateBlendShape();
-						this.female.ChangeMouthPtn(this.expression.mouthPtn, true);
-						this.expressionRealtime.mouthPtn = this.expression.mouthPtn;
-					}
-					else
-					{
-						this.expressionRealtime.mouthPtn = num;
-					}
-				}
-				bool flag7 = this.coEyeOpenSlide == null;
-				if (flag7)
-				{
-					float eyesOpenMax = this.female.GetEyesOpenMax();
-					bool flag8 = !Utl.Equals(this.expressionRealtime.eyeOpen, eyesOpenMax);
-					if (flag8)
-					{
-						result = true;
-						bool flag9 = useLock && (this.lockExpression || this.lockEyeOpen);
-						if (flag9)
-						{
-							bool flag10 = this.faceListCtrl != null;
-							if (flag10)
-							{
-								Utl.GetFieldValue<FaceListCtrl, GlobalMethod.FloatBlend>(this.faceListCtrl, "blendEye").Start(this.expression.eyeOpen, this.expression.eyeOpen, 0f);
-							}
-							this.female.ChangeEyesOpenMax(this.expression.eyeOpen);
-							this.expressionRealtime.eyeOpen = this.expression.eyeOpen;
-						}
-						else
-						{
-							this.expressionRealtime.eyeOpen = eyesOpenMax;
-						}
-					}
-				}
-				bool flag11 = this.coMouthOpenSlide == null;
-				if (flag11)
-				{
-					float mouthOpenMax = this.female.GetMouthOpenMax();
-					bool flag12 = !Utl.Equals(this.expressionRealtime.mouthOpen, mouthOpenMax);
-					if (flag12)
-					{
-						result = true;
-						bool flag13 = !this.ignoreMouthOpen && !this.ignoreMouthLoad && useLock && (this.lockExpression || this.lockMouthPtn);
-						if (flag13)
-						{
-							bool flag14 = this.faceListCtrl != null;
-							if (flag14)
-							{
-								Utl.GetFieldValue<FaceListCtrl, GlobalMethod.FloatBlend>(this.faceListCtrl, "blendMouth").Start(this.expression.mouthOpen, this.expression.mouthOpen, 0f);
-							}
-							this.female.ChangeMouthOpenMax(this.expression.mouthOpen);
-							bool isStudio = ExpressionControl.isStudio;
-							if (isStudio)
-							{
-								this.ociFemale.ChangeMouthOpen(this.expression.mouthOpen);
-							}
-							this.expressionRealtime.mouthOpen = this.expression.mouthOpen;
-						}
-						else
-						{
-							this.expressionRealtime.mouthOpen = mouthOpenMax;
-						}
-					}
-				}
-				bool flag15 = this.expressionRealtime.tearLv != this.female.tearsLv;
-				if (flag15)
-				{
-					result = true;
-					bool flag16 = useLock && (this.lockExpression || this.lockTear);
-					if (flag16)
-					{
-						this.female.tearsLv = this.expression.tearLv;
-						this.expressionRealtime.tearLv = this.expression.tearLv;
-					}
-					else
-					{
-						this.expressionRealtime.tearLv = this.female.tearsLv;
-					}
-				}
-				bool flag17 = this.coHohoAkaSlide == null;
-				if (flag17)
-				{
-					float hohoAkaRate = this.female.fileStatus.hohoAkaRate;
-					bool flag18 = !Utl.Equals(this.expressionRealtime.hohoAka, hohoAkaRate);
-					if (flag18)
-					{
-						result = true;
-						bool flag19 = useLock && (this.lockExpression || this.lockHohoAka);
-						if (flag19)
-						{
-							this.female.ChangeHohoAkaRate(this.expression.hohoAka);
-							this.expressionRealtime.hohoAka = this.expression.hohoAka;
-						}
-						else
-						{
-							this.expressionRealtime.hohoAka = hohoAkaRate;
-						}
-					}
-				}
-				bool flag20 = this.expressionRealtime.hideHighlight != this.female.fileStatus.hideEyesHighlight;
-				if (flag20)
-				{
-					result = true;
-					bool flag21 = useLock && (this.lockExpression || this.lockHighlight);
-					if (flag21)
-					{
-						this.female.HideEyeHighlight(this.expression.hideHighlight);
-						this.expressionRealtime.hideHighlight = this.expression.hideHighlight;
-					}
-					else
-					{
-						this.expressionRealtime.hideHighlight = this.female.fileStatus.hideEyesHighlight;
-					}
-				}
-				bool flag22 = this.expressionRealtime.blink != this.female.GetEyesBlinkFlag();
-				if (flag22)
-				{
-					result = true;
-					bool flag23 = useLock && (this.lockExpression || this.lockBlink);
-					if (flag23)
-					{
-						this.female.ChangeEyesBlinkFlag(this.expression.blink);
-						this.expressionRealtime.blink = this.expression.blink;
-					}
-					else
-					{
-						this.expressionRealtime.blink = this.female.GetEyesBlinkFlag();
-					}
-				}
-				return result;
 			}
 			public void RestoreEyeSmall()
 			{
