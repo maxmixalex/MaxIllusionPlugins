@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_MultiTeamH</AssemblyName>
+    <RootNamespace>MultiTeamH</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>MultiTeamH</Product>
+    <AssemblyTitle>MultiTeamH</AssemblyTitle>
+    <Version>0.11.62</Version>
+    <AssemblyVersion>0.11.62.0</AssemblyVersion>
+    <NoWarn>$(NoWarn);AD0001;KKANAL01;KKANAL03</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp-firstpass" />
+    <PackageReference Include="IllusionLibs.Koikatu.Sirenix.Serialization" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionLibs.Koikatu.TextMeshPro" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+  </ItemGroup>
+</Project>

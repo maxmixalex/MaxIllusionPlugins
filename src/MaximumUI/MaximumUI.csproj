@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>MaximumUI</AssemblyName>
+    <RootNamespace>MaximumUI</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>MaximumUI</Product>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\**\*.png" />
+  </ItemGroup>
+</Project>

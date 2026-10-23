@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_ClothingCompression</AssemblyName>
+    <RootNamespace>ClothingCompression</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>ClothingCompression</Product>
+    <AssemblyTitle>ClothingCompression</AssemblyTitle>
+    <Version>0.3.18</Version>
+    <AssemblyVersion>0.3.18.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="ExtensibleSaveFormat.Koikatu" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp-firstpass" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionLibs.Koikatu.TextMeshPro" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+    <PackageReference Include="Sideloader.Koikatu" />
+    <PackageReference Include="MonoMod.RuntimeDetour" />
+  </ItemGroup>
+</Project>

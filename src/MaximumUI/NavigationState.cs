@@ -1,0 +1,155 @@
+using System;
+using System.Collections.Generic;
+
+namespace MaximumUI {
+    public sealed class NavigationItem {
+        public string Id;
+        public string Key;
+        public string Path;
+        public string TypeName;
+        public MuiRect Rect;
+        public bool Enabled;
+
+        public NavigationItem Clone() {
+            return (NavigationItem)MemberwiseClone();
+        }
+    }
+
+    public sealed class UiNavigationStore {
+        private readonly List<NavigationItem> items = new List<NavigationItem>();
+        private readonly Dictionary<string, NavigationItem> itemById = new Dictionary<string, NavigationItem>();
+        private string focusedId;
+        private string requestedFocusId;
+        private string defaultFocusId;
+
+        public string FocusedId {
+            get { return focusedId; }
+        }
+
+        public int Count {
+            get { return items.Count; }
+        }
+
+        public bool HasFocus {
+            get { return !string.IsNullOrEmpty(focusedId); }
+        }
+
+        public void BeginFrame() {
+            items.Clear();
+            itemById.Clear();
+            requestedFocusId = null;
+            defaultFocusId = null;
+        }
+
+        public void Register(Widget widget, string path, MuiRect rect, bool enabled) {
+            if (widget == null || widget is EmptyWidget) return;
+
+            string id = ItemId(widget, path);
+            NavigationItem item = new NavigationItem {
+                Id = id,
+                Key = widget.Key == null ? null : widget.Key.ToString(),
+                Path = path ?? string.Empty,
+                TypeName = widget.GetType().Name,
+                Rect = rect,
+                Enabled = enabled
+            };
+
+            items.Add(item);
+            itemById[id] = item;
+            itemById["path:" + item.Path] = item;
+            if (!string.IsNullOrEmpty(item.Key)) itemById["key:" + item.Key] = item;
+
+            if (widget.HasDefaultFocus && string.IsNullOrEmpty(defaultFocusId)) defaultFocusId = id;
+            if (widget.RequestFocus) requestedFocusId = id;
+        }
+
+        public void EndFrame() {
+            if (!string.IsNullOrEmpty(requestedFocusId) && itemById.ContainsKey(requestedFocusId)) {
+                focusedId = requestedFocusId;
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(focusedId) && itemById.ContainsKey(focusedId)) return;
+
+            if (!string.IsNullOrEmpty(defaultFocusId) && itemById.ContainsKey(defaultFocusId)) {
+                focusedId = defaultFocusId;
+                return;
+            }
+
+            focusedId = items.Count > 0 ? items[0].Id : null;
+        }
+
+        public bool Focus(object key) {
+            if (key == null) return false;
+            return FocusId("key:" + key);
+        }
+
+        public bool FocusPath(string path) {
+            if (path == null) return false;
+            return FocusId("path:" + path);
+        }
+
+        public bool FocusNext() {
+            if (items.Count == 0) {
+                focusedId = null;
+                return false;
+            }
+
+            int index = FocusedIndex();
+            int next = index < 0 ? 0 : (index + 1) % items.Count;
+            focusedId = items[next].Id;
+            return true;
+        }
+
+        public bool FocusPrevious() {
+            if (items.Count == 0) {
+                focusedId = null;
+                return false;
+            }
+
+            int index = FocusedIndex();
+            int previous = index < 0 ? items.Count - 1 : (index - 1 + items.Count) % items.Count;
+            focusedId = items[previous].Id;
+            return true;
+        }
+
+        public bool IsFocused(Widget widget, string path) {
+            return string.Equals(focusedId, ItemId(widget, path), StringComparison.Ordinal);
+        }
+
+        public NavigationItem FocusedItem() {
+            if (string.IsNullOrEmpty(focusedId)) return null;
+
+            NavigationItem item;
+            return itemById.TryGetValue(focusedId, out item) ? item.Clone() : null;
+        }
+
+        public IList<NavigationItem> Snapshot() {
+            List<NavigationItem> result = new List<NavigationItem>();
+            for (int i = 0; i < items.Count; i++) {
+                result.Add(items[i].Clone());
+            }
+
+            return result;
+        }
+
+        private bool FocusId(string id) {
+            if (string.IsNullOrEmpty(id) || !itemById.ContainsKey(id)) return false;
+            focusedId = id;
+            return true;
+        }
+
+        private int FocusedIndex() {
+            for (int i = 0; i < items.Count; i++) {
+                if (string.Equals(items[i].Id, focusedId, StringComparison.Ordinal)) return i;
+            }
+
+            return -1;
+        }
+
+        private static string ItemId(Widget widget, string path) {
+            if (widget != null && widget.Key != null) return "key:" + widget.Key;
+            return "path:" + (path ?? string.Empty);
+        }
+    }
+}

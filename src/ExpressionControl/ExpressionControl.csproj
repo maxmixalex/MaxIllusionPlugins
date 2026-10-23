@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_ExpressionControl</AssemblyName>
+    <RootNamespace>ExpressionControl</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>ExpressionControl</Product>
+    <AssemblyTitle>ExpressionControl</AssemblyTitle>
+    <Version>0.2.7.18</Version>
+    <AssemblyVersion>0.2.7.18</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="ExtensibleSaveFormat.Koikatu" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp-firstpass" />
+    <PackageReference Include="IllusionLibs.Koikatu.Sirenix.Serialization" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+  </ItemGroup>
+</Project>

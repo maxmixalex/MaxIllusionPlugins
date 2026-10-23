@@ -1,0 +1,9 @@
+<Project>
+  <Target Name="CopyPluginArtifacts" AfterTargets="Build">
+    <ItemGroup>
+      <PluginArtifacts Include="$(TargetPath)" />
+    </ItemGroup>
+    <MakeDir Directories="$(PluginOutputPath)" />
+    <Copy SourceFiles="@(PluginArtifacts)" DestinationFolder="$(PluginOutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
