@@ -67,8 +67,12 @@ namespace ClothingCompression {
         }
 
         internal static ItemDescriptor Resolve(ChaControl cha, DeformationEntry entry) {
+            return Resolve(Get(cha), entry);
+        }
+
+        internal static ItemDescriptor Resolve(IList<ItemDescriptor> items, DeformationEntry entry) {
             if (entry == null || entry.BindingKind == BoundItemKind.None) return null;
-            List<ItemDescriptor> items = Get(cha);
+            if (items == null) return null;
             ItemDescriptor stable = items.FirstOrDefault(x => Matches(entry, x) && x.Slot == entry.PreferredSlot)
                 ?? items.FirstOrDefault(x => Matches(entry, x));
             if (stable != null) return stable;
@@ -132,9 +136,10 @@ namespace ClothingCompression {
         internal static string Localize(string value) {
             if (string.IsNullOrEmpty(value)) return value;
             string cached; if (Cache.TryGetValue(value, out cached)) return cached;
+            string source = value;
             try { if (ChineseGetTextMethod != null) { string translated = ChineseGetTextMethod.Invoke(null, new object[] { value }) as string; if (!string.IsNullOrEmpty(translated) && translated != value) return Cache[value] = translated; } } catch { }
             try { object translator = DefaultTranslatorProperty == null ? null : DefaultTranslatorProperty.GetValue(null, null); if (translator != null && TryTranslateMethod != null) { object[] args = { value, null }; if ((bool)TryTranslateMethod.Invoke(translator, args) && args[1] is string) value = (string)args[1]; } } catch { }
-            return Cache[value] = value;
+            return Cache[source] = value;
         }
         private static MethodInfo FindTryTranslateMethod() {
             if (DefaultTranslatorProperty == null) return null;

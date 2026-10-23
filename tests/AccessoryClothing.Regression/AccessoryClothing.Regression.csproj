@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryOperations.cs" Link="Production/AccessoryOperations.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryHighlighter.cs" Link="Production/AccessoryHighlighter.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/MaterialEditorBridge.cs" Link="Production/MaterialEditorBridge.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionModels.cs" Link="Production/CompressionModels.cs" />
+    <Compile Include="../../src/ClothingCompression/ItemCatalog.cs" Link="Production/ItemCatalog.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionController.cs" Link="Production/CompressionController.cs" />
+    <Compile Include="../../src/Common/AtomicXmlFile.cs" Link="Production/AtomicXmlFile.cs" />
+  </ItemGroup>
+</Project>

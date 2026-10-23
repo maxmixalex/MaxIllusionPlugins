@@ -26,7 +26,7 @@ namespace ClothingCompression {
     internal sealed class ClothingCompressionPlugin : BaseUnityPlugin {
         internal const string Guid = "MaxMixAlex.ClothingCompression";
         internal const string Name = "Clothing Compression";
-        internal const string Version = "0.3.18";
+        internal const string Version = "0.3.19";
         internal static readonly string[] CoordinateNames = { "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣" };
         private static readonly FieldInfo ControlObjectsField = typeof(BaseGuiEntry).GetField("_controlObjects", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo DropdownOptionsField = typeof(MakerDropdown).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -73,6 +73,12 @@ namespace ClothingCompression {
         private void OnMakerFinishedLoading(object sender, EventArgs e) { RefreshMakerControls(CurrentMakerController()); }
 
         private void RegisterMakerControls(object sender, RegisterSubCategoriesEvent e) {
+            // Maker can be entered repeatedly in the same game process. Controls from
+            // its previous scene must not be retained or revisited by refresh calls.
+            detailControls.Clear();
+            makerImportEntries.Clear();
+            makerImportCoordinate = -1;
+            makerImportEntry = 0;
             MakerCategory baseCategory = MakerConstants.Clothes.Copy;
             MakerCategory cat = new MakerCategory(baseCategory.CategoryName, "clothingCompression", baseCategory.Position + 1, "勒肉形变");
             e.AddSubCategory(cat);

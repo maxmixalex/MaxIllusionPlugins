@@ -14,12 +14,24 @@ namespace AccessoryBatchManager {
         private string cachedPath;
         private DateTime cachedWriteTime;
         private ChaFileCoordinate cachedCoordinate;
+        private int refreshedFrame = -1;
+        private bool availableThisFrame;
 
         internal string DisplayName { get; private set; }
         internal ChaFileCoordinate Coordinate { get { return cachedCoordinate; } }
         internal ChaFileAccessory.PartsInfo[] Parts { get { return cachedCoordinate == null ? null : cachedCoordinate.accessory.parts; } }
 
         internal bool TryRefresh() {
+            // OnGUI runs for layout, input and repaint. Scene searches and filesystem
+            // checks need only run once per frame while the card source is visible.
+            if (refreshedFrame == Time.frameCount) return availableThisFrame;
+            refreshedFrame = Time.frameCount;
+            try { return availableThisFrame = RefreshCore(); }
+            catch (IOException) { return availableThisFrame = Clear(); }
+            catch (UnauthorizedAccessException) { return availableThisFrame = Clear(); }
+        }
+
+        private bool RefreshCore() {
             CustomCoordinateFile coordinateFile = UnityEngine.Object.FindObjectOfType<CustomCoordinateFile>();
             if (coordinateFile == null || !coordinateFile.gameObject.activeInHierarchy || ListControllerField == null || FileWindowField == null)
                 return Clear();

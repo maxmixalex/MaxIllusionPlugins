@@ -23,12 +23,18 @@ namespace ClothingCompression {
             if (!Visible) return;
             if (skin == null) { skin = new PocGuiSkin(); combo = new PopupCombo(ComboWindowId, skin); }
             Color oldColor = GUI.color, oldContent = GUI.contentColor, oldBackground = GUI.backgroundColor;
-            GUI.color = Color.white; GUI.contentColor = Color.black; GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
-            rect = GUI.Window(WindowId, rect, DrawWindow, ClothingCompressionPlugin.Name + " " + ClothingCompressionPlugin.Version, skin.Window);
-            rect.x = Mathf.Clamp(rect.x, 0f, Mathf.Max(0f, Screen.width - rect.width)); rect.y = Mathf.Clamp(rect.y, 0f, Mathf.Max(0f, Screen.height - 24f));
-            combo.Follow(rect);
-            combo.Draw();
-            GUI.color = oldColor; GUI.contentColor = oldContent; GUI.backgroundColor = oldBackground;
+            bool oldEnabled = GUI.enabled;
+            try {
+                GUI.color = Color.white; GUI.contentColor = Color.black; GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
+                rect = GUI.Window(WindowId, rect, DrawWindow, ClothingCompressionPlugin.Name + " " + ClothingCompressionPlugin.Version, skin.Window);
+                rect.x = Mathf.Clamp(rect.x, 0f, Mathf.Max(0f, Screen.width - rect.width)); rect.y = Mathf.Clamp(rect.y, 0f, Mathf.Max(0f, Screen.height - 24f));
+                combo.Follow(rect);
+                combo.Draw();
+            }
+            finally {
+                GUI.color = oldColor; GUI.contentColor = oldContent; GUI.backgroundColor = oldBackground;
+                GUI.enabled = oldEnabled;
+            }
             HandleMouse();
         }
 

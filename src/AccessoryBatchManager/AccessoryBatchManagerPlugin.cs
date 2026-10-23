@@ -22,7 +22,7 @@ namespace AccessoryBatchManager {
     [BepInPlugin(GUID, "Accessory Batch Manager", Version)]
     public sealed class AccessoryBatchManagerPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.AccessoryBatchManager";
-        public const string Version = "0.6.3";
+        public const string Version = "0.6.4";
 
         private const int WindowId = 68410931;
         private const int ConfirmWindowId = WindowId + 1;
@@ -76,6 +76,7 @@ namespace AccessoryBatchManager {
         private GameObject nativeFrontButtons;
         private Transform nativeAddButtons;
         private bool installingNativeButtons;
+        private Coroutine nativeButtonInstall;
         private ClassicComboBox combo;
         private readonly CoordinateCardSource coordinateCardSource = new CoordinateCardSource();
         private readonly AccessoryHighlighter accessoryHighlighter = new AccessoryHighlighter();
@@ -96,17 +97,21 @@ namespace AccessoryBatchManager {
         private void OnDestroy() {
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
             MakerAPI.MakerExiting -= OnMakerExiting;
+            if (nativeButtonInstall != null) StopCoroutine(nativeButtonInstall);
             accessoryHighlighter.Dispose();
             if (nativeFrontButtons != null) Object.Destroy(nativeFrontButtons);
+            if (whiteSkin != null) Object.Destroy(whiteSkin);
         }
 
         private void OnMakerFinishedLoading(object sender, EventArgs eventArgs) {
             if (installingNativeButtons) return;
             installingNativeButtons = true;
-            StartCoroutine(InstallNativeButtons());
+            nativeButtonInstall = StartCoroutine(InstallNativeButtons());
         }
 
         private void OnMakerExiting(object sender, EventArgs eventArgs) {
+            if (nativeButtonInstall != null) StopCoroutine(nativeButtonInstall);
+            nativeButtonInstall = null;
             visible = false;
             confirmedAction = null;
             selected.Clear();
@@ -151,33 +156,38 @@ namespace AccessoryBatchManager {
             GUISkin oldSkin = GUI.skin;
             Color oldBackground = GUI.backgroundColor;
             Color oldContent = GUI.contentColor;
-            GUI.skin = whiteSkin;
-            GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
-            GUI.contentColor = Color.black;
-            windowRect.height = windowFolded ? FoldedWindowHeight : Mathf.Max(windowRect.height, WindowHeight);
-            windowRect = GUI.Window(WindowId, windowRect, DrawWindow, "饰品批量管理 " + Version, windowFolded ? foldedWindowStyle : windowStyle);
-            windowRect.x = Mathf.Clamp(windowRect.x, -WindowWidth + 40f, Screen.width - 40f);
-            windowRect.y = Mathf.Clamp(windowRect.y, 0f, Screen.height - 30f);
+            bool oldEnabled = GUI.enabled;
+            try {
+                GUI.skin = whiteSkin;
+                GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
+                GUI.contentColor = Color.black;
+                windowRect.height = windowFolded ? FoldedWindowHeight : Mathf.Max(windowRect.height, WindowHeight);
+                windowRect = GUI.Window(WindowId, windowRect, DrawWindow, "饰品批量管理 " + Version, windowFolded ? foldedWindowStyle : windowStyle);
+                windowRect.x = Mathf.Clamp(windowRect.x, -WindowWidth + 40f, Screen.width - 40f);
+                windowRect.y = Mathf.Clamp(windowRect.y, 0f, Screen.height - 30f);
 
-            if (confirmedAction != null) {
-                if (confirmRect.x == 0f && confirmRect.y == 0f)
-                    confirmRect = new Rect((Screen.width - confirmRect.width) * 0.5f, (Screen.height - confirmRect.height) * 0.5f, confirmRect.width, confirmRect.height);
-                confirmRect = GUI.Window(ConfirmWindowId, confirmRect, DrawConfirmation, "确认操作", windowStyle);
+                if (confirmedAction != null) {
+                    if (confirmRect.x == 0f && confirmRect.y == 0f)
+                        confirmRect = new Rect((Screen.width - confirmRect.width) * 0.5f, (Screen.height - confirmRect.height) * 0.5f, confirmRect.width, confirmRect.height);
+                    confirmRect = GUI.Window(ConfirmWindowId, confirmRect, DrawConfirmation, "确认操作", windowStyle);
+                }
+
+                if (combo.Show) {
+                    combo.Follow(windowRect);
+                    combo.Rect = GUI.Window(ComboWindowId, combo.Rect, combo.DrawWindow, string.Empty, whiteSkin.box);
+                    GUI.BringWindowToFront(ComboWindowId);
+                }
+
+                if (Event.current != null && Event.current.type == EventType.Repaint) {
+                    UpdateHighlights(AccessoryOperations.GetCharacter());
+                }
             }
-
-            if (combo.Show) {
-                combo.Follow(windowRect);
-                combo.Rect = GUI.Window(ComboWindowId, combo.Rect, combo.DrawWindow, string.Empty, whiteSkin.box);
-                GUI.BringWindowToFront(ComboWindowId);
+            finally {
+                GUI.skin = oldSkin;
+                GUI.backgroundColor = oldBackground;
+                GUI.contentColor = oldContent;
+                GUI.enabled = oldEnabled;
             }
-
-            if (Event.current != null && Event.current.type == EventType.Repaint) {
-                UpdateHighlights(AccessoryOperations.GetCharacter());
-            }
-
-            GUI.skin = oldSkin;
-            GUI.backgroundColor = oldBackground;
-            GUI.contentColor = oldContent;
             BlockMakerInput();
         }
 
@@ -272,8 +282,8 @@ namespace AccessoryBatchManager {
                 status = "服装卡来源已失效，已切回角色搭配。";
             }
             DrawCoordinateControllers();
-            ChaFileCoordinate sourceCoordinateData = sourceIsCoordinateCard ? coordinateCardSource.Coordinate : character.chaFile.coordinate[sourceCoordinate];
-            ChaFileCoordinate destinationCoordinateData = character.chaFile.coordinate[destinationCoordinate];
+            ChaFileCoordinate sourceCoordinateData = sourceIsCoordinateCard ? coordinateCardSource.Coordinate : AccessoryOperations.GetCoordinate(character, sourceCoordinate);
+            ChaFileCoordinate destinationCoordinateData = AccessoryOperations.GetCoordinate(character, destinationCoordinate);
             ChaFileAccessory.PartsInfo[] sourceParts = sourceCoordinateData.accessory.parts;
             ChaFileAccessory.PartsInfo[] destinationParts = destinationCoordinateData.accessory.parts;
             ChaFileClothes.PartsInfo[] sourceClothes = sourceCoordinateData.clothes.parts;
@@ -385,11 +395,12 @@ namespace AccessoryBatchManager {
         private void DrawAdjustmentButtons(ChaControl character, int adjustment, string label) {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, GUILayout.Width(60f));
-            GUI.enabled = HasValidMapping(false) && confirmedAction == null;
+            bool controlsEnabled = GUI.enabled;
+            GUI.enabled = controlsEnabled && HasValidMapping(false) && confirmedAction == null;
             if (GUILayout.Button("复制", GUILayout.Width(120f))) ConfirmAdjustment(character, adjustment, MirrorMode.None, label + "复制");
             if (GUILayout.Button("左右反转", GUILayout.Width(120f))) ConfirmAdjustment(character, adjustment, MirrorMode.LeftRight, label + "左右反转复制");
             if (GUILayout.Button("上下反转", GUILayout.Width(120f))) ConfirmAdjustment(character, adjustment, MirrorMode.UpDown, label + "上下反转复制");
-            GUI.enabled = confirmedAction == null;
+            GUI.enabled = controlsEnabled;
             GUILayout.EndHorizontal();
         }
 
@@ -479,7 +490,7 @@ namespace AccessoryBatchManager {
                 if (capturedSourceClothing) {
                     ChaFileClothes.PartsInfo[] clothing = cardCoordinate != null
                         ? cardCoordinate.clothes.parts
-                        : character.chaFile.coordinate[capturedSourceCoordinate].clothes.parts;
+                        : AccessoryOperations.GetCoordinate(character, capturedSourceCoordinate).clothes.parts;
                     copied = capturedDestinationClothing
                         ? AccessoryOperations.CopyOrMoveClothing(character, clothing, capturedSourceCoordinate, capturedDestinationCoordinate, sources, destinations, move)
                         : AccessoryOperations.CopyOrMoveClothingToAccessories(character, clothing, capturedSourceCoordinate, capturedDestinationCoordinate, sources, destinations, capturedReverseParent, move);
@@ -516,7 +527,7 @@ namespace AccessoryBatchManager {
             }
             string position = atFront ? "最前" : "最后";
             string sourceName = sourceIsCoordinateCard ? coordinateCardSource.DisplayName : CoordinateNames[sourceCoordinate];
-            ChaFileCoordinate sourceCoordinateData = sourceIsCoordinateCard ? coordinateCardSource.Coordinate : character.chaFile.coordinate[sourceCoordinate];
+            ChaFileCoordinate sourceCoordinateData = sourceIsCoordinateCard ? coordinateCardSource.Coordinate : AccessoryOperations.GetCoordinate(character, sourceCoordinate);
             ChaFileAccessory.PartsInfo[] sourceParts = sourceListIsClothing
                 ? AccessoryOperations.ConvertClothingToAccessories(character, sourceCoordinateData.clothes.parts)
                 : sourceCoordinateData.accessory.parts;
@@ -645,7 +656,15 @@ namespace AccessoryBatchManager {
         private void RequestConfirmation(string text, Action action) {
             combo.Hide();
             confirmationText = text;
-            confirmedAction = action;
+            ChaControl character = AccessoryOperations.GetCharacter();
+            int coordinate = character == null ? -1 : character.fileStatus.coordinateType;
+            confirmedAction = delegate {
+                if (character == null || AccessoryOperations.GetCharacter() != character || character.fileStatus.coordinateType != coordinate) {
+                    status = "角色或当前搭配已经改变，请重新选择并确认操作。";
+                    return;
+                }
+                action();
+            };
             visible = true;
             confirmRect.x = (Screen.width - confirmRect.width) * 0.5f;
             confirmRect.y = (Screen.height - confirmRect.height) * 0.5f;
