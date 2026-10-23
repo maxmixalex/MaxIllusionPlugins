@@ -183,7 +183,8 @@ namespace MaximumUI {
         public void Append(DrawList source, MuiVec2 offset) {
             if (source == null) return;
 
-            for (int i = 0; i < source.Commands.Count; i++) {
+            int count = source.Commands.Count;
+            for (int i = 0; i < count; i++) {
                 DrawCommand command = source.Commands[i];
                 if (command == null) continue;
                 commands.Add(CloneWithOffset(command, offset));

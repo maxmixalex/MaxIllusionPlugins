@@ -18,7 +18,9 @@ namespace MaximumUI {
                     offset += read;
                 }
 
-                Texture2D texture = new Texture2D(width, height);
+                Texture2D texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+                texture.hideFlags = HideFlags.HideAndDontSave;
+                texture.wrapMode = TextureWrapMode.Clamp;
                 texture.LoadImage(bytes);
                 return texture;
             }

@@ -15,6 +15,12 @@ namespace MaximumUI {
         public DialogService Dialogs;
         public string Path;
         public bool IsModalOpen;
+        // Opt in only when the caller invalidates ImguiRenderer after mutating widgets.
+        public bool CacheLayout;
+        public bool SoftMouseCapture = true;
+        public bool SoftKeyboardCapture;
+        internal bool SuppressDialogs;
+        internal Dialog InputDialog;
         public DragDropState DragDrop = new DragDropState();
 
         internal IList<DropdownOverlay> Dropdowns {
@@ -26,7 +32,11 @@ namespace MaximumUI {
         }
 
         public string StateId(Widget widget, string suffix) {
-            string keyPart = widget != null && widget.Key != null ? "key:" + widget.Key : "path:" + Path;
+            return StateId(widget, suffix, Path);
+        }
+
+        internal string StateId(Widget widget, string suffix, string path) {
+            string keyPart = widget != null && widget.Key != null ? "key:" + widget.Key : "path:" + path;
             return MountId + ":" + keyPart + ":" + suffix;
         }
 
@@ -72,6 +82,7 @@ namespace MaximumUI {
         public string[] Items;
         public System.Action<int> Callback;
         public int MaxVisibleItems = 8;
+        internal Dialog ModalDialog;
     }
 
     internal sealed class ContextMenuState {

@@ -26,6 +26,8 @@ namespace MaximumUI {
         public float PanelPadding = 4f;
         public float FoldoutIndent = 12f;
         public float TextWidth = 7f;
+        public System.Func<string, float> MeasureText;
+        public System.Func<string, float, float> MeasureWrappedTextHeight;
     }
 
     public sealed class LayoutNode {

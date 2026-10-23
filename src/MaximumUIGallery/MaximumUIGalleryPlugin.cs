@@ -10,7 +10,7 @@ namespace MaximumUIGallery {
     [BepInPlugin(GUID, "MaximumUI Gallery", Version)]
     public sealed class MaximumUIGalleryPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MaximumUIGallery";
-        public const string Version = "0.1.0";
+        public const string Version = "0.1.1";
 
         private const string MountId = GUID + ".main";
 
@@ -23,7 +23,8 @@ namespace MaximumUIGallery {
                     Visible = true,
                     HasToggleKey = true,
                     ToggleKey = KeyCode.F8,
-                    SortOrder = 500
+                    SortOrder = 500,
+                    BuildEveryFrame = false
                 });
         }
 
@@ -78,6 +79,7 @@ namespace MaximumUIGallery {
     }
 
     internal sealed class GalleryView : StatefulView<GalleryState> {
+        private float nextMetricsRefresh;
         private readonly string[] modes = { "Normal", "Compact", "Expanded", "Debug" };
         private readonly string[] samples = {
             "First item",
@@ -101,6 +103,13 @@ namespace MaximumUIGallery {
 
         public GalleryView()
             : base(new GalleryState()) {
+        }
+
+        public override void Update(BuildContext context) {
+            if (State.Tab == 4 && Time.unscaledTime >= nextMetricsRefresh) {
+                nextMetricsRefresh = Time.unscaledTime + 0.25f;
+                MaximumUIRuntime.MarkDirty(this);
+            }
         }
 
         public override Widget Build(BuildContext context) {
@@ -132,12 +141,12 @@ namespace MaximumUIGallery {
                     }, key: "show-debug-tab") {
                         ButtonWidth = 24f
                     })
-                    .Content(new Tab("Controls").Content(BuildControlsTab(context)))
-                    .Content(new Tab("Layout").Content(BuildLayoutTab()))
-                    .Content(new Tab("Dialogs").Content(BuildDialogsTab(context)))
+                    .Content(new Tab("Controls").Content(State.Tab == 0 ? BuildControlsTab(context) : MUI.Empty))
+                    .Content(new Tab("Layout").Content(State.Tab == 1 ? BuildLayoutTab() : MUI.Empty))
+                    .Content(new Tab("Dialogs").Content(State.Tab == 2 ? BuildDialogsTab(context) : MUI.Empty))
                     .Content(new Tab("Style") {
                         Unsaved = true
-                    }.Content(BuildStyleTab()))
+                    }.Content(State.Tab == 3 ? BuildStyleTab() : MUI.Empty))
                     .Content(new Tab("Debug") {
                         Closable = true,
                         Visible = State.ShowDebugTab,
@@ -147,7 +156,7 @@ namespace MaximumUIGallery {
                                 if (s.Tab > 3) s.Tab = 3;
                             });
                         }
-                    }.Content(BuildDebugTab(context)))
+                    }.Content(State.Tab == 4 ? BuildDebugTab(context) : MUI.Empty))
                     .Content(new TrailingTabButton("Log", delegate {
                         DebugLog.Info("Trailing tab button " + State.ClickCount.ToString());
                         SetState(delegate(GalleryState s) { s.ClickCount++; });

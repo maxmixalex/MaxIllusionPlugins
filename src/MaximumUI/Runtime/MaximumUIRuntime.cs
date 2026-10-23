@@ -14,7 +14,7 @@ namespace MaximumUI {
             public UiShortcutRouter Shortcuts = new UiShortcutRouter();
             public ImguiRenderer Renderer = new ImguiRenderer();
             public DialogService Dialogs = new DialogService();
-            public bool Dirty = true;
+            public readonly ViewBuildSchedule BuildSchedule = new ViewBuildSchedule();
             public Widget CachedRoot;
             public BuildContext BuildContext;
             public RenderContext RenderContext;
@@ -48,7 +48,7 @@ namespace MaximumUI {
             };
             mount.BuildContext = new BuildContext {
                 MountId = id,
-                Theme = mount.Options.Theme ?? MaximumTheme.ExpressionLight,
+                Theme = mount.Options.Theme ?? MaximumTheme.CleanLight,
                 StateStore = mount.StateStore,
                 Query = mount.QueryStore,
                 Navigation = mount.Navigation,
@@ -61,25 +61,41 @@ namespace MaximumUI {
                 StateStore = mount.StateStore,
                 Query = mount.QueryStore,
                 Navigation = mount.Navigation,
-                Dialogs = mount.Dialogs
+                Dialogs = mount.Dialogs,
+                CacheLayout = true,
+                SoftMouseCapture = mount.Options.SoftMouseCapture,
+                SoftKeyboardCapture = mount.Options.SoftKeyboardCapture
             };
+            mount.Dialogs.Theme = mount.BuildContext.Theme;
             mounts.Add(mount);
             SortMounts();
-            view.OnMount(mount.BuildContext);
+            try {
+                view.OnMount(mount.BuildContext);
+            } catch {
+                mounts.Remove(mount);
+                mount.Renderer.Dispose();
+                throw;
+            }
         }
 
         public static void Unmount(string id) {
             for (int i = mounts.Count - 1; i >= 0; i--) {
                 if (!string.Equals(mounts[i].Id, id, StringComparison.Ordinal)) continue;
 
-                mounts[i].View.OnUnmount(mounts[i].BuildContext);
+                MountRecord mount = mounts[i];
                 mounts.RemoveAt(i);
+                try {
+                    mount.View.OnUnmount(mount.BuildContext);
+                } finally {
+                    mount.Renderer.Dispose();
+                    mount.StateStore.Clear();
+                }
             }
         }
 
         public static void MarkDirty(View view) {
             for (int i = 0; i < mounts.Count; i++) {
-                if (mounts[i].View == view) mounts[i].Dirty = true;
+                if (mounts[i].View == view) mounts[i].BuildSchedule.MarkDirty();
             }
         }
 
@@ -100,28 +116,47 @@ namespace MaximumUI {
         }
 
         public static void OnGUI() {
-            frameCount++;
+            frameCount = Time.frameCount;
+            IsMouseOverAnyWindow = false;
             IsAnyTextFieldFocused = false;
+            IsModalOpen = false;
+            int modalMount = -1;
             for (int i = 0; i < mounts.Count; i++) {
                 MountRecord mount = mounts[i];
                 if (!mount.Options.Visible) continue;
 
                 mount.BuildContext.IsModalOpen = mount.Dialogs.HasOpenDialogs;
-                if (mount.Options.BuildEveryOnGUI || mount.Dirty || mount.CachedRoot == null) {
+                if (mount.BuildSchedule.ShouldBuild(mount.Options, frameCount, mount.CachedRoot != null)) {
+                    int revision = mount.BuildSchedule.Revision;
                     mount.Shortcuts.BeginBuild();
                     mount.CachedRoot = mount.View.Build(mount.BuildContext);
-                    mount.Dirty = false;
+                    mount.Renderer.InvalidateLayout();
+                    mount.BuildSchedule.CompleteBuild(frameCount, revision);
                 }
+                if (mount.Dialogs.HasOpenDialogs || WidgetVisibility.ContainsRootDialog(mount.CachedRoot, mount.RenderContext, "0")) modalMount = i;
+            }
 
-                mount.RenderContext.Path = string.Empty;
-                mount.RenderContext.IsModalOpen = mount.Dialogs.HasOpenDialogs;
-                mount.BuildContext.IsModalOpen = mount.RenderContext.IsModalOpen;
-                mount.Renderer.Render(mount.CachedRoot, mount.RenderContext);
-                mount.BuildContext.IsMouseOverMaximumUI = IsMouseOverAnyWindow;
+            // A modal owns input across all mounts and is painted above other windows.
+            IsModalOpen = modalMount >= 0;
+            for (int i = 0; i < mounts.Count; i++) {
+                if (i != modalMount) RenderMount(mounts[i], modalMount >= 0, false);
+            }
+            if (modalMount >= 0) RenderMount(mounts[modalMount], true, true);
+            for (int i = 0; i < mounts.Count; i++) {
+                mounts[i].BuildContext.IsMouseOverMaximumUI = IsMouseOverAnyWindow;
             }
 
             if (RouteNavigation()) return;
             RouteShortcuts();
+        }
+
+        private static void RenderMount(MountRecord mount, bool modalOpen, bool ownsModal) {
+            if (!mount.Options.Visible) return;
+            mount.RenderContext.Path = string.Empty;
+            mount.RenderContext.IsModalOpen = modalOpen;
+            mount.RenderContext.SuppressDialogs = modalOpen && !ownsModal;
+            mount.BuildContext.IsModalOpen = modalOpen;
+            mount.Renderer.Render(mount.CachedRoot, mount.RenderContext);
         }
 
         public static RuntimeMetrics GetMetrics() {
@@ -168,6 +203,7 @@ namespace MaximumUI {
             for (int i = mounts.Count - 1; i >= 0; i--) {
                 MountRecord mount = mounts[i];
                 if (mount.Options == null || !mount.Options.Visible || mount.Navigation == null || mount.Navigation.Count == 0) continue;
+                if (mount.RenderContext.SuppressDialogs) continue;
 
                 bool moved = current.shift ? mount.Navigation.FocusPrevious() : mount.Navigation.FocusNext();
                 if (!moved) continue;
@@ -182,6 +218,7 @@ namespace MaximumUI {
         }
 
         private static void RouteShortcuts() {
+            if (IsModalOpen) return;
             Event current = Event.current;
             if (current == null || current.type != EventType.KeyDown) return;
 

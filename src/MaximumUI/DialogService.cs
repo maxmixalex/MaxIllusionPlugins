@@ -10,6 +10,7 @@ namespace MaximumUI {
         private const float DialogButtonHeight = 24f;
 
         private readonly List<Dialog> dialogs = new List<Dialog>();
+        public MaximumTheme Theme;
 
         public IList<Dialog> Dialogs {
             get { return dialogs; }
@@ -32,7 +33,7 @@ namespace MaximumUI {
                 new HStack(gap: 6f) {
                     new Spacer(),
                     new Button("确定", delegate {
-                        CloseTop();
+                        Close(dialog);
                     }).Width(72f)
                 }
             });
@@ -53,15 +54,14 @@ namespace MaximumUI {
                 new HStack(gap: 6f) {
                     new Spacer(),
                     new Button("取消", delegate {
-                        if (onCancel != null) onCancel();
-                        CloseTop();
+                        Close(dialog);
                     }).Width(72f),
                     new Button("确定", delegate {
-                        if (onConfirm != null) onConfirm();
-                        CloseTop();
+                        Complete(dialog, onConfirm);
                     }).Width(72f)
                 }
             });
+            dialog.OnClose = onCancel;
             Show(dialog);
         }
 
@@ -90,11 +90,27 @@ namespace MaximumUI {
         }
 
         public void CloseAll() {
-            while (dialogs.Count > 0) CloseTop();
+            Dialog[] closing = dialogs.ToArray();
+            dialogs.Clear();
+            Exception firstError = null;
+            for (int i = closing.Length - 1; i >= 0; i--) {
+                try {
+                    if (closing[i].OnClose != null) closing[i].OnClose();
+                } catch (Exception error) {
+                    if (firstError == null) firstError = error;
+                }
+            }
+            if (firstError != null) throw firstError;
         }
 
-        private static float MeasureDialogWidth(string message, int buttonCount) {
-            int fontSize = MaximumTheme.ExpressionLight.FontSize;
+        internal void Complete(Dialog dialog, Action result) {
+            if (dialog == null || !dialogs.Remove(dialog)) return;
+            // Remove the originating dialog first; the callback may open another one.
+            if (result != null) result();
+        }
+
+        private float MeasureDialogWidth(string message, int buttonCount) {
+            int fontSize = (Theme ?? MaximumTheme.CleanLight).FontSize;
             float contentWidth = EstimateMessageWidth(message, fontSize);
             float buttonWidth = Mathf.Max(0, buttonCount) * 78f + Mathf.Max(0, buttonCount - 1) * 6f;
             float width = Mathf.Max(MinDialogWidth, Mathf.Max(contentWidth + DialogPadding, buttonWidth + DialogPadding));
@@ -108,8 +124,8 @@ namespace MaximumUI {
             return Mathf.Max(108f, height);
         }
 
-        private static float MeasureMessageHeight(string message, float dialogWidth) {
-            int fontSize = MaximumTheme.ExpressionLight.FontSize;
+        private float MeasureMessageHeight(string message, float dialogWidth) {
+            int fontSize = (Theme ?? MaximumTheme.CleanLight).FontSize;
             int lines = CountWrappedLines(message, Mathf.Max(1f, dialogWidth - DialogPadding), fontSize);
             return Mathf.Max(22f, lines * (fontSize + 6f));
         }

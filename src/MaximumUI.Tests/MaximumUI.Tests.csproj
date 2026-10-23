@@ -2,10 +2,19 @@
   <PropertyGroup>
     <TargetFramework>net461</TargetFramework>
     <OutputType>Library</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
     <ImplicitUsings>false</ImplicitUsings>
     <Nullable>disable</Nullable>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
   </ItemGroup>
+  <Target Name="CopyHeadlessUnityReference" AfterTargets="Build">
+    <ItemGroup>
+      <HeadlessUnityReference Include="@(ReferencePath)" Condition="'%(ReferencePath.Filename)' == 'UnityEngine'" />
+    </ItemGroup>
+    <!-- Only this test directory needs the reference for managed enums/struct
+         signatures. It is not a Unity runtime or a distributable plugin. -->
+    <Copy SourceFiles="@(HeadlessUnityReference)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

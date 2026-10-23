@@ -42,7 +42,7 @@ namespace MaximumUI {
         }
 
         public void Register(Widget widget, string path, MuiRect rect, bool enabled) {
-            if (widget == null || widget is EmptyWidget) return;
+            if (widget == null || widget is EmptyWidget || !enabled || !widget.Enabled || !widget.Focusable) return;
 
             string id = ItemId(widget, path);
             NavigationItem item = new NavigationItem {

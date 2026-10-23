@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaximumUI {
-    public sealed class UnityPainter {
+    public sealed class UnityPainter : IDisposable {
         private readonly Texture2D white;
         private readonly Stack<MuiVec2> clipOrigins = new Stack<MuiVec2>();
         private MuiVec2 clipOrigin;
@@ -12,12 +12,17 @@ namespace MaximumUI {
             white = Textures.Solid(Color.white);
         }
 
+        public void Dispose() {
+            if (white != null) UnityEngine.Object.Destroy(white);
+        }
+
         public void Paint(DrawList drawList) {
-            if (drawList == null) return;
+            if (drawList == null || Event.current == null || !GuiEventPolicy.ShouldPaint(Event.current.type)) return;
 
             clipOrigins.Clear();
             clipOrigin = new MuiVec2(0f, 0f);
-            for (int i = 0; i < drawList.Commands.Count; i++) {
+            try {
+              for (int i = 0; i < drawList.Commands.Count; i++) {
                 DrawCommand command = drawList.Commands[i];
                 if (command == null) continue;
 
@@ -55,6 +60,13 @@ namespace MaximumUI {
                 } else if (command.Type == DrawCommandType.Image) {
                     DrawTexture(command.Rect, command.Resource as Texture, command.Color);
                 }
+              }
+            } finally {
+                // A malformed/custom draw command must not leave the whole plugin UI clipped.
+                while (clipOrigins.Count > 0) {
+                    GUI.EndClip();
+                    clipOrigin = clipOrigins.Pop();
+                }
             }
         }
 
@@ -86,8 +98,6 @@ namespace MaximumUI {
         }
 
         private void DrawLine(MuiVec2 start, MuiVec2 end, MuiColor color, float thickness) {
-            start = ToPointRelative(start);
-            end = ToPointRelative(end);
             float dx = end.X - start.X;
             float dy = end.Y - start.Y;
             float length = Mathf.Sqrt(dx * dx + dy * dy);
@@ -96,6 +106,9 @@ namespace MaximumUI {
                 DrawTexture(new MuiRect(start.X, start.Y, size, size), white, color);
                 return;
             }
+
+            start = ToPointRelative(start);
+            end = ToPointRelative(end);
 
             float t = thickness <= 0f ? 1f : thickness;
             Matrix4x4 oldMatrix = GUI.matrix;
@@ -118,12 +131,13 @@ namespace MaximumUI {
         private void StrokeCircle(MuiVec2 center, float radius, MuiColor color, float thickness, int segments) {
             if (radius <= 0f) return;
             int count = Mathf.Clamp(segments <= 0 ? 32 : segments, 8, 128);
-            MuiVec2[] points = new MuiVec2[count + 1];
-            for (int i = 0; i <= count; i++) {
+            MuiVec2 previous = new MuiVec2(center.X + radius, center.Y);
+            for (int i = 1; i <= count; i++) {
                 float angle = (float)(Math.PI * 2.0 * i / count);
-                points[i] = new MuiVec2(center.X + Mathf.Cos(angle) * radius, center.Y + Mathf.Sin(angle) * radius);
+                MuiVec2 next = new MuiVec2(center.X + Mathf.Cos(angle) * radius, center.Y + Mathf.Sin(angle) * radius);
+                DrawLine(previous, next, color, thickness);
+                previous = next;
             }
-            DrawPolyline(points, color, thickness);
         }
 
         private void FillCircle(MuiVec2 center, float radius, MuiColor color) {
@@ -137,11 +151,9 @@ namespace MaximumUI {
         }
 
         private void FillTriangle(MuiVec2 a, MuiVec2 b, MuiVec2 c, MuiColor color) {
-            MuiVec2[] points = new MuiVec2[] { a, b, c };
-            Array.Sort(points, CompareY);
-            a = points[0];
-            b = points[1];
-            c = points[2];
+            if (a.Y > b.Y) Swap(ref a, ref b);
+            if (b.Y > c.Y) Swap(ref b, ref c);
+            if (a.Y > b.Y) Swap(ref a, ref b);
 
             int minY = Mathf.FloorToInt(a.Y);
             int maxY = Mathf.CeilToInt(c.Y);
@@ -169,36 +181,31 @@ namespace MaximumUI {
             }
         }
 
-        private static int CompareY(MuiVec2 a, MuiVec2 b) {
-            return a.Y.CompareTo(b.Y);
+        private static void Swap(ref MuiVec2 a, ref MuiVec2 b) {
+            MuiVec2 temp = a;
+            a = b;
+            b = temp;
         }
 
         private static bool TriangleScanline(MuiVec2 a, MuiVec2 b, MuiVec2 c, float y, out float x1, out float x2) {
             x1 = 0f;
             x2 = 0f;
-            float[] xs = new float[3];
             int count = 0;
-            AddIntersection(a, b, y, xs, ref count);
-            AddIntersection(b, c, y, xs, ref count);
-            AddIntersection(c, a, y, xs, ref count);
-            if (count < 2) return false;
-            x1 = xs[0];
-            x2 = xs[1];
-            if (count > 2) {
-                x1 = Mathf.Min(x1, xs[2]);
-                x2 = Mathf.Max(x2, xs[2]);
-            }
-            return true;
+            AddIntersection(a, b, y, ref x1, ref x2, ref count);
+            AddIntersection(b, c, y, ref x1, ref x2, ref count);
+            AddIntersection(c, a, y, ref x1, ref x2, ref count);
+            return count >= 2;
         }
 
-        private static void AddIntersection(MuiVec2 a, MuiVec2 b, float y, float[] xs, ref int count) {
-            if (count >= xs.Length) return;
+        private static void AddIntersection(MuiVec2 a, MuiVec2 b, float y, ref float x1, ref float x2, ref int count) {
             if (Mathf.Abs(a.Y - b.Y) <= 0.0001f) return;
             float min = Mathf.Min(a.Y, b.Y);
             float max = Mathf.Max(a.Y, b.Y);
             if (y < min || y >= max) return;
             float t = (y - a.Y) / (b.Y - a.Y);
-            xs[count++] = a.X + (b.X - a.X) * t;
+            float x = a.X + (b.X - a.X) * t;
+            if (count++ == 0) x1 = x2 = x;
+            else { x1 = Mathf.Min(x1, x); x2 = Mathf.Max(x2, x); }
         }
 
         private static MuiVec2 Cubic(MuiVec2 p1, MuiVec2 p2, MuiVec2 p3, MuiVec2 p4, float t) {

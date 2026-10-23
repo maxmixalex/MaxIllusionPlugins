@@ -29,8 +29,8 @@ namespace MaximumUI {
                 padding = new RectOffset(4, 4, 4, 4)
             };
             selectedState = new GUIStyleState {
-                textColor = Color.white,
-                background = Theme.Gray
+                textColor = Theme.ComboBoxItem.hover.textColor,
+                background = Theme.ButtonHover
             };
             normalState = new GUIStyleState {
                 textColor = Color.black,
@@ -180,14 +180,17 @@ namespace MaximumUI {
         private int DrawItems() {
             Event current = Event.current;
             int count = items == null ? 0 : items.Length;
-            for (int i = 0; i < count; i++) {
+            int first = 0;
+            int end = count;
+            if (scroll) ScrollGeometry.VisibleRows(scrollPosition.y, scrollViewRect.height, itemHeight, count, out first, out end);
+            for (int i = first; i < end; i++) {
                 Rect row = new Rect(itemRect.x, itemRect.y + itemHeight * i, itemRect.width, itemHeight);
                 bool hover = current != null && row.Contains(current.mousePosition);
                 if (current == null || current.type == EventType.Repaint) {
                     selectionStyle.Draw(row, items[i] ?? string.Empty, hover, false, false, false);
                 }
 
-                if (hover && current != null && current.type == EventType.MouseDown && current.button == 0) {
+                if (GUI.enabled && hover && current != null && current.type == EventType.MouseDown && current.button == 0) {
                     current.Use();
                     return i;
                 }

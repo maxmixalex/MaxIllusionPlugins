@@ -79,7 +79,8 @@ namespace MaximumUI {
             else if (widget is Table) ArrangeTable(node, (Table)widget, rect);
             else if (widget is TableRow) ArrangeHStack(node, 1f, rect);
             else if (widget is TableCell) ArrangePanel(node, rect);
-            else if (widget is ScrollView) ArrangeStackChildren(node, rect, 0f);
+            else if (widget is ScrollView) ArrangeStackChildren(node,
+                new MuiRect(rect.X, rect.Y, Math.Max(1f, rect.Width - 16f), rect.Height), 0f);
             else if (widget is Foldout) ArrangeFoldout(node, (Foldout)widget, rect);
             else if (widget is CollapsingHeader) ArrangeCollapsingHeader(node, ((CollapsingHeader)widget).Open, rect);
             else if (widget is ClosableCollapsingHeader) ArrangeCollapsingHeader(node, ((ClosableCollapsingHeader)widget).Open && ((ClosableCollapsingHeader)widget).Visible, rect);
@@ -194,7 +195,11 @@ namespace MaximumUI {
         }
 
         private void MeasureScrollView(LayoutNode node, ScrollView scrollView, LayoutConstraints constraints) {
-            MeasureChildren(node, scrollView, constraints, true);
+            // Content has unbounded vertical space. Measuring it against the viewport
+            // previously clamped nested stacks and made their last rows unreachable.
+            LayoutConstraints contentConstraints = new LayoutConstraints(0f,
+                Math.Max(1f, constraints.MaxWidth - 16f), 0f, float.PositiveInfinity);
+            MeasureChildren(node, scrollView, contentConstraints, true);
             MuiVec2 content = MeasureStackSize(node, 0f);
             float height = scrollView.Height > 0f ? scrollView.Height : content.Y;
             node.DesiredSize = new MuiVec2(content.X, height);
@@ -290,6 +295,15 @@ namespace MaximumUI {
             Label label = widget as Label;
             if (label != null) {
                 width = MeasureText(label.Text);
+                if (label.WordWrap) {
+                    float wrapWidth = widget.Layout.HasWidth ? widget.Layout.Width : constraints.MaxWidth;
+                    if (widget.Layout.HasMaxWidth) wrapWidth = Math.Min(wrapWidth, widget.Layout.MaxWidth);
+                    if (wrapWidth > 0f && !float.IsInfinity(wrapWidth)) {
+                        height = metrics.MeasureWrappedTextHeight != null
+                            ? Math.Max(metrics.RowHeight, metrics.MeasureWrappedTextHeight(label.Text, wrapWidth))
+                            : Math.Max(metrics.RowHeight, (float)Math.Ceiling(width / wrapWidth) * metrics.RowHeight);
+                    }
+                }
             } else if (widget is BulletText) {
                 BulletText bulletText = (BulletText)widget;
                 width = MeasureText(bulletText.Text) + 22f;
@@ -478,7 +492,7 @@ namespace MaximumUI {
             if (layout.Orientation == TwoPaneOrientation.Horizontal) {
                 float available = Math.Max(0f, rect.Width - splitter);
                 float firstWidth = available * ratio;
-                firstWidth = Math.Max(layout.MinFirst, Math.Min(firstWidth, Math.Max(layout.MinFirst, available - layout.MinSecond)));
+                firstWidth = FitSplit(firstWidth, available, layout.MinFirst, layout.MinSecond);
                 Arrange(node.Children[0], new MuiRect(rect.X, rect.Y, firstWidth, rect.Height));
                 if (node.Children.Count > 1) {
                     Arrange(node.Children[1], new MuiRect(rect.X + firstWidth + splitter, rect.Y, Math.Max(0f, rect.Width - firstWidth - splitter), rect.Height));
@@ -486,12 +500,21 @@ namespace MaximumUI {
             } else {
                 float available = Math.Max(0f, rect.Height - splitter);
                 float firstHeight = available * ratio;
-                firstHeight = Math.Max(layout.MinFirst, Math.Min(firstHeight, Math.Max(layout.MinFirst, available - layout.MinSecond)));
+                firstHeight = FitSplit(firstHeight, available, layout.MinFirst, layout.MinSecond);
                 Arrange(node.Children[0], new MuiRect(rect.X, rect.Y, rect.Width, firstHeight));
                 if (node.Children.Count > 1) {
                     Arrange(node.Children[1], new MuiRect(rect.X, rect.Y + firstHeight + splitter, rect.Width, Math.Max(0f, rect.Height - firstHeight - splitter)));
                 }
             }
+        }
+
+        private static float FitSplit(float desired, float available, float firstMinimum, float secondMinimum) {
+            float first = Math.Max(0f, firstMinimum);
+            float second = Math.Max(0f, secondMinimum);
+            if (first + second > available) {
+                return first + second > 0f ? available * first / (first + second) : 0f;
+            }
+            return Math.Max(first, Math.Min(desired, available - second));
         }
 
         private void ArrangeGrid(LayoutNode node, Grid grid, MuiRect rect) {
@@ -797,6 +820,7 @@ namespace MaximumUI {
 
         private float MeasureText(string text) {
             if (string.IsNullOrEmpty(text)) return 12f;
+            if (metrics.MeasureText != null) return Math.Max(12f, metrics.MeasureText(text));
             return Math.Max(12f, text.Length * metrics.TextWidth);
         }
 
