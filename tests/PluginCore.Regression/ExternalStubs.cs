@@ -22,10 +22,13 @@ namespace UnityEngine {
         }
         public static bool GetKeyDown(string key) { return GetKey(key); }
     }
-    public static class Time { public static float deltaTime = 0.02f; }
+    public static class Time { public static float deltaTime = 0.02f, unscaledTime; }
+    public static class Debug { public static void LogException(Exception error) { } }
     public static class Screen { public static int width = 1280; }
     public static class Mathf {
         public static int Clamp(int value, int min, int max) { return Math.Max(min, Math.Min(max, value)); }
+        public static float Clamp(float value, float min, float max) { return Math.Max(min, Math.Min(max, value)); }
+        public static int Min(int a, int b) { return Math.Min(a, b); }
         public static float Abs(float value) { return Math.Abs(value); }
         public static float Lerp(float from, float to, float t) { return from + (to - from) * Math.Max(0f, Math.Min(1f, t)); }
         public static float Log10(float value) { return (float)Math.Log10(value); }
@@ -33,6 +36,7 @@ namespace UnityEngine {
 }
 
 public class ChaControl : UnityEngine.MonoBehaviour {
+    public readonly CharacterFile chaFile = new CharacterFile();
     public bool hiPoly = true;
     public byte tearsLv;
     public readonly CharacterStatus fileStatus = new CharacterStatus();
@@ -56,7 +60,11 @@ public class ChaControl : UnityEngine.MonoBehaviour {
     public void ChangeEyesBlinkFlag(bool value) { Blink = value; }
     public object GetComponent(Type type) { return null; }
 }
+public class CharacterFile { public readonly CharacterParameter parameter = new CharacterParameter(); }
+public class CharacterParameter { public int sex = 1; public string fullname = "Test Character"; }
 public class FaceBlendShapes {
+    public readonly BlinkController BlinkCtrl = new BlinkController();
+    public class BlinkController { public float BlinkFrequency = 30f, BaseSpeed = 0.15f; }
     public readonly BlendShape EyebrowCtrl = new BlendShape(), EyesCtrl = new BlendShape(), MouthCtrl = new BlendShape();
     public class BlendShape { public void CalculateBlendShape() { } }
 }

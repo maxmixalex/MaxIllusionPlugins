@@ -43,6 +43,7 @@ namespace ClothingCompression {
         internal int SelectedIndex { get { return selectedIndex; } set { selectedIndex = Mathf.Clamp(value, 0, Math.Max(0, entries.Count - 1)); } }
         internal DeformationEntry Selected { get { return entries.Count == 0 ? null : entries[Mathf.Clamp(selectedIndex, 0, entries.Count - 1)]; } }
         internal bool Dirty { get; private set; }
+        internal int CatalogRevision { get; private set; }
         internal string Status { get; private set; } = string.Empty;
         internal string CharacterIdentityKey {
             get {
@@ -56,18 +57,22 @@ namespace ClothingCompression {
         internal string MakeCoordinateKey(int coordinate) { return CharacterIdentityKey + ":coord:" + coordinate; }
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState) {
+            CatalogRevision++;
             itemFrame = -1;
             ClearMeshes();
             if (!maintainState) LoadLibraryEntries();
+            else ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             RequestApply(0.6f);
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode) { }
 
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate, bool maintainState) {
+            CatalogRevision++;
             itemFrame = -1;
             ClearMeshes();
             if (!maintainState) LoadLibraryEntries();
+            else ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             RequestApply(0.3f);
         }
 
@@ -78,7 +83,9 @@ namespace ClothingCompression {
             string equipment = string.Join("|", items.Select(x => x.Key + "@" + x.Slot).OrderBy(x => x).ToArray());
             if (equipment != equipmentSignature) {
                 equipmentSignature = equipment;
+                CatalogRevision++;
                 if (!Dirty) { LoadLibraryEntries(); RequestApply(0.2f); return; }
+                ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             }
             if (entries.Count > 0 && pendingApply == null) {
                 string renderers = GetRendererSignature();
@@ -148,6 +155,7 @@ namespace ClothingCompression {
                 Dirty = false;
                 Status = count == 0 ? "没有可保存的已绑定形变。" : "已保存 " + count + " 个形变到 " + ClothingCompressionPlugin.Library.Path;
                 ClothingCompressionPlugin.Log.LogMessage(Status);
+                ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
                 return count;
             } catch (Exception ex) {
                 Status = "保存失败，当前编辑已保留；请检查 XML 文件和日志，修复后重载。";

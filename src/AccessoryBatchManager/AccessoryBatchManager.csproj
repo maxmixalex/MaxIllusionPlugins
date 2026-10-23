@@ -6,9 +6,12 @@
     <Company>MaxMixAlex</Company>
     <Product>Accessory Batch Manager</Product>
     <AssemblyTitle>Accessory Batch Manager</AssemblyTitle>
-    <Version>0.6.4</Version>
-    <AssemblyVersion>0.6.4.0</AssemblyVersion>
+    <Version>0.7.0</Version>
+    <AssemblyVersion>0.7.0.0</AssemblyVersion>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BepInEx.Core" />
     <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />

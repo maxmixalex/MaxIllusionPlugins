@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using BepInEx;
+using BepInEx.Configuration;
 using MaximumUI;
 using UnityEngine;
 
@@ -10,26 +11,41 @@ namespace MaximumUIGallery {
     [BepInPlugin(GUID, "MaximumUI Gallery", Version)]
     public sealed class MaximumUIGalleryPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MaximumUIGallery";
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         private const string MountId = GUID + ".main";
+        private ConfigEntry<KeyboardShortcut> shortcut;
+        private GalleryView view;
 
         private void Awake() {
+            shortcut = Config.Bind("General", "Show gallery", new KeyboardShortcut(KeyCode.F10), "Show or hide the MaximumUI Gallery.");
+            bool show = Config.Bind("General", "Show on startup", false, "Open the optional Gallery when the plugin starts.").Value;
+            view = new GalleryView { ShortcutText = shortcut.Value.ToString() };
+            shortcut.SettingChanged += OnShortcutChanged;
             MaximumUIRuntime.EnsureHost();
             MaximumUIRuntime.Mount(
                 MountId,
-                new GalleryView(),
+                view,
                 new MountOptions {
-                    Visible = true,
-                    HasToggleKey = true,
-                    ToggleKey = KeyCode.F8,
+                    Visible = show,
                     SortOrder = 500,
                     BuildEveryFrame = false,
                     Theme = MaximumTheme.MetroDark
                 });
         }
 
+        private void Update() {
+            if (!MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen && shortcut.Value.IsDown())
+                MaximumUIRuntime.SetVisible(MountId, !MaximumUIRuntime.IsVisible(MountId));
+        }
+
+        private void OnShortcutChanged(object sender, EventArgs args) {
+            view.ShortcutText = shortcut.Value.ToString();
+            MaximumUIRuntime.MarkDirty(view);
+        }
+
         private void OnDestroy() {
+            if (shortcut != null) shortcut.SettingChanged -= OnShortcutChanged;
             MaximumUIRuntime.Unmount(MountId);
         }
     }
@@ -85,6 +101,7 @@ namespace MaximumUIGallery {
     }
 
     internal sealed class GalleryView : StatefulView<GalleryState> {
+        public string ShortcutText = "F10";
         private float nextMetricsRefresh;
         private MaximumTheme ownedTheme;
         private string[] largeItems;
@@ -183,7 +200,7 @@ namespace MaximumUIGallery {
                 new Separator(),
                 new HStack(gap: 12f) {
                     new Label(State.Status) { Role = LabelRole.Muted }.ExpandWidth(),
-                    new Label("F8  show / hide     Ctrl+1..6  navigate") { Role = LabelRole.Muted }.Width(295f)
+                    new Label(ShortcutText + "  show / hide     Ctrl+1..6  navigate") { Role = LabelRole.Muted }.Width(295f)
                 }.Height(RowHeight)
             }.ExpandHeight());
         }

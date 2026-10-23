@@ -585,7 +585,7 @@ namespace MaximumUI {
 
         private void RenderTwoPaneLayoutAt(LayoutNode node, TwoPaneLayout widget, RenderContext context, Vector2 offset) {
             RenderLayoutChildren(node, context, offset);
-            if (node.Children.Count < 2) return;
+            if (LayoutEngine.FlowChildCount(node) < 2) return;
 
             Rect first = OffsetRect(node.Children[0].Rect, offset);
             Rect second = OffsetRect(node.Children[1].Rect, offset);
@@ -1679,7 +1679,10 @@ namespace MaximumUI {
             ScrollViewState state = context.StateStore.GetOrCreate<ScrollViewState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
             Rect viewRect = CalculateScrollViewRect(node, rect);
-            state.Position = BeginScrollView(context, rect, state.Position, viewRect, widget.AlwaysShowHorizontal, widget.AlwaysShowVertical);
+            Vector2 before = widget.ScrollPosition == null ? state.Position : widget.ScrollPosition.Resolve(
+                ToMuiRect(rect), ToMuiRect(viewRect), widget.AlwaysShowHorizontal, widget.AlwaysShowVertical);
+            state.Position = BeginScrollView(context, rect, before, viewRect, widget.AlwaysShowHorizontal, widget.AlwaysShowVertical);
+            if (widget.ScrollPosition != null) widget.ScrollPosition.Publish(before, state.Position, GUI.enabled && !IsInputBlockedByDialog());
             try {
                 RenderLayoutChildren(node, context, new Vector2(-node.Rect.X, -node.Rect.Y));
             } finally {
@@ -2329,7 +2332,10 @@ namespace MaximumUI {
                 DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
             }
 
-            state.Position = BeginScrollView(context, rect, state.Position, viewRect, false, widget.AlwaysShowVertical || totalHeight > rect.height);
+            bool vertical = widget.AlwaysShowVertical || totalHeight > rect.height;
+            Vector2 before = widget.ScrollPosition == null ? state.Position : widget.ScrollPosition.Resolve(ToMuiRect(rect), ToMuiRect(viewRect), false, vertical);
+            state.Position = BeginScrollView(context, rect, before, viewRect, false, vertical);
+            if (widget.ScrollPosition != null) widget.ScrollPosition.Publish(before, state.Position, GUI.enabled && !IsInputBlockedByDialog());
             try {
                 int first;
                 int last;

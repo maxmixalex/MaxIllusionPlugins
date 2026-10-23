@@ -41,7 +41,7 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -p 'test_package*.py' -v 2>&1 | tee artifacts/logs/packaging-tests.log
 
       - name: Restore public compilation references
-        run: dotnet restore MaxIllusionPlugins.sln 2>&1 | tee artifacts/logs/restore.log
+        run: dotnet restore MaxIllusionPlugins.sln -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/restore.log
 
       - name: Rebuild all production and regression projects
         run: dotnet build MaxIllusionPlugins.sln -c Release --no-restore -t:Rebuild -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/build.log
@@ -49,10 +49,10 @@ jobs:
       - name: Execute assertions and managed performance benchmark
         run: python3 scripts/test.py --no-build --benchmark 2>&1 | tee artifacts/logs/regression-tests.log
 
-      - name: Build actual Gallery preview exporter
+      - name: Build actual UI preview exporter
         run: dotnet build tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/preview-build.log
 
-      - name: Export Metro previews from built Gallery
+      - name: Export Metro Gallery and plugin previews
         run: dotnet run --project tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release --no-build -- bin/Release/MaximumUIGallery/KK_MaximumUIGallery.dll artifacts/previews 2>&1 | tee artifacts/logs/previews.log
 
       - name: Package installable plugins
@@ -67,7 +67,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: Upload real Gallery drawing previews
+      - name: Upload real UI drawing previews
         id: previews
         uses: actions/upload-artifact@v7
         with:

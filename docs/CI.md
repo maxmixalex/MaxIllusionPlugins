@@ -14,10 +14,10 @@
 | 产物 | 内容 |
 | --- | --- |
 | `plugin-packages-…` | 五个功能插件单独的安装 ZIP、五插件合集、独立 Gallery ZIP、安装说明和程序集版本清单 |
-| `maximumui-previews-…` | 从本次真实 Gallery DLL 导出的 Metro Dark / Light SVG；可以在浏览器中打开 |
+| `maximumui-previews-…` | 真实 Gallery 的 Metro Dark / Light SVG，以及四个插件实际控件树的匿名示例预览；可以在浏览器中打开 |
 | `build-test-logs-…` | 还原、编译、真实断言测试、托管微基准、预览和打包日志；失败时也会上传已生成的日志 |
 
-独立 Gallery 不随五插件合集安装，需要测试控件时再安装其单独包；快捷键可在 Gallery 配置中调整。产物保留 30 天；过期后可从新的运行下载。
+独立 Gallery 不随五插件合集安装，需要测试控件时再安装其单独包；默认 `F10`、启动时隐藏，快捷键可在 Gallery 配置中调整。四个接入插件的独立包和合集均带上 `MaximumUI.dll`，无需另外安装 Gallery。产物保留 30 天；过期后可从新的运行下载。
 
 ## CI 实际执行内容
 
@@ -26,7 +26,7 @@
 1. 用临时假输出验证打包器的依赖包含与排除行为。
 2. 还原并单节点 Rebuild 整个解决方案。
 3. 执行 `python3 scripts/test.py --no-build --benchmark`，调用所有真实断言入口。单独运行 `dotnet test` 不会执行 MaximumUI 的原类库测试，工作流没有采用该路径。
-4. 构建独立预览工具，从刚生成的 Gallery DLL 导出 SVG。
+4. 构建独立预览工具，从刚生成的 Gallery DLL 和实际插件 View 导出 SVG。插件数据由匿名工厂构造，不访问用户预设。
 5. 调用 `scripts/package.py`，只从明确列出的生产项目目录选取主 DLL，并递归包含该项目的本仓 ProjectReference。
 6. 上传安装包、预览和日志，在运行摘要中提供下载链接。
 

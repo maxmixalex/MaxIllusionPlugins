@@ -14,7 +14,8 @@ internal static class Program {
     private static int failed;
     private static readonly string TemporaryRoot = Path.Combine(Path.GetTempPath(), "accessory-clothing-tests-" + Guid.NewGuid().ToString("N"));
 
-    private static int Main() {
+    private static int Main(string[] args) {
+        if (args.Length != 0) return PresetFileValidation.Run(args);
         Directory.CreateDirectory(TemporaryRoot);
         try {
             Run("same-number accessory copy across coordinates", CrossCoordinateSameSlot);
@@ -55,6 +56,8 @@ internal static class Program {
             Run("empty controller does not rebuild forever", EmptyController);
             Run("unbound body preview leaves garments unchanged", UnboundPreview);
             Run("unrelated renderer skips native mesh cloning", UnrelatedMesh);
+            CompressionEditorRegression.Run(Run);
+            AccessoryEditorSessionRegression.Run(Run);
         }
         finally { Directory.Delete(TemporaryRoot, true); }
         Console.WriteLine("Accessory/Clothing regression: " + passed + " passed, " + failed + " failed.");

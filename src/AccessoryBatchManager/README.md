@@ -1,6 +1,6 @@
 # Accessory Batch Manager
 
-Koikatsu 角色编辑器饰品批量管理插件。依赖 KKAPI 与 MoreAccessories，UI 使用独立的 Unity IMGUI，不依赖 MaximumUI。
+Koikatsu 角色编辑器饰品批量管理插件。依赖 KKAPI 与 MoreAccessories，0.7.0 的编辑器使用 MaximumUI Metro 声明式控件，支持窗口缩放、折叠、键盘导航与统一模态确认。
 
 ## 使用
 
@@ -11,7 +11,13 @@ Koikatsu 角色编辑器饰品批量管理插件。依赖 KKAPI 与 MoreAccessor
 - 在游戏原生“服装读入”页选中服装卡时，可将该卡作为复制来源（包括 MoreAccessories 扩展槽位）。
 - MoreAccessories 原生饰品列表最顶部提供 `+1 到最前` 和 `+10 到最前`，直接执行且不弹确认。
 
-所有写入操作都会先显示二次确认。
+高级窗口中的批量数据操作会先显示二次确认；原生列表的“到最前”按钮保留直接执行行为。
+
+批量及复制 / 移动的槽位列表已改为 VirtualList，只有可见行才解析本地化名称和创建控件。Shift 可连续选取或取消一段槽位；同步滚动使用共享滚动位置，不要求两列长度相同。界面仅构建当前页面；外部角色 / 槽位变化在窗口打开时每 0.25 秒检查一次，选区操作立即反馈，高亮也在模型替换后刷新。文本输入或模态窗口打开时不会触发开关快捷键。
+
+界面命令绑定到当时的角色、当前工作搭配对象、来源卡/搭配、目标搭配和选区。切换这些目标或相关操作选项后，旧界面排队的命令不会改为操作新目标，待确认操作也会取消；同名且含有相同饰品 ID 的另一张来源卡仍按不同卡处理。单纯刷新状态文案不会取消仍然有效的点击。重新载入角色卡，即使当前搭配编号相同，也需要重新确认操作。
+
+退出 Maker 或禁用插件组件时，会卸载 MaximumUI 窗口、清除模型闭包和角色引用，并重置来源卡缓存。重新打开窗口会建立新的编辑会话，上一会话的命令和确认不会恢复执行。
 
 整理采用稳定的“非空槽前移、空槽补到末尾”方式，不把槽位数组缩到 20 以下。这样能保持 MoreAccessories 对七套搭配的数组同步和原版存档兼容性。
 
@@ -22,5 +28,7 @@ dotnet build src/AccessoryBatchManager/AccessoryBatchManager.csproj -c Release
 ```
 
 `bin/Release/AccessoryBatchManager/KK_AccessoryBatchManager.dll`
+
+安装时同时提供本次构建的 `MaximumUI.dll`，不需要安装 Gallery。`AccessoryEditorView.cs` 是实际生产控件树，`AccessoryMaximumUi.cs` 将它接到原有业务操作，`AccessoryEditorSession.cs` 校验延迟命令及确认的会话与目标身份。控件树回归验证角色 / 槽位入口、禁用条件、确认取消、Shift 选区和大列表的可见行缓存；`AccessoryClothing.Regression` 还直接链接实际会话守卫、来源卡缓存和复制/删除操作，验证状态刷新、来源替换、关闭重开和相同搭配编号加载新对象的边界。
 
 可选兼容包括 ClothesToAccessories、SliderHighlight 与材质编辑相关桥接。构建引用通过 NuGet 还原；实际跨搭配数据、扩展槽位及材质效果仍需在对应插件组合下验证。

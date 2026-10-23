@@ -21,6 +21,12 @@ namespace AccessoryBatchManager {
         internal ChaFileCoordinate Coordinate { get { return cachedCoordinate; } }
         internal ChaFileAccessory.PartsInfo[] Parts { get { return cachedCoordinate == null ? null : cachedCoordinate.accessory.parts; } }
 
+        internal void Reset() {
+            Clear();
+            refreshedFrame = -1;
+            availableThisFrame = false;
+        }
+
         internal bool TryRefresh() {
             // OnGUI runs for layout, input and repaint. Scene searches and filesystem
             // checks need only run once per frame while the card source is visible.

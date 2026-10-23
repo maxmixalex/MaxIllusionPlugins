@@ -11,21 +11,25 @@ namespace UnityEngine {
         private readonly int id = ++next;
         public bool Destroyed;
         public static int InstantiateCalls;
+        public static readonly List<object> SceneObjects = new List<object>();
         public string name = "test";
         public int GetInstanceID() { return id; }
         public static void Destroy(Object value) { if (value != null) value.Destroyed = true; }
         public static T Instantiate<T>(T value) where T : Object { InstantiateCalls++; return (T)((ICloneable)value).Clone(); }
+        public static T FindObjectOfType<T>() { return SceneObjects.OfType<T>().FirstOrDefault(); }
     }
     public class Component : Object {
         public GameObject gameObject;
         public Transform transform { get { return gameObject == null ? null : gameObject.transform; } }
+        public T GetComponent<T>() { return gameObject == null ? default(T) : gameObject.Components.OfType<T>().FirstOrDefault(); }
         public T[] GetComponentsInChildren<T>(bool includeInactive = false) { return gameObject == null ? new T[0] : gameObject.GetComponentsInChildren<T>(includeInactive); }
     }
     public class GameObject : Object {
+        public static int ComponentsInChildrenCalls;
         public bool activeInHierarchy = true;
         public readonly List<object> Components = new List<object>();
         public readonly Transform transform = new Transform();
-        public T[] GetComponentsInChildren<T>(bool includeInactive = false) { return Components.OfType<T>().ToArray(); }
+        public T[] GetComponentsInChildren<T>(bool includeInactive = false) { ComponentsInChildrenCalls++; return Components.OfType<T>().ToArray(); }
         public object GetComponent(Type type) { return Components.FirstOrDefault(type.IsInstanceOfType); }
         public T Add<T>(T component) where T : Component { component.gameObject = this; Components.Add(component); return component; }
     }
@@ -78,7 +82,7 @@ namespace UnityEngine {
         public static float Sqrt(float value) { return (float)Math.Sqrt(value); }
         public static float Exp(float value) { return (float)Math.Exp(value); }
     }
-    public static class Time { public static int frameCount; }
+    public static class Time { public static int frameCount; public static float realtimeSinceStartup; }
     public static class Application { public static string loadedLevelName = "test"; }
     public sealed class WaitForSeconds { public WaitForSeconds(float seconds) { } }
     public sealed class WaitForEndOfFrame { }
@@ -146,6 +150,9 @@ public sealed class ChaFileStatus {
     public byte[] clothesState = new byte[9];
 }
 public sealed class ChaFileCoordinate {
+    public static Func<ChaFileCoordinate, string, bool> FileLoader;
+    public string coordinateName;
+    public bool LoadFile(string path) { return FileLoader != null && FileLoader(this, path); }
     public ChaFileAccessory accessory = new ChaFileAccessory();
     public ChaFileClothes clothes = new ChaFileClothes();
 }
@@ -185,12 +192,44 @@ public sealed class TestListController {
     public int Lookups;
     public ListInfoBase GetListInfo(ChaListDefine.CategoryNo category, int id) { Lookups++; return new ListInfoBase { Name = "Item " + id }; }
 }
-namespace ChaCustom { public sealed class CustomBase { public static CustomBase Instance; public bool updateCustomUI; } }
+namespace ChaCustom {
+    public sealed class CustomBase { public static CustomBase Instance; public bool updateCustomUI; }
+    public sealed class CustomCoordinateFile : UnityEngine.Component {
+        // The production card adapter reflects these external game UI fields.
+        private readonly CustomFileListCtrl listCtrl;
+        private readonly CustomFileWindow fileWindow;
+        public CustomCoordinateFile(CustomFileListCtrl list, CustomFileWindow window) {
+            listCtrl = list; fileWindow = window; gameObject = new UnityEngine.GameObject();
+        }
+    }
+    public sealed class CustomFileWindow : UnityEngine.Component {
+        public enum FileWindowType { CoordinateLoad }
+        public FileWindowType fwType;
+        public CustomFileWindow() { gameObject = new UnityEngine.GameObject(); }
+    }
+    public sealed class CustomFileListCtrl {
+        public CustomFileInfoComponent Selected;
+        public CustomFileInfoComponent GetSelectTopItem() { return Selected; }
+    }
+    public sealed class CustomFileInfoComponent { public CustomFileInfo info; }
+    public sealed class CustomFileInfo { public string FullPath, FileName, name; }
+}
 namespace KKAPI.Maker {
     public static class MakerAPI { public static bool InsideMaker; public static ChaControl GetCharacterControl() { return null; } }
 }
+namespace KKAPI.Studio {
+    public static class StudioAPI {
+        public static bool InsideStudio { get { return false; } }
+        public static IEnumerable<StudioCharacter> GetSelectedCharacters() { return new StudioCharacter[0]; }
+    }
+    public sealed class StudioCharacter { public ChaControl GetChaControl() { return null; } }
+}
 namespace KKAPI { public enum GameMode { Maker, MainGame, Studio } }
 namespace KKAPI.Chara {
+    public static class CharacterApi {
+        public sealed class ControllerRegistration { public IEnumerable<CharaCustomFunctionController> Instances = new CharaCustomFunctionController[0]; }
+        public static ControllerRegistration GetRegisteredBehaviour(string guid) { return null; }
+    }
     public class CharaCustomFunctionController : UnityEngine.Component {
         public ChaControl ChaControl;
         public ChaFile ChaFileControl;
@@ -217,12 +256,14 @@ namespace AccessoryBatchManager {
 namespace BepInEx { public static class Paths { public static string ConfigPath = System.IO.Path.GetTempPath(); } }
 namespace ClothingCompression {
     internal sealed class ClothingCompressionPlugin {
+        internal const string Guid = "MaxMixAlex.ClothingCompression", Name = "Clothing Compression", Version = "test";
         internal static readonly TestLog Log = new TestLog();
         internal static readonly TestOption<bool> VerboseDiagnostics = new TestOption<bool>();
         internal static readonly ClothingCompressionPlugin Instance = new ClothingCompressionPlugin();
         internal static readonly MeshAccessDetour MeshAccess = new MeshAccessDetour();
         internal static CompressionLibraryStore Library;
-        internal void RefreshMakerControls(CompressionController controller) { }
+        internal Action<CompressionController> OnRefreshMakerControls;
+        internal void RefreshMakerControls(CompressionController controller) { if (OnRefreshMakerControls != null) OnRefreshMakerControls(controller); }
     }
     internal sealed class TestOption<T> { internal T Value = default(T); }
     internal sealed class MeshAccessDetour { internal void Apply() { } internal void Undo() { } }

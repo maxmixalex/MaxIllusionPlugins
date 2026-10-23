@@ -111,7 +111,7 @@ namespace MaximumUI {
         }
 
         private void PaintTwoPaneLayout(LayoutNode node, TwoPaneLayout layout, WidgetPaintState state, DrawList drawList) {
-            if (node.Children.Count < 2) return;
+            if (LayoutEngine.FlowChildCount(node) < 2) return;
 
             MuiRect first = node.Children[0].Rect;
             MuiRect second = node.Children[1].Rect;
@@ -625,10 +625,11 @@ namespace MaximumUI {
 
             string prefix = treeNode.Leaf ? (treeNode.Bullet ? "* " : "- ") : (treeNode.Open ? "v " : "> ");
             drawList.Text(new MuiRect(header.X + 6f, header.Y, Math.Max(0f, header.Width - 12f), header.Height), prefix + treeNode.Label, null, TextColor(node));
-            if (treeNode.DrawLines && treeNode.Open && node.Children.Count > 0) {
+            int children = LayoutEngine.FlowChildCount(node);
+            if (treeNode.DrawLines && treeNode.Open && children > 0) {
                 float x = header.X + 9f;
                 float startY = header.Bottom;
-                float endY = node.Children[node.Children.Count - 1].Rect.Y + Math.Min(22f, node.Children[node.Children.Count - 1].Rect.Height) * 0.5f;
+                float endY = node.Children[children - 1].Rect.Y + Math.Min(22f, node.Children[children - 1].Rect.Height) * 0.5f;
                 drawList.Line(new MuiVec2(x, startY), new MuiVec2(x, endY), theme.Separator, 1f);
             }
         }

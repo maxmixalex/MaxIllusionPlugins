@@ -653,6 +653,7 @@ namespace MaximumUI {
         public float Height;
         public Func<int, Widget> BuildItem;
         public bool AlwaysShowVertical;
+        public ScrollPosition ScrollPosition;
 
         public VirtualList(int itemCount, float rowHeight, Func<int, Widget> buildItem, object key = null)
             : base(key) {

@@ -104,6 +104,12 @@ namespace MaximumUI {
             if (firstError != null) throw firstError;
         }
 
+        // Mount teardown/hiding is not a dialog result. Never run a stale
+        // confirmation or open another dialog from a hidden owner.
+        internal void DismissAll() {
+            dialogs.Clear();
+        }
+
         internal void Complete(Dialog dialog, Action result) {
             if (dialog == null || !dialogs.Remove(dialog)) return;
             // Remove the originating dialog first; the callback may open another one.

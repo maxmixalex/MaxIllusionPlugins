@@ -22,7 +22,7 @@ python scripts/test.py
 
 `MountOptions` 默认每个 Unity 帧构建一次控件树（`BuildEveryFrame = true`、`BuildEveryOnGUI = false`）。同一帧的 Layout、Repaint 和输入事件共享控件树与测量结果。普通 `View` 仍会在下一帧读取外部状态；依赖每个 GUI 事件重新构建的旧代码可显式设置 `BuildEveryOnGUI = true`。
 
-完全由 `StatefulView.SetState` / `ReplaceState` 驱动的界面可设置 `BuildEveryFrame = false`。外部状态变化时调用 `MaximumUIRuntime.MarkDirty(view)`。失效会触发下一次 GUI 调用重建，即使它仍处于同一帧；构建期间发生的失效也会保留。Gallery 使用此模式，并仅构建当前标签页内容，调试指标每 0.25 秒刷新一次。
+完全由 `StatefulView.SetState` / `ReplaceState` 驱动的界面可设置 `BuildEveryFrame = false`。外部状态变化时调用 `MaximumUIRuntime.MarkDirty(view)`。失效会触发下一次 GUI 调用重建，即使它仍处于同一帧；构建期间发生的失效也会保留。Gallery 与四个接入编辑器使用此模式。Gallery 仅构建当前标签页内容，调试指标每 0.25 秒刷新一次；插件适配器只在可见时轮询必要的外部快照，并在变化时失效。
 
 每次运行时重建都会使布局缓存失效。仅移动窗口会重新排列已有节点，改变窗口尺寸则重新测量。缓存有 256 个根路径的上限，不会无限保留动态路径。直接调用 `ImguiRenderer` 的代码默认不启用缓存；若设置 `RenderContext.CacheLayout = true`，则在修改已保留的 Widget 属性、子节点或主题度量后调用 `ImguiRenderer.InvalidateLayout()`。直接使用公开的 `LayoutCache` 时遵循相同约定，调用 `Invalidate()`；缓存不观察可变字段。
 
@@ -30,7 +30,9 @@ python scripts/test.py
 
 `VirtualList.CacheItems` 默认开启，在保留模式下缓存可见范围和 overscan 的 Widget / LayoutNode；离开该范围即删除。空行也有缓存，构建异常可在下一事件重试。宽度变化重新测量，位置变化只重新排列；内容失效刷新已有行。需要在每次 GUI 事件重建行的调用方可设 `CacheItems = false`。普通 ScrollView 不提供整棵控件树的虚拟化。
 
-`ImguiRenderer` 实现 `IDisposable`。运行时在卸载视图或挂载失败时释放渲染器持有的绘制资源；直接使用者应在销毁宿主时调用 `Dispose()`。业务插件尚未接入此库。
+`ImguiRenderer` 实现 `IDisposable`。运行时在卸载视图或挂载失败时释放渲染器持有的绘制资源；直接使用者应在销毁宿主时调用 `Dispose()`。AccessoryBatchManager、ClothingCompression 高级窗口、ExpressionControl、JuiceControl 已接入；它们的 View、适配器及真实控件回归可作为完整使用示例。
+
+`ScrollView.ScrollPosition` 与 `VirtualList.ScrollPosition` 可选地引用同一个 `ScrollPosition`，用于并排列表同步滚动。外部请求位置与各视口的实际夹取位置分开保存：较短列表到达底部不会把较长列表拉回，只有实际输入产生的移动才写回共享位置。调用 `Reset()` 可在切换来源时同步回到顶部。AccessoryBatchManager 的复制页面使用此接口。
 
 ## 外观与交互
 
@@ -57,11 +59,15 @@ ThemeEditor 的 `ColorTokens` / `ScalarTokens` 可选数组限定可编辑项，
 
 模态窗口在挂载之间统一确定输入归属，并置于其他挂载之上。同一挂载内只有最上层对话框可交互；相同优先级保持注册顺序。关闭确认框时先移除该对话框再调用确认回调，回调新建的对话框不会被误关。`CloseAll` 只关闭调用时存在的对话框。
 
+内联 `Dialog` 是独立叠加窗口，不参与父栈、网格、表格或分栏的普通布局流，也不会扩大滚动内容范围。布局仍保留其原始声明路径及独立内容测量，因此打开模态不会压缩背景列表，模态发现、查询与按钮输入继续可用。
+
 ### 窗口、输入与生命周期
 
 `Window.Resizable` 默认开启，右下角拖动调整大小。折叠后展开恢复原高度；分辨率小于指定最小尺寸时以屏幕边界优先，标题与控制按钮保持可达。对话框独立使用 `DialogContentPadding`，服务 Alert/Confirm 按实际文本度量计算尺寸，过长正文使用滚动区，操作按钮留在外面。
 
 多挂载在绘制前按可见顺序确定鼠标归属，键盘跟随最后点击或明确请求焦点的挂载。可调用 `MaximumUIRuntime.Focus(mountId)` 切换挂载键盘归属，再通过 BuildContext 的 Navigation 聚焦控件。RequestFocus 仅在新请求出现时生效；不要永久依赖 true 每帧重新抢焦点。Tab / Shift+Tab 使用当前可见、可用控件的顺序，常用按钮/选择控件支持 Enter / Space；列表/下拉/滑条/树有对应方向键行为。普通鼠标聚焦不会立即启动整窗的键盘导航。
+
+通过 `IsMounted(id)` / `IsVisible(id)` 查询挂载，通过 `SetVisible(id, visible)` 显示或隐藏。隐藏保留窗口与用户状态，立即释放输入、清除浮层队列、关闭服务对话框，并取消该次显示期间尚未执行的控件回调；隐藏后再打开不会执行旧确认操作。由 View 自行声明的内联 Dialog 状态仍由 View 管理，四个接入编辑器会在关闭流程清理业务模态与目标。没有变化的可见性调用直接返回。显示会重新构建并请求焦点；彻底离开宿主场景时调用 `Unmount`。全局 `IsAnyTextFieldFocused` / `IsModalOpen` 可用于插件快捷键保护。
 
 嵌套滚动和分组保留屏幕原点与祖先剪裁交集，浮层定位、拖放和 Query 使用屏幕坐标。控件新捕获需同时命中自身矩形与当前可见区域；已经捕获的拖动可继续越出矩形，松开仍清理。隐藏、卸载、模态抢占和已被其它 OnGUI 消费的 MouseUp 都有清理路径。底层挂载仍可保留几何 Hover 查询，但不会把被屏蔽的输入登记成 Active / Clicked。
 
@@ -69,7 +75,9 @@ InputInt / InputFloat / InputDouble 可实际键入。编辑中保留负号、�
 
 下拉默认定位到当前值，Escape/Tab/外部点击关闭；菜单和上下文菜单优先处理自己的输入，嵌套菜单支持进入与返回。标签页重排保留 MouseDown/Drag/原始 MouseUp 状态，不因按钮消费事件而漏掉回调。重新挂载、隐藏和主题切换清理遗留浮层。
 
-Runtime Update 采用稳定挂载快照，允许回调卸载当前视图或添加新视图，新挂载在下一次 Update 进入遍历。排队回调关联来源挂载，卸载后跳过；同一次 Flush 中新增工作留到下一次，异常不阻断同批其它回调。自定义主题仍由调用方按上述所有权规则释放。
+Runtime Update 采用稳定挂载快照，允许回调卸载当前视图或添加新视图，新挂载在下一次 Update 进入遍历。渲染期间排队的回调关联来源挂载及可见性代次，卸载或隐藏后跳过；有效回调完成后自动使其所属 View 失效。同一次 Flush 中新增工作留到下一次，异常不阻断同批其它回调。自定义主题仍由调用方按上述所有权规则释放。
+
+查询与导航的内部记录使用有界对象池，Widget 缓存稳定 Key / Path 的规范标识；Key 应视为稳定身份，替换 Key 或路径会刷新缓存。公开 `GetItem` / Snapshot 返回副本，不会因下一帧复用记录而改变。池分别最多保留 512 个项目/导航记录和 32 个窗口记录，超出部分仍正确处理，但不保证零分配。
 
 ## 无界面回归与性能测量
 
@@ -84,7 +92,7 @@ MAXIMUMUI_BENCHMARK=1 dotnet run --project tests/MaximumUI.Runner/MaximumUI.Runn
 
 场景为 1000 个 Label、150 帧、每帧 2 个 GUI 事件。逐事件策略执行 300 次树构建和布局，默认逐帧策略执行 150 次，按需空闲策略执行 1 次。0.2.0 的 .NET 9.0.319 测量中，三者分配量分别为 129,062,440 / 64,538,576 / 430,432 字节。计时受预热、JIT 和运行环境影响；该基准不含 Unity 绘制、输入处理和游戏负载，不能换算为游戏帧率。
 
-当前 UI 入口执行 104 组回归。额外热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁与数值同步零分配。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。完整结果见 [后续修复记录](../../docs/Followup-2026-10-23.md)。
+当前 UI 入口执行 139 组回归，包括 19 组实际饰品/皮肤效果 View 与会话行为、8 组共享滚动/挂载隐藏/查询池回归，以及 8 组内联 Dialog 布局回归。额外热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁与数值同步零分配。0.3.0 还验证 80 个保留控件在 1,000 次查询/导航登记循环中的零托管分配。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。ClothingCompression 和 ExpressionControl 的实际 View→业务回归由各自插件宿主执行。完整结果见 [接入记录](../../docs/Integration-2026-10-23.md)。
 
 `python scripts/test.py --benchmark` 也会执行上述策略基准及全部回归。若需比较历史版本与修复版本的独立 DLL，使用 [MaximumUI.Benchmark](../../tests/MaximumUI.Benchmark/README.md) 的显式程序集路径和独立输出目录；该项目不加入解决方案、不产生插件发布产物。
 

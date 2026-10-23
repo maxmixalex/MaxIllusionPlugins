@@ -23,11 +23,12 @@ namespace ClothingCompression {
     [BepInDependency(Sideloader.Sideloader.GUID)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]
+    [BepInProcess(KoikatuAPI.StudioProcessName)]
     internal sealed class ClothingCompressionPlugin : BaseUnityPlugin {
         internal const string Guid = "MaxMixAlex.ClothingCompression";
         internal const string Name = "Clothing Compression";
-        internal const string Version = "0.3.19";
-        internal static readonly string[] CoordinateNames = { "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣" };
+        internal const string Version = "0.4.0";
+        internal static readonly string[] CoordinateNames = CompressionEditorSupport.CoordinateNames;
         private static readonly FieldInfo ControlObjectsField = typeof(BaseGuiEntry).GetField("_controlObjects", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo DropdownOptionsField = typeof(MakerDropdown).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)
             ?? typeof(MakerDropdown).GetField("<Options>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -47,6 +48,7 @@ namespace ClothingCompression {
         private MakerSideToggleRow sideControl;
         private MakerSlider positionControl, widthControl, depthControl, proximalControl, distalControl, clearanceXControl, clearanceYControl, clearanceZControl;
         private readonly List<BaseGuiEntry> detailControls = new List<BaseGuiEntry>();
+        private readonly CompressionEditorData makerData = new CompressionEditorData();
         private List<DeformationEntry> makerImportEntries = new List<DeformationEntry>();
         private int makerImportCoordinate = -1, makerImportEntry;
         private bool refreshingMaker;
@@ -62,14 +64,20 @@ namespace ClothingCompression {
             MeshAccess = new MeshAccessDetour(); gui = new CompressionGui();
         }
 
-        private void Update() { if (ToggleWindow.Value.IsDown()) ToggleAdvanced(); }
-        private void OnGUI() { gui.Draw(); }
+        private void Update() {
+            if (!MaximumUI.MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUI.MaximumUIRuntime.IsModalOpen && ToggleWindow.Value.IsDown()) ToggleAdvanced();
+            if (gui != null) gui.Update();
+        }
+        private void OnGUI() { if (gui != null) gui.Draw(); }
+        private void OnDisable() { if (gui != null) gui.Visible = false; }
         private void OnDestroy() {
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
+            if (gui != null) gui.Dispose();
+            gui = null;
             if (MeshAccess != null) MeshAccess.Dispose(); MeshAccess = null;
         }
-        internal void ToggleAdvanced() { gui.Visible = !gui.Visible; }
+        internal void ToggleAdvanced() { if (gui != null) gui.Visible = !gui.Visible; }
         private void OnMakerFinishedLoading(object sender, EventArgs e) { RefreshMakerControls(CurrentMakerController()); }
 
         private void RegisterMakerControls(object sender, RegisterSubCategoriesEvent e) {
@@ -79,6 +87,7 @@ namespace ClothingCompression {
             makerImportEntries.Clear();
             makerImportCoordinate = -1;
             makerImportEntry = 0;
+            makerData.Clear();
             MakerCategory baseCategory = MakerConstants.Clothes.Copy;
             MakerCategory cat = new MakerCategory(baseCategory.CategoryName, "clothingCompression", baseCategory.Position + 1, "勒肉形变");
             e.AddSubCategory(cat);
@@ -167,11 +176,13 @@ namespace ClothingCompression {
             if (refreshingMaker) return;
             CompressionController controller = CurrentMakerController(); DeformationEntry entry = controller == null ? null : controller.Selected;
             if (entry == null) return;
-            List<ItemDescriptor> items = ItemCatalog.Get(controller.ChaControl);
+            makerData.Refresh(controller, makerImportCoordinate);
+            List<ItemDescriptor> items = makerData.BindingItems;
             ItemCatalog.Bind(entry, index <= 0 || index > items.Count ? null : items[index - 1]); controller.Changed(true);
         }
 
         internal void RefreshMakerControls(CompressionController controller) {
+            if (gui != null) gui.Invalidate();
             if (!MakerAPI.InsideMaker || deformationControl == null) return;
             refreshingMaker = true;
             try {
@@ -186,7 +197,8 @@ namespace ClothingCompression {
                     deformationLabels = deformationLabels.Concat(new[] { "（当前仅有一个形变）" }).ToArray();
                 UpdateDropdown(deformationControl, deformationLabels, controller == null ? 0 : controller.SelectedIndex);
 
-                List<ItemDescriptor> items = controller == null ? new List<ItemDescriptor>() : ItemCatalog.Get(controller.ChaControl);
+                makerData.Refresh(controller, makerImportCoordinate);
+                List<ItemDescriptor> items = makerData.BindingItems;
                 string[] bindingLabels = new[] { "<color=#D52B1E>未绑定（始终应用）</color>" }.Concat(items.Select(x => ShortenOption(x.Display, 28))).ToArray();
                 int bindingIndex = 0;
                 if (selected != null && selected.BindingKind != BoundItemKind.None) {
@@ -220,9 +232,8 @@ namespace ClothingCompression {
                 if (makerImportCoordinate < 0 || makerImportCoordinate >= CoordinateNames.Length)
                     makerImportCoordinate = current >= 0 && current < CoordinateNames.Length ? (current + 1) % CoordinateNames.Length : 0;
                 UpdateDropdown(importCoordinateControl, CoordinateNames, makerImportCoordinate);
-                makerImportEntries = controller == null || makerImportCoordinate == current
-                    ? new List<DeformationEntry>()
-                    : Library.LoadCoordinateEntries(controller.MakeCoordinateKey(makerImportCoordinate));
+                makerData.Refresh(controller, makerImportCoordinate);
+                makerImportEntries = makerData.ImportEntries;
                 makerImportEntry = Mathf.Clamp(makerImportEntry, 0, Math.Max(0, makerImportEntries.Count - 1));
                 string[] labels = makerImportEntries.Count == 0
                     ? new[] { makerImportCoordinate == current ? "请选择其他服装搭配" : "该搭配没有已保存形变" }
@@ -234,9 +245,7 @@ namespace ClothingCompression {
         }
 
         internal static string FormatEntryLabel(int index, DeformationEntry entry) {
-            string item = entry == null || entry.BindingKind == BoundItemKind.None || string.IsNullOrEmpty(entry.BindingName) ? "未绑定" : entry.BindingName;
-            string kind = entry != null && entry.Kind == DeformationKind.UpperArm ? "大臂" : entry != null && entry.Kind == DeformationKind.Arm ? "前臂" : entry != null && entry.Kind == DeformationKind.Knee ? "膝部" : entry != null && entry.Kind == DeformationKind.LowerThigh ? "整腿" : "大腿";
-            return (index + 1) + " " + item + "（" + kind + "）";
+            return CompressionEditorSupport.FormatEntryLabel(index, entry);
         }
 
         private static void UpdateDropdown(MakerDropdown control, string[] options, int value) {
@@ -272,10 +281,7 @@ namespace ClothingCompression {
         }
 
         internal static void SetKind(DeformationEntry entry, DeformationKind kind) {
-            if (entry.Kind == kind) return;
-            entry.Kind = kind;
-            entry.Position = kind == DeformationKind.Thigh ? 0.32f : kind == DeformationKind.LowerThigh ? 0.58f : kind == DeformationKind.Knee ? 0f : kind == DeformationKind.UpperArm ? 0.55f : 0.68f;
-            entry.Width = kind == DeformationKind.Knee ? 0.14f : kind == DeformationKind.LowerThigh ? 0.12f : kind == DeformationKind.Thigh ? 0.09f : 0.10f;
+            CompressionEditorSupport.SetKind(entry, kind);
         }
 
         private void SetDetailControlsVisible(bool visible) {

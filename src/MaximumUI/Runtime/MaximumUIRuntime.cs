@@ -21,6 +21,7 @@ namespace MaximumUI {
             public BuildContext BuildContext;
             public RenderContext RenderContext;
             public bool Active = true;
+            public int CallbackEpoch;
             public long Order;
         }
 
@@ -124,6 +125,51 @@ namespace MaximumUI {
             }
         }
 
+        public static bool IsMounted(string id) {
+            return FindMount(id) != null;
+        }
+
+        public static bool IsVisible(string id) {
+            MountRecord mount = FindMount(id);
+            Window window = mount == null ? null : mount.CachedRoot as Window;
+            return mount != null && mount.Options.Visible && (window == null || window.Visible);
+        }
+
+        // Visibility is a mount operation: hiding must relinquish its input
+        // lease and popups immediately, even before the next OnGUI event.
+        public static bool SetVisible(string id, bool visible) {
+            MountRecord mount = FindMount(id);
+            if (mount == null) return false;
+            Window window = mount.CachedRoot as Window;
+            bool changed = mount.Options.Visible != visible || (window != null && window.Visible != visible);
+            if (!changed) return true;
+            mount.Options.Visible = visible;
+            mount.InputTarget.Available = visible;
+            if (window != null) window.Visible = visible;
+            if (visible) {
+                mount.BuildSchedule.MarkDirty();
+                inputRouting.Focus(mount.InputTarget);
+            } else {
+                unchecked { mount.CallbackEpoch++; }
+                inputRouting.Forget(mount.InputTarget);
+                mount.Renderer.CancelInput();
+                mount.RenderContext.ResetOverlays();
+                mount.QueryStore.BeginFrame();
+                mount.Dialogs.DismissAll();
+                if (ReferenceEquals(lastKeyboardOwner, mount.InputTarget)) IsAnyTextFieldFocused = false;
+                IsModalOpen = FindModalMount(GetMountSnapshot()) >= 0;
+            }
+            return true;
+        }
+
+        private static MountRecord FindMount(string id) {
+            for (int i = 0; i < mounts.Count; i++) {
+                MountRecord mount = mounts[i];
+                if (mount.Active && string.Equals(mount.Id, id, StringComparison.Ordinal)) return mount;
+            }
+            return null;
+        }
+
         public static bool Focus(string id) {
             for (int i = mounts.Count - 1; i >= 0; i--) {
                 MountRecord mount = mounts[i];
@@ -143,7 +189,15 @@ namespace MaximumUI {
         private static void EnqueueOwnedCallback(MountRecord owner, Action callback) {
             if (callback == null) return;
             if (owner == null) pendingCallbacks.Add(callback);
-            else pendingCallbacks.Add(delegate { if (owner.Active) callback(); });
+            else {
+                int epoch = owner.CallbackEpoch;
+                pendingCallbacks.Add(delegate {
+                    if (owner.Active && owner.Options.Visible && owner.CallbackEpoch == epoch) {
+                        try { callback(); }
+                        finally { if (owner.Active) owner.BuildSchedule.MarkDirty(); }
+                    }
+                });
+            }
         }
 
         public static bool SetTheme(string id, MaximumTheme theme) {
@@ -170,13 +224,8 @@ namespace MaximumUI {
             for (int i = 0; i < snapshot.Length; i++) {
                 MountRecord mount = snapshot[i];
                 if (!mount.Active) continue;
-                if (mount.Options.HasToggleKey && Input.GetKeyDown(mount.Options.ToggleKey)) {
-                    mount.Options.Visible = !mount.Options.Visible;
-                    if (mount.Options.Visible) {
-                        mount.InputTarget.Available = true;
-                        inputRouting.Focus(mount.InputTarget);
-                    }
-                }
+                if (mount.Options.HasToggleKey && !IsAnyTextFieldFocused && !IsModalOpen && Input.GetKeyDown(mount.Options.ToggleKey))
+                    SetVisible(mount.Id, !IsVisible(mount.Id));
 
                 mount.View.Update(mount.BuildContext);
             }

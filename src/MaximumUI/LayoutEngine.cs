@@ -89,6 +89,8 @@ namespace MaximumUI {
             else if (widget is Tab) ArrangeStackChildren(node, rect, 0f);
             else if (widget is MenuBar) {
             }
+
+            ArrangeDialogs(node, rect);
         }
 
         private void MeasureWindow(LayoutNode node, Window window, LayoutConstraints constraints) {
@@ -107,7 +109,8 @@ namespace MaximumUI {
             MeasureChildren(node, widget, constraints, true);
             float width = 0f;
             float height = 0f;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) height += gap;
                 width = Math.Max(width, node.Children[i].DesiredSize.X);
                 height += node.Children[i].DesiredSize.Y;
@@ -120,7 +123,8 @@ namespace MaximumUI {
             MeasureChildren(node, widget, constraints, true);
             float width = 0f;
             float height = 0f;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) width += gap;
                 width += node.Children[i].DesiredSize.X;
                 height = Math.Max(height, node.Children[i].DesiredSize.Y);
@@ -140,12 +144,13 @@ namespace MaximumUI {
             MeasureChildren(node, layout, constraints, true);
             float width = constraints.MaxWidth > 0f && !float.IsInfinity(constraints.MaxWidth) ? constraints.MaxWidth : 240f;
             float height = constraints.MaxHeight > 0f && !float.IsInfinity(constraints.MaxHeight) ? constraints.MaxHeight : 120f;
+            int count = FlowChildCount(node);
 
-            if (node.Children.Count > 0) {
+            if (count > 0) {
                 width = Math.Max(width, node.Children[0].DesiredSize.X);
                 height = Math.Max(height, node.Children[0].DesiredSize.Y);
             }
-            if (node.Children.Count > 1) {
+            if (count > 1) {
                 if (layout.Orientation == TwoPaneOrientation.Horizontal) {
                     width = Math.Max(width, node.Children[0].DesiredSize.X + layout.SplitterSize + node.Children[1].DesiredSize.X);
                     height = Math.Max(height, Math.Max(node.Children[0].DesiredSize.Y, node.Children[1].DesiredSize.Y));
@@ -164,12 +169,13 @@ namespace MaximumUI {
             float cellWidth = Math.Max(1f, (constraints.MaxWidth - grid.ColumnGap * (columns - 1)) / columns);
             float width = constraints.MaxWidth;
             float height = 0f;
-            int rows = node.Children.Count == 0 ? 0 : (node.Children.Count + columns - 1) / columns;
+            int count = FlowChildCount(node);
+            int rows = count == 0 ? 0 : (count + columns - 1) / columns;
             for (int row = 0; row < rows; row++) {
                 float rowHeight = 0f;
                 for (int column = 0; column < columns; column++) {
                     int index = row * columns + column;
-                    if (index >= node.Children.Count) break;
+                    if (index >= count) break;
                     rowHeight = Math.Max(rowHeight, node.Children[index].DesiredSize.Y);
                 }
                 if (row > 0) height += grid.RowGap;
@@ -180,15 +186,13 @@ namespace MaximumUI {
         }
 
         private void MeasureTable(LayoutNode node, Table table, LayoutConstraints constraints) {
-            for (int i = 0; i < table.Children.Count; i++) {
-                if (table.Children[i] is TableColumn) continue;
-                node.Children.Add(Measure(table.Children[i], constraints, JoinPath(node.Path, i)));
-            }
+            MeasureChildren(node, table, constraints, true);
 
             float width = constraints.MaxWidth;
             float height = 0f;
             if (table.ShowHeader && HasVisibleTableColumns(table) && !HasExplicitHeaderRow(node)) height += GetTableHeaderHeight(table);
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (height > 0f || i > 0) height += table.RowGap;
                 height += Math.Max(metrics.RowHeight, node.Children[i].DesiredSize.Y);
             }
@@ -488,7 +492,8 @@ namespace MaximumUI {
         }
 
         private void ArrangeTwoPaneLayout(LayoutNode node, TwoPaneLayout layout, MuiRect rect) {
-            if (node.Children.Count == 0) return;
+            int count = FlowChildCount(node);
+            if (count == 0) return;
 
             float splitter = Math.Max(1f, layout.SplitterSize);
             float ratio = Clamp01(layout.Ratio);
@@ -497,7 +502,7 @@ namespace MaximumUI {
                 float firstWidth = available * ratio;
                 firstWidth = FitSplit(firstWidth, available, layout.MinFirst, layout.MinSecond);
                 Arrange(node.Children[0], new MuiRect(rect.X, rect.Y, firstWidth, rect.Height));
-                if (node.Children.Count > 1) {
+                if (count > 1) {
                     Arrange(node.Children[1], new MuiRect(rect.X + firstWidth + splitter, rect.Y, Math.Max(0f, rect.Width - firstWidth - splitter), rect.Height));
                 }
             } else {
@@ -505,7 +510,7 @@ namespace MaximumUI {
                 float firstHeight = available * ratio;
                 firstHeight = FitSplit(firstHeight, available, layout.MinFirst, layout.MinSecond);
                 Arrange(node.Children[0], new MuiRect(rect.X, rect.Y, rect.Width, firstHeight));
-                if (node.Children.Count > 1) {
+                if (count > 1) {
                     Arrange(node.Children[1], new MuiRect(rect.X, rect.Y + firstHeight + splitter, rect.Width, Math.Max(0f, rect.Height - firstHeight - splitter)));
                 }
             }
@@ -524,18 +529,19 @@ namespace MaximumUI {
             int columns = Math.Max(1, grid.Columns);
             float cellWidth = Math.Max(1f, (rect.Width - grid.ColumnGap * (columns - 1)) / columns);
             float y = rect.Y;
-            int rows = node.Children.Count == 0 ? 0 : (node.Children.Count + columns - 1) / columns;
+            int count = FlowChildCount(node);
+            int rows = count == 0 ? 0 : (count + columns - 1) / columns;
             for (int row = 0; row < rows; row++) {
                 float rowHeight = 0f;
                 for (int column = 0; column < columns; column++) {
                     int index = row * columns + column;
-                    if (index >= node.Children.Count) break;
+                    if (index >= count) break;
                     rowHeight = Math.Max(rowHeight, node.Children[index].DesiredSize.Y);
                 }
                 if (row > 0) y += grid.RowGap;
                 for (int column = 0; column < columns; column++) {
                     int index = row * columns + column;
-                    if (index >= node.Children.Count) break;
+                    if (index >= count) break;
                     LayoutNode child = node.Children[index];
                     float x = rect.X + column * (cellWidth + grid.ColumnGap);
                     Arrange(child, new MuiRect(x, y, cellWidth, rowHeight));
@@ -552,7 +558,8 @@ namespace MaximumUI {
                 y += GetTableHeaderHeight(table) + table.RowGap;
             }
 
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) y += table.RowGap;
                 LayoutNode row = node.Children[i];
                 float rowHeight = Math.Max(metrics.RowHeight, row.DesiredSize.Y);
@@ -565,7 +572,8 @@ namespace MaximumUI {
             row.Rect = rect;
             float x = rect.X;
             int visibleColumn = 0;
-            for (int column = 0; column < row.Children.Count; column++) {
+            int count = FlowChildCount(row);
+            for (int column = 0; column < count; column++) {
                 if (!IsTableColumnVisible(table, column)) {
                     Arrange(row.Children[column], new MuiRect(x, rect.Y, 0f, rect.Height));
                     continue;
@@ -576,6 +584,7 @@ namespace MaximumUI {
                 x += width + table.ColumnGap;
                 visibleColumn++;
             }
+            ArrangeDialogs(row, rect);
         }
 
         private int GetTableColumnCount(Table table, LayoutNode node) {
@@ -591,8 +600,9 @@ namespace MaximumUI {
             if (defined > 0) return Math.Max(1, visibleDefined);
 
             int count = Math.Max(1, table.Columns);
-            for (int i = 0; i < node.Children.Count; i++) {
-                count = Math.Max(count, node.Children[i].Children.Count);
+            int rows = FlowChildCount(node);
+            for (int i = 0; i < rows; i++) {
+                count = Math.Max(count, FlowChildCount(node.Children[i]));
             }
 
             return Math.Max(1, count);
@@ -692,7 +702,8 @@ namespace MaximumUI {
         private void ArrangeHStack(LayoutNode node, float gap, MuiRect rect) {
             int expandCount = CountHorizontalExpanders(node);
             float fixedWidth = 0f;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) fixedWidth += gap;
                 if (!ExpandsWidth(node.Children[i])) fixedWidth += node.Children[i].DesiredSize.X;
             }
@@ -700,7 +711,7 @@ namespace MaximumUI {
             float extraWidth = Math.Max(0f, rect.Width - fixedWidth);
             float expandWidth = expandCount > 0 ? extraWidth / expandCount : 0f;
             float x = rect.X;
-            for (int i = 0; i < node.Children.Count; i++) {
+            for (int i = 0; i < count; i++) {
                 LayoutNode child = node.Children[i];
                 if (i > 0) x += gap;
 
@@ -714,7 +725,8 @@ namespace MaximumUI {
         private void ArrangeStackChildren(LayoutNode node, MuiRect rect, float gap) {
             int expandCount = CountVerticalExpanders(node);
             float fixedHeight = 0f;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) fixedHeight += gap;
                 if (!ExpandsHeight(node.Children[i])) fixedHeight += node.Children[i].DesiredSize.Y;
             }
@@ -722,7 +734,7 @@ namespace MaximumUI {
             float extraHeight = Math.Max(0f, rect.Height - fixedHeight);
             float expandHeight = expandCount > 0 ? extraHeight / expandCount : 0f;
             float y = rect.Y;
-            for (int i = 0; i < node.Children.Count; i++) {
+            for (int i = 0; i < count; i++) {
                 LayoutNode child = node.Children[i];
                 if (i > 0) y += gap;
 
@@ -770,17 +782,54 @@ namespace MaximumUI {
         }
 
         private void MeasureChildren(LayoutNode node, Widget widget, LayoutConstraints constraints, bool includeAll) {
+            bool hasDialogs = false;
             for (int i = 0; i < widget.Children.Count; i++) {
                 Widget child = widget.Children[i];
                 if (child == null || child is EmptyWidget) continue;
+                if (widget is Table && child is TableColumn) continue;
+                if (child is Dialog) {
+                    hasDialogs = true;
+                    continue;
+                }
                 node.Children.Add(Measure(child, constraints, JoinPath(node.Path, i)));
+            }
+
+            // Dialogs render in the overlay layer. Retain their layout/input nodes,
+            // after the normal-flow children, without using a pane's constraints or
+            // a scroll view's unbounded height. Paths still use declaration indices.
+            if (!hasDialogs) return;
+            for (int i = 0; i < widget.Children.Count; i++) {
+                Dialog dialog = widget.Children[i] as Dialog;
+                if (dialog == null) continue;
+                LayoutConstraints dialogConstraints = new LayoutConstraints(0f, Math.Max(1f, dialog.Width),
+                    0f, Math.Max(1f, dialog.Height));
+                node.Children.Add(Measure(dialog, dialogConstraints, JoinPath(node.Path, i)));
+            }
+        }
+
+        internal static int FlowChildCount(LayoutNode node) {
+            int count = node.Children.Count;
+            while (count > 0 && node.Children[count - 1].Widget is Dialog) count--;
+            return count;
+        }
+
+        private void ArrangeDialogs(LayoutNode node, MuiRect rect) {
+            for (int i = FlowChildCount(node); i < node.Children.Count; i++) {
+                LayoutNode dialog = node.Children[i];
+                float width = Math.Max(1f, dialog.DesiredSize.X);
+                float height = Math.Max(1f, dialog.DesiredSize.Y);
+                // Native rendering centers again in screen coordinates; keeping a
+                // complete independent rectangle also supports managed previews.
+                Arrange(dialog, new MuiRect(rect.X + (rect.Width - width) * 0.5f,
+                    rect.Y + (rect.Height - height) * 0.5f, width, height));
             }
         }
 
         private MuiVec2 MeasureStackSize(LayoutNode node, float gap) {
             float width = 0f;
             float height = 0f;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int count = FlowChildCount(node);
+            for (int i = 0; i < count; i++) {
                 if (i > 0) height += gap;
                 width = Math.Max(width, node.Children[i].DesiredSize.X);
                 height += node.Children[i].DesiredSize.Y;
@@ -837,7 +886,8 @@ namespace MaximumUI {
 
         private static int CountHorizontalExpanders(LayoutNode node) {
             int count = 0;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int children = FlowChildCount(node);
+            for (int i = 0; i < children; i++) {
                 if (ExpandsWidth(node.Children[i])) count++;
             }
 
@@ -846,7 +896,8 @@ namespace MaximumUI {
 
         private static int CountVerticalExpanders(LayoutNode node) {
             int count = 0;
-            for (int i = 0; i < node.Children.Count; i++) {
+            int children = FlowChildCount(node);
+            for (int i = 0; i < children; i++) {
                 if (ExpandsHeight(node.Children[i])) count++;
             }
 

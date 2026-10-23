@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
   </ItemGroup>
   <PropertyGroup>
     <AssemblyName>KK_ClothingCompression</AssemblyName>
@@ -9,8 +10,8 @@
     <Company>MaxMixAlex</Company>
     <Product>ClothingCompression</Product>
     <AssemblyTitle>ClothingCompression</AssemblyTitle>
-    <Version>0.3.19</Version>
-    <AssemblyVersion>0.3.19.0</AssemblyVersion>
+    <Version>0.4.0</Version>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BepInEx.Core" />

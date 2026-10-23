@@ -5,9 +5,14 @@
     <IsPluginArtifact>false</IsPluginArtifact>
     <ImplicitUsings>false</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <!-- Linked editor models are populated by their game adapters in production. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
+    <Compile Include="..\JuiceControl\JuiceEditorView.cs" Link="Production\JuiceEditorView.cs" />
+    <Compile Include="..\JuiceControl\JuiceEditorSession.cs" Link="Production\JuiceEditorSession.cs" />
+    <Compile Include="..\AccessoryBatchManager\AccessoryEditorView.cs" Link="Production\AccessoryEditorView.cs" />
   </ItemGroup>
   <Target Name="CopyHeadlessUnityReference" AfterTargets="Build">
     <ItemGroup>

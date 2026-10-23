@@ -95,6 +95,7 @@ namespace ClothingCompression {
         }
 
         internal string Path { get { return path; } }
+        internal int Revision { get; private set; }
 
         internal CompressionLibrary Data {
             get { if (data == null) Reload(); return data; }
@@ -111,6 +112,7 @@ namespace ClothingCompression {
                 loaded.Version = 2;
                 data = loaded;
                 readFailure = null;
+                Revision++;
                 return true;
             } catch (Exception ex) {
                 ClothingCompressionPlugin.Log.LogError("Could not read " + path + ": " + ex);
@@ -150,6 +152,7 @@ namespace ClothingCompression {
                 });
             }
             Write();
+            Revision++;
             return bound.Count;
         }
 

@@ -6,11 +6,12 @@
     <Company>MaxMixAlex</Company>
     <Product>ExpressionControl</Product>
     <AssemblyTitle>ExpressionControl</AssemblyTitle>
-    <Version>0.2.7.20</Version>
-    <AssemblyVersion>0.2.7.20</AssemblyVersion>
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BepInEx.Core" />

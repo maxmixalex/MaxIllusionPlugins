@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="684" height="980" viewBox="0 0 684 980" role="img" aria-labelledby="title description" xmlns="http://www.w3.org/2000/svg">
+  <title id="title">JuiceControl / 角色与场景预设 / actual production View</title>
+  <desc id="description">Managed drawing preview; Unity font/input not validated. Geometry and colors come from JuiceControl.JuiceEditorView.Build, LayoutEngine, WidgetPainter and ThemePalettes. Virtual rows are built by their production factory and laid out with LayoutEngine. SVG uses estimated text metrics and text roles from the real widget tree. Native window chrome and scrollbars are outside this preview.</desc>
+  <metadata>Source: JuiceControl.JuiceEditorView.Build; MaximumUI.LayoutEngine; MaximumUI.WidgetPainter; palette=Metro Dark; nodes=35; commands=63; viewport=620x760; virtual rows built=0; Anonymous fixture; production presets page</metadata>
+  <rect x="0" y="0" width="684" height="980" fill="#15181c" />
+  <text x="32" y="33" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">MAXIMUM UI   /   DESIGN REVIEW</text>
+  <text x="32" y="65" font-size="25" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">JuiceControl / 角色与场景预设</text>
+  <text x="32" y="88" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">Metro Dark  /  ACTUAL PRODUCTION VIEW  /  MANAGED DRAWLIST</text>
+  <g transform="translate(32 112)">
+    <rect x="0" y="0" width="620" height="760" fill="#191d22" />
+    <rect x="0.5" y="0.5" width="619" height="759" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="0" y="15.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0" fill="#ebf0f4">JuiceControl  0.2.0</text>
+    <text x="16" y="65.8" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.0.0" fill="#ebf0f4">角色效果</text>
+    <rect x="528" y="44" width="76" height="17" fill="#1e3c52" />
+    <rect x="528.5" y="44.5" width="75" height="16" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="566" y="56.4" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.0.1" fill="#ebf0f4">JUICE</text>
+    <text x="16" y="107.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1" fill="#ebf0f4">角色</text>
+    <rect x="72" y="88" width="532" height="32" fill="#2b323a" />
+    <rect x="72.5" y="88.5" width="531" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="78" y="107.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1" fill="#ebf0f4">示例角色 A</text>
+    <text x="588" y="107.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1" fill="#ebf0f4">v</text>
+    <text x="30" y="146.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0" fill="#ebf0f4">效果与锁定</text>
+    <rect x="313" y="130" width="291" height="26" fill="#1c3d52" />
+    <rect x="313" y="130" width="3" height="26" fill="#49aae6" />
+    <text x="327" y="146.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.1" fill="#ebf0f4">角色 / 场景预设</text>
+    <rect x="16" y="176" width="588" height="1" fill="#2f3841" />
+    <defs>
+      <clipPath id="clip-0">
+        <rect x="16" y="191" width="588" height="468" fill="#ffffff" />
+      </clipPath>
+    </defs>
+    <g clip-path="url(#clip-0)">
+      <text x="16" y="212.3" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.0" fill="#ebf0f4">角色预设</text>
+      <rect x="16" y="233" width="572" height="32" fill="#2b323a" />
+      <rect x="16.5" y="233.5" width="571" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="22" y="252.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.1" fill="#ebf0f4">自然效果</text>
+      <text x="572" y="252.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.1" fill="#ebf0f4">v</text>
+      <rect x="16" y="277" width="282" height="32" fill="#49aae6" />
+      <text x="157" y="296.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.2.0" fill="#131e28">应用到当前角色</text>
+      <rect x="306" y="277" width="282" height="32" fill="#2b323a" />
+      <rect x="306.5" y="277.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="447" y="296.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.2.1" fill="#ebf0f4">新建保存</text>
+      <rect x="16" y="317" width="282" height="32" fill="#2b323a" />
+      <rect x="16.5" y="317.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="157" y="336.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.2.2" fill="#ebf0f4">覆盖 / 重命名</text>
+      <rect x="306" y="317" width="282" height="32" fill="#2b323a" />
+      <rect x="306.5" y="317.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="447" y="336.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.2.3" fill="#ebf0f4">删除选中</text>
+      <rect x="16" y="365" width="572" height="1" fill="#2f3841" />
+      <text x="16" y="403.3" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.4" fill="#ebf0f4">场景预设</text>
+      <text x="16" y="440.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.5" fill="#a4b1be">按场景角色位置保存与应用整组效果。</text>
+      <rect x="16" y="462" width="572" height="32" fill="#2b323a" />
+      <rect x="16.5" y="462.5" width="571" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="22" y="481.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.6" fill="#ebf0f4">场景示例 A</text>
+      <text x="572" y="481.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.4.0.6" fill="#ebf0f4">v</text>
+      <rect x="16" y="506" width="282" height="32" fill="#49aae6" />
+      <text x="157" y="525.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.7.0" fill="#131e28">应用到场景</text>
+      <rect x="306" y="506" width="282" height="32" fill="#2b323a" />
+      <rect x="306.5" y="506.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="447" y="525.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.7.1" fill="#ebf0f4">新建保存</text>
+      <rect x="16" y="546" width="282" height="32" fill="#2b323a" />
+      <rect x="16.5" y="546.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="157" y="565.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.7.2" fill="#ebf0f4">覆盖 / 重命名</text>
+      <rect x="306" y="546" width="282" height="32" fill="#2b323a" />
+      <rect x="306.5" y="546.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="447" y="565.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.7.3" fill="#ebf0f4">删除选中</text>
+      <rect x="16" y="594" width="572" height="1" fill="#2f3841" />
+      <rect x="16" y="611" width="282" height="32" fill="#2b323a" />
+      <rect x="16.5" y="611.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="157" y="630.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.9.0" fill="#ebf0f4">打开 XML</text>
+      <rect x="306" y="611" width="282" height="32" fill="#2b323a" />
+      <rect x="306.5" y="611.5" width="281" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="447" y="630.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.4.0.9.1" fill="#ebf0f4">重载 XML</text>
+    </g>
+    <rect x="16" y="673" width="588" height="1" fill="#2f3841" />
+    <text x="16" y="704.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.6" fill="#a4b1be">已选择示例角色 A。效果变化将保留到当前角色。</text>
+    <text x="16" y="738.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.7" fill="#a4b1be">SkinEffects：示例扩展效果已连接。</text>
+  </g>
+  <text x="32" y="904" font-size="12" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">Managed drawing preview; Unity font/input not validated.</text>
+  <text x="32" y="926" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">Production widgets, layout, palette and drawing commands. Anonymous example data. SVG</text>
+  <text x="32" y="942" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">typography is approximate; native chrome and scrollbars are omitted.</text>
+</svg>

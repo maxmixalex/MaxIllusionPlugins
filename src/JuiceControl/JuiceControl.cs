@@ -22,22 +22,11 @@ namespace JuiceControl {
     [BepInProcess(KKAPI.KoikatuAPI.GameProcessNameSteam)]
 #endif
     [BepInPlugin(GUID, "JuiceControl", Version)]
-    public class JuiceControl : BaseUnityPlugin {
+    public partial class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.1.4";
+        public const string Version = "0.2.0";
 
-        private const int WindowId = 68150210;
-        private const int ComboWindowId = WindowId + 1;
-        private const int NameDialogWindowId = WindowId + 2;
         private const string DefaultPresetFileName = GUID + ".presets.xml";
-        private const float DefaultWindowWidth = 390f;
-        private const float DefaultWindowHeight = 700f;
-        private const float MinWindowWidth = 360f;
-        private const float MinWindowHeight = 560f;
-        private const float FoldedWindowHeight = 20f;
-        private const float NameDialogWidth = 260f;
-        private const float NameDialogHeight = 126f;
-        private const float EffectRowHeight = 22f;
         private const int SiruMaxLevel = 3;
         private const int TearMaxLevel = 3;
         private const int BlushMaxLevel = 4;
@@ -60,13 +49,7 @@ namespace JuiceControl {
         internal static ConfigEntry<bool> DebugLogging { get; private set; }
 
         private bool showWindow;
-        private bool windowFolded;
-        private Rect windowRect = new Rect(80f, 60f, DefaultWindowWidth, DefaultWindowHeight);
-        private Vector2 effectScrollPosition;
-        private bool mouseDownOnWindow;
-        private Rect nameDialogRect = new Rect(0f, 0f, NameDialogWidth, NameDialogHeight);
         private bool showNameDialog;
-        private bool focusNameDialogInput;
         private NameDialogMode nameDialogMode;
         private string nameDialogText = string.Empty;
         private string nameDialogMessage = string.Empty;
@@ -82,14 +65,9 @@ namespace JuiceControl {
         private ChaControl selectedCharacter;
         private string statusText = string.Empty;
         private string presetLoadError = string.Empty;
-        private Vector2 presetErrorScroll;
-        private Rect characterDropdownAnchor;
-        private Rect characterPresetDropdownAnchor;
-        private Rect groupPresetDropdownAnchor;
         private int characterScanFrame = -1;
         private List<CharacterEntry> cachedCharacters;
 
-        private JuiceGui ui;
         private readonly Dictionary<ChaControl, Dictionary<string, int>> lockedEffectLevels = new Dictionary<ChaControl, Dictionary<string, int>>();
 
         private void Awake() {
@@ -107,11 +85,16 @@ namespace JuiceControl {
         }
 
         private void OnDestroy() {
+            ReleaseMaximumUi();
             if (PresetFileName != null) PresetFileName.SettingChanged -= OnPresetFileChanged;
             lockedEffectLevels.Clear();
             cachedCharacters = null;
             selectedCharacter = null;
             if (Instance == this) Instance = null;
+        }
+
+        private void OnDisable() {
+            ReleaseMaximumUi();
         }
 
         private void Start() {
@@ -122,14 +105,17 @@ namespace JuiceControl {
 
         private void OnPresetFileChanged(object sender, EventArgs args) {
             LoadPresets();
+            // Equal-sized files can have different preset names. Invalidate the
+            // retained picker even when the status/count polling is unchanged.
+            if (editorView != null) RefreshEditor();
         }
 
         private void Update() {
-            if (!Enabled.Value) return;
-
-            if (ToggleMenu.Value.IsDown()) {
+            if (Enabled.Value && !MaximumUI.MaximumUIRuntime.IsAnyTextFieldFocused &&
+                !MaximumUI.MaximumUIRuntime.IsModalOpen && ToggleMenu.Value.IsDown()) {
                 showWindow = !showWindow;
             }
+            UpdateMaximumUi();
         }
 
         private void LateUpdate() {
@@ -141,392 +127,7 @@ namespace JuiceControl {
         }
 
         private void OnGUI() {
-            if (!Enabled.Value || !showWindow) return;
-
-            InitStyles();
-            RefreshIntegrations(false);
-
-            Color oldColor = GUI.color;
-            Color oldContentColor = GUI.contentColor;
-            Color oldBackgroundColor = GUI.backgroundColor;
-            bool oldEnabled = GUI.enabled;
-            try {
-                GUI.color = Color.white;
-                GUI.contentColor = Color.black;
-                GUI.backgroundColor = new Color(1f, 1f, 1f, 0.8f);
-
-                windowRect.width = Mathf.Max(windowRect.width, DefaultWindowWidth);
-                windowRect.height = windowFolded ? FoldedWindowHeight : Mathf.Max(windowRect.height, DefaultWindowHeight);
-                windowRect = GUI.Window(WindowId, windowRect, DrawWindow, "JuiceControl " + Version, windowFolded ? ui.FoldedWindowStyle : ui.WindowStyle);
-                windowRect = ClipWindowPosition(windowRect, !windowFolded);
-
-                if (showNameDialog) {
-                    nameDialogRect = GUI.ModalWindow(NameDialogWindowId, nameDialogRect, DrawNameDialog, "JuiceControl " + Version, ui.WindowStyle);
-                    nameDialogRect = ClipPopupWindowPosition(nameDialogRect);
-                }
-
-                ui.DrawComboBox();
-            } finally {
-                GUI.color = oldColor;
-                GUI.contentColor = oldContentColor;
-                GUI.backgroundColor = oldBackgroundColor;
-                GUI.enabled = oldEnabled;
-            }
-
-            ui.HandleMouseInput(windowRect, showNameDialog, nameDialogRect, ref mouseDownOnWindow);
-        }
-
-        private void InitStyles() {
-            if (ui != null) return;
-
-            ui = new JuiceGui(ComboWindowId);
-        }
-
-        private void DrawWindow(int windowId) {
-            float buttonSize = ui.WindowStyle.fontSize * 1.4f;
-            float buttonY = 0f;
-            float closeX = windowRect.width - buttonSize;
-            float foldX = closeX - buttonSize;
-            if (GUI.Button(new Rect(foldX, buttonY, buttonSize, buttonSize), windowFolded ? "+" : "-", ui.ButtonStyle)) {
-                windowFolded = !windowFolded;
-                ui.Combo.Hide();
-                if (!windowFolded) {
-                    windowRect.height = DefaultWindowHeight;
-                }
-            }
-            if (GUI.Button(new Rect(closeX, buttonY, buttonSize, buttonSize), "×", ui.ButtonStyle)) {
-                ui.Combo.Hide();
-                showWindow = false;
-            }
-
-            GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(0f, foldX), FoldedWindowHeight));
-
-            if (windowFolded) {
-                return;
-            }
-
-            GUILayout.Space(18f);
-            List<CharacterEntry> characters = GetCharacters();
-            EnsureSelectedCharacter(characters);
-
-            DrawCharacterSelector(characters);
-            DrawSeparator();
-            DrawEffectList();
-            DrawJuiceControlBar();
-            DrawSeparator();
-            DrawPresetPanel(characters);
-            DrawSeparator();
-            DrawStatusBar();
-
-            GUI.DragWindow(new Rect(0f, 0f, Mathf.Max(0f, foldX), FoldedWindowHeight));
-        }
-
-        private void DrawCharacterSelector(List<CharacterEntry> characters) {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("角色:", ui.LabelStyle, GUILayout.Width(42f));
-            GUI.enabled = characters.Count > 0;
-            if (GUILayout.Button("<", ui.ButtonStyle, GUILayout.Width(28f))) SelectCharacter(characters, GetSelectedCharacterIndex(characters) - 1);
-
-            bool clicked = GUILayout.Button(GetSelectedCharacterDisplayName(characters), ui.ButtonStyle, GUILayout.MinWidth(230f));
-            Rect buttonRect = GUILayoutUtility.GetLastRect();
-            if (Event.current != null && Event.current.type == EventType.Repaint && buttonRect.width > 1f) characterDropdownAnchor = buttonRect;
-            if (clicked) OpenCharacterDropdown(characterDropdownAnchor, characters);
-
-            if (GUILayout.Button(">", ui.ButtonStyle, GUILayout.Width(28f))) SelectCharacter(characters, GetSelectedCharacterIndex(characters) + 1);
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void OpenCharacterDropdown(Rect buttonRect, List<CharacterEntry> characters) {
-            if (ui.Combo == null || characters.Count == 0) return;
-
-            string[] items = new string[characters.Count];
-            for (int i = 0; i < characters.Count; i++) {
-                items[i] = characters[i].DisplayName;
-            }
-
-            ui.Combo.Set(windowRect, buttonRect, items, delegate(int index) {
-                if (index < 0 || index >= characters.Count) return;
-                selectedCharacter = characters[index].Character;
-                statusText = "已选择角色: " + characters[index].DisplayName;
-            });
-        }
-
-        private void DrawEffectList() {
-            GUILayout.BeginVertical();
-            if (selectedCharacter == null) {
-                GUILayout.Label("当前场景中没有找到角色。", ui.LabelStyle);
-                GUILayout.EndVertical();
-                return;
-            }
-
-            float errorHeight = string.IsNullOrEmpty(presetLoadError) ? 0f : 100f;
-            effectScrollPosition = GUILayout.BeginScrollView(effectScrollPosition, GUILayout.Height(Mathf.Max(120f, windowRect.height - 430f - errorHeight)));
-
-            for (int i = 0; i < SiruParts.Length; i++) {
-                SiruPartInfo partInfo = SiruParts[i];
-                string id = "siru:" + partInfo.Part;
-                DrawEffectItem(partInfo.DisplayName, id, selectedCharacter.GetSiruFlags(partInfo.Part), SiruMaxLevel, delegate(int level) {
-                    SetSiruPart(selectedCharacter, partInfo.Part, (byte)level);
-                }, null);
-            }
-
-            DrawEffectItem("泪水", "tear", selectedCharacter.tearsLv, TearMaxLevel, delegate(int level) {
-                SetTearLevel(selectedCharacter, (byte)level);
-            }, null);
-
-            DrawEffectItem("脸红", "blush", GetBlushLevel(selectedCharacter), BlushMaxLevel, delegate(int level) {
-                SetBlushLevel(selectedCharacter, level);
-            }, FormatBlushLevel);
-
-            if (SkinEffectsBridge.IsAvailable) {
-                for (int i = 0; i < SkinEffectsBridge.Effects.Count; i++) {
-                    SkinEffectInfo effect = SkinEffectsBridge.Effects[i];
-                    SkinEffectInfo capturedEffect = effect;
-                    DrawEffectItem(SkinEffectsBridge.DisplayPrefix + " " + effect.DisplayName, SkinEffectsBridge.GetEffectId(effect), SkinEffectsBridge.GetLevel(selectedCharacter, effect), effect.MaxLevel, delegate(int level) {
-                        SkinEffectsBridge.SetLevel(selectedCharacter, capturedEffect, level);
-                    }, null);
-                }
-            }
-
-            GUILayout.EndScrollView();
-            GUILayout.EndVertical();
-        }
-
-        private void DrawEffectItem(string displayName, string id, int level, int maxLevel, Action<int> setLevel, Func<int, string> formatter) {
-            bool locked = IsEffectLocked(selectedCharacter, id);
-            int clampedMax = Mathf.Max(0, maxLevel);
-            int currentLevel = Mathf.Clamp(level, 0, clampedMax);
-
-            GUILayout.BeginHorizontal(GUILayout.Height(EffectRowHeight));
-            GUILayout.Label(displayName, ui.LabelStyle, GUILayout.Width(120f), GUILayout.Height(EffectRowHeight));
-
-            int nextLevel = currentLevel;
-            if (GUILayout.Button("−", ui.ButtonStyle, GUILayout.Width(32f), GUILayout.Height(EffectRowHeight)))
-                nextLevel = Mathf.Max(0, currentLevel - 1);
-            string text = formatter == null ? currentLevel.ToString() : formatter(currentLevel);
-            if (GUILayout.Button(text, ui.ButtonStyle, GUILayout.MinWidth(78f), GUILayout.ExpandWidth(true), GUILayout.Height(EffectRowHeight)))
-                nextLevel = clampedMax == 0 ? 0 : (currentLevel + 1) % (clampedMax + 1);
-            if (GUILayout.Button("+", ui.ButtonStyle, GUILayout.Width(32f), GUILayout.Height(EffectRowHeight)))
-                nextLevel = Mathf.Min(clampedMax, currentLevel + 1);
-
-            bool newLocked = GUILayout.Toggle(locked, GUIContent.none, GUILayout.Width(24f), GUILayout.Height(EffectRowHeight));
-            if (nextLevel != currentLevel) {
-                setLevel(nextLevel);
-                UpdateLockedEffectValue(selectedCharacter, id, nextLevel);
-            }
-            if (newLocked != locked) {
-                SetEffectLocked(selectedCharacter, id, newLocked, nextLevel);
-            }
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawJuiceControlBar() {
-            GUILayout.BeginVertical();
-
-            GUILayout.BeginHorizontal();
-            GUI.enabled = selectedCharacter != null;
-            if (GUILayout.Button("获取当前状态", ui.ButtonStyle, GUILayout.Height(EffectRowHeight), GUILayout.ExpandWidth(true))) {
-                RefreshCurrentState(selectedCharacter);
-                statusText = "已获取当前汁液状态。";
-            }
-
-            bool allLocked = selectedCharacter != null && AreAllEffectsLocked(selectedCharacter);
-            bool newAllLocked = GUILayout.Toggle(allLocked, "固定全部汁液", ui.ToggleStyle, GUILayout.Height(EffectRowHeight), GUILayout.ExpandWidth(true));
-            if (newAllLocked != allLocked) {
-                if (newAllLocked) {
-                    CaptureAllEffectLocks(selectedCharacter);
-                    statusText = "已锁定全部汁液。";
-                } else {
-                    ClearLockedEffects(selectedCharacter);
-                    statusText = "已解除全部汁液锁定。";
-                }
-            }
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUI.enabled = selectedCharacter != null;
-            if (GUILayout.Button("清空汁液", ui.ButtonStyle, GUILayout.Height(EffectRowHeight))) {
-                ApplyState(selectedCharacter, new CharaSkinState());
-                ClearLockedEffects(selectedCharacter);
-                statusText = "已清空汁液。";
-            }
-
-            if (GUILayout.Button("全满汁液", ui.ButtonStyle, GUILayout.Height(EffectRowHeight))) {
-                ApplyState(selectedCharacter, CharaSkinState.CreateMax(SiruMaxLevel, TearMaxLevel, BlushMaxLevel, SkinEffectsBridge.Effects));
-                RefreshCurrentState(selectedCharacter);
-                statusText = "已设置为全满汁液。";
-            }
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-
-            GUILayout.EndVertical();
-        }
-
-        private void DrawPresetPanel(List<CharacterEntry> characters) {
-            if (!presetStore.CanSave) {
-                GUILayout.Label("当前 XML 载入失败：仍可应用已载入预设；修复并重载后才能保存。", ui.LabelStyle);
-                if (!string.IsNullOrEmpty(presetLoadError)) {
-                    // The normal one-line status bar cannot display a source path
-                    // and parser error. Keep them visible even after other actions.
-                    presetErrorScroll = GUILayout.BeginScrollView(presetErrorScroll, GUILayout.Height(90f));
-                    GUILayout.Label(presetLoadError, ui.WrappedLabelStyle);
-                    GUILayout.EndScrollView();
-                }
-            }
-            DrawCharacterPresetSelector();
-            DrawCharacterPresetToolbar();
-            DrawGroupPresetSelector();
-            DrawGroupPresetToolbar(characters);
-            DrawXmlToolbar();
-        }
-
-        private void DrawCharacterPresetSelector() {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("汁液预设:", ui.LabelStyle, GUILayout.Width(70f));
-            GUI.enabled = HasCharacterPreset();
-            if (GUILayout.Button("<", ui.ButtonStyle, GUILayout.Width(28f))) SelectCharacterPreset(selectedCharacterPresetIndex - 1);
-            bool clicked = GUILayout.Button(GetCurrentCharacterPresetName(), ui.ButtonStyle);
-            Rect buttonRect = GUILayoutUtility.GetLastRect();
-            if (Event.current != null && Event.current.type == EventType.Repaint && buttonRect.width > 1f) characterPresetDropdownAnchor = buttonRect;
-            if (clicked) OpenCharacterPresetDropdown(characterPresetDropdownAnchor);
-            if (GUILayout.Button(">", ui.ButtonStyle, GUILayout.Width(28f))) SelectCharacterPreset(selectedCharacterPresetIndex + 1);
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void OpenCharacterPresetDropdown(Rect buttonRect) {
-            if (ui.Combo == null || presetXml == null || presetXml.CharacterPresets.Count == 0) return;
-
-            string[] items = new string[presetXml.CharacterPresets.Count];
-            for (int i = 0; i < presetXml.CharacterPresets.Count; i++) {
-                items[i] = presetXml.CharacterPresets[i].Name;
-            }
-
-            ui.Combo.Set(windowRect, buttonRect, items, delegate(int index) {
-                if (index < 0 || index >= presetXml.CharacterPresets.Count) return;
-                selectedCharacterPresetIndex = index;
-                characterPresetName = presetXml.CharacterPresets[index].Name;
-                statusText = "已选择汁液预设: " + characterPresetName;
-            });
-        }
-
-        private void DrawCharacterPresetToolbar() {
-            GUILayout.BeginHorizontal();
-            GUI.enabled = selectedCharacter != null && HasCharacterPreset();
-            if (GUILayout.Button("应用选中", ui.ButtonStyle, GUILayout.Height(22f))) ApplyCurrentCharacterPresetToSelected();
-            GUI.enabled = presetStore.CanSave && selectedCharacter != null;
-            if (GUILayout.Button("新建保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.CreateCharacter, string.Empty);
-            GUI.enabled = presetStore.CanSave && selectedCharacter != null && HasCharacterPreset();
-            if (GUILayout.Button("覆盖保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.OverwriteCharacter, GetCurrentCharacterPresetName());
-            GUI.enabled = presetStore.CanSave && HasCharacterPreset();
-            if (GUILayout.Button("删除选中", ui.ButtonStyle, GUILayout.Height(22f))) DeleteCurrentCharacterPreset();
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawGroupPresetSelector() {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("场景预设:", ui.LabelStyle, GUILayout.Width(70f));
-            GUI.enabled = HasGroupPreset();
-            if (GUILayout.Button("<", ui.ButtonStyle, GUILayout.Width(28f))) SelectGroupPreset(selectedGroupPresetIndex - 1);
-            bool clicked = GUILayout.Button(GetCurrentGroupPresetName(), ui.ButtonStyle);
-            Rect buttonRect = GUILayoutUtility.GetLastRect();
-            if (Event.current != null && Event.current.type == EventType.Repaint && buttonRect.width > 1f) groupPresetDropdownAnchor = buttonRect;
-            if (clicked) OpenGroupPresetDropdown(groupPresetDropdownAnchor);
-            if (GUILayout.Button(">", ui.ButtonStyle, GUILayout.Width(28f))) SelectGroupPreset(selectedGroupPresetIndex + 1);
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void OpenGroupPresetDropdown(Rect buttonRect) {
-            if (ui.Combo == null || presetXml == null || presetXml.GroupPresets.Count == 0) return;
-
-            string[] items = new string[presetXml.GroupPresets.Count];
-            for (int i = 0; i < presetXml.GroupPresets.Count; i++) {
-                items[i] = presetXml.GroupPresets[i].Name;
-            }
-
-            ui.Combo.Set(windowRect, buttonRect, items, delegate(int index) {
-                if (index < 0 || index >= presetXml.GroupPresets.Count) return;
-                selectedGroupPresetIndex = index;
-                groupPresetName = presetXml.GroupPresets[index].Name;
-                statusText = "已选择场景预设: " + groupPresetName;
-            });
-        }
-
-        private void DrawGroupPresetToolbar(List<CharacterEntry> characters) {
-            GUILayout.BeginHorizontal();
-            GUI.enabled = characters.Count > 0 && HasGroupPreset();
-            if (GUILayout.Button("应用选中", ui.ButtonStyle, GUILayout.Height(22f))) ApplyCurrentGroupPreset(characters);
-            GUI.enabled = presetStore.CanSave && characters.Count > 0;
-            if (GUILayout.Button("新建保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.CreateGroup, string.Empty);
-            GUI.enabled = presetStore.CanSave && characters.Count > 0 && HasGroupPreset();
-            if (GUILayout.Button("覆盖保存", ui.ButtonStyle, GUILayout.Height(22f))) OpenNameDialog(NameDialogMode.OverwriteGroup, GetCurrentGroupPresetName());
-            GUI.enabled = presetStore.CanSave && HasGroupPreset();
-            if (GUILayout.Button("删除选中", ui.ButtonStyle, GUILayout.Height(22f))) DeleteCurrentGroupPreset();
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawXmlToolbar() {
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("打开XML", ui.ButtonStyle, GUILayout.Height(22f))) OpenPresetXml();
-            if (GUILayout.Button("重载XML", ui.ButtonStyle, GUILayout.Height(22f))) {
-                if (LoadPresets()) statusText = "已重载预设 XML。";
-                RefreshIntegrations(true);
-            }
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawSeparator() {
-            GUILayout.Space(4f);
-            Rect rect = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true));
-            GUI.Box(rect, GUIContent.none, ui.LineStyle);
-            GUILayout.Space(4f);
-        }
-
-        private void DrawStatusBar() {
-            GUILayout.Label(string.IsNullOrEmpty(statusText) ? "就绪。" : statusText, ui.LabelStyle, GUILayout.Height(20f));
-        }
-
-        private void DrawNameDialog(int windowId) {
-            GUI.contentColor = Color.black;
-
-            Rect rect = new Rect(8f, 28f, nameDialogRect.width - 16f, 22f);
-            GUI.Label(rect, GetNameDialogPrompt(), ui.LabelStyle);
-
-            rect.y += 24f;
-            GUI.SetNextControlName("JuiceControlNameInput");
-            nameDialogText = GUI.TextField(rect, nameDialogText, ui.TextFieldStyle);
-            if (focusNameDialogInput) {
-                GUI.FocusControl("JuiceControlNameInput");
-                focusNameDialogInput = false;
-            }
-
-            if (Event.current.type == EventType.KeyDown &&
-                Event.current.keyCode == KeyCode.Return &&
-                GUI.GetNameOfFocusedControl() == "JuiceControlNameInput") {
-                ConfirmNameDialog();
-                Event.current.Use();
-            }
-
-            rect.y += 24f;
-            GUI.Label(rect, nameDialogMessage, ui.LabelStyle);
-
-            rect.y += 24f;
-            rect.width = (nameDialogRect.width - 20f) / 2f;
-            if (GUI.Button(rect, "确定", ui.ButtonStyle)) {
-                ConfirmNameDialog();
-            }
-
-            rect.x += rect.width + 4f;
-            if (GUI.Button(rect, "取消", ui.ButtonStyle)) {
-                CloseNameDialog();
-            }
-
-            ui.DragNamedDialog(nameDialogRect);
+            if (Enabled.Value && showWindow) EnsureMaximumUi();
         }
 
         private void OpenNameDialog(NameDialogMode mode, string defaultName) {
@@ -538,12 +139,7 @@ namespace JuiceControl {
             nameDialogText = defaultName ?? string.Empty;
             nameDialogMessage = string.Empty;
             showNameDialog = true;
-            focusNameDialogInput = true;
-            if (ui.Combo != null) ui.Combo.Hide();
 
-            nameDialogRect.width = NameDialogWidth;
-            nameDialogRect.height = NameDialogHeight;
-            nameDialogRect = MoveScreenCenter(nameDialogRect);
         }
 
         private void CloseNameDialog() {
@@ -552,7 +148,6 @@ namespace JuiceControl {
             nameDialogPreset = null;
             nameDialogCharacter = null;
             nameDialogMessage = string.Empty;
-            GUI.FocusControl(null);
         }
 
         private void ConfirmNameDialog() {
@@ -999,38 +594,6 @@ namespace JuiceControl {
             return entry == null ? "Preset" : entry.Name + " Skin";
         }
 
-        private static Rect ClipWindowPosition(Rect rect, bool keepFullyVisible) {
-            float maxWidth = Mathf.Max(320f, Screen.width - 20f);
-            float minWidth = Mathf.Min(MinWindowWidth, maxWidth);
-            float maxHeight = Mathf.Max(FoldedWindowHeight, Screen.height - 20f);
-            float minHeight = keepFullyVisible ? Mathf.Min(MinWindowHeight, maxHeight) : FoldedWindowHeight;
-            rect.width = Mathf.Clamp(rect.width, minWidth, maxWidth);
-            rect.height = Mathf.Clamp(rect.height, minHeight, maxHeight);
-            if (keepFullyVisible) {
-                rect.x = Mathf.Clamp(rect.x, 0f, Mathf.Max(0f, Screen.width - rect.width));
-                rect.y = Mathf.Clamp(rect.y, 0f, Mathf.Max(0f, Screen.height - rect.height));
-            } else {
-                rect.x = Mathf.Clamp(rect.x, -rect.width * 0.9f, Screen.width - rect.width * 0.1f);
-                rect.y = Mathf.Clamp(rect.y, -rect.height * 0.9f, Screen.height - rect.height * 0.1f);
-            }
-
-            return rect;
-        }
-
-        private static Rect MoveScreenCenter(Rect rect) {
-            rect.x = Mathf.Max(0f, (Screen.width - rect.width) / 2f);
-            rect.y = Mathf.Max(0f, (Screen.height - rect.height) / 2f);
-            return rect;
-        }
-
-        private static Rect ClipPopupWindowPosition(Rect rect) {
-            rect.width = Mathf.Min(rect.width, Mathf.Max(120f, Screen.width - 20f));
-            rect.height = Mathf.Min(rect.height, Mathf.Max(FoldedWindowHeight, Screen.height - 20f));
-            rect.x = Mathf.Clamp(rect.x, 0f, Mathf.Max(0f, Screen.width - rect.width));
-            rect.y = Mathf.Clamp(rect.y, 0f, Mathf.Max(0f, Screen.height - rect.height));
-            return rect;
-        }
-
         private void SetSiruPart(ChaControl cha, ChaFileDefine.SiruParts part, byte level) {
             if (cha == null) return;
 
@@ -1211,12 +774,10 @@ namespace JuiceControl {
         }
 
         private bool LoadPresets() {
+            editorSession.Invalidate();
             presetStore.Invalidate();
             // A dialog opened for the previous file must not save after a path switch.
-            showNameDialog = false;
-            nameDialogMode = NameDialogMode.None;
-            nameDialogPreset = null;
-            nameDialogCharacter = null;
+            CloseNameDialog();
             string path = null;
             try {
                 path = ResolvePresetPath(PresetFileName == null ? DefaultPresetFileName : PresetFileName.Value);
@@ -1225,7 +786,6 @@ namespace JuiceControl {
                 statusText = "载入预设 XML 失败；详情见预设面板。";
                 presetLoadError = XmlFileDiagnostics.Describe(ex) + "\n文件: " + (path ?? "(路径配置无效)") +
                     "\n请修复文件后点击「重载XML」。";
-                presetErrorScroll = Vector2.zero;
                 // Keep the complete exception (including serializer inner errors
                 // and the source path) available without enabling debug logging.
                 Logger.LogWarning("Could not load preset XML: " + (path ?? "(invalid configured path)") + "\n" + ex);
@@ -1294,76 +854,5 @@ namespace JuiceControl {
             OverwriteGroup
         }
     }
-
-    internal static class JuiceControlGuiUtility {
-        static JuiceControlGuiUtility() {
-            TexGuiWindowOn = LoadTexture(Base64TexWindowOn);
-            TexGuiWindowOff = LoadTexture(Base64TexWindowOff);
-            TexGuiWindowFoldOn = LoadTexture(Base64TexWindowFoldOn);
-            TexGuiWindowFoldOff = LoadTexture(Base64TexWindowFoldOff);
-            TexGuiBackgroundOn = LoadTexture(Base64TexBackgroundOn);
-            TexGuiButtonNormal = LoadTexture(Base64TexButtonNormal);
-            TexGuiButtonHover = LoadTexture(Base64TexButtonHover);
-            TexGuiButtonActive = LoadTexture(Base64TexButtonActive);
-            TexGuiInputNormal = LoadTexture(Base64TexInputNormal);
-            TexGuiInputActive = LoadTexture(Base64TexInputActive);
-            TexBlack = CreateSolidTexture(Color.black);
-            TexGray = CreateSolidTexture(new Color(0.8f, 0.8f, 0.8f, 1f));
-        }
-
-        public static int GetPix(int value) {
-            return (int)((1f + (Screen.width / 1280f - 1f) * 0.6f) * value);
-        }
-
-        public static bool GetAnyMouseButtonDown() {
-            return Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1) || Input.GetMouseButtonDown(2);
-        }
-
-        public static bool GetAnyMouseButton() {
-            return Input.GetMouseButton(0) || Input.GetMouseButton(1) || Input.GetMouseButton(2);
-        }
-
-        private static Texture2D LoadTexture(string base64) {
-            Texture2D texture = new Texture2D(32, 32);
-            texture.LoadImage(Convert.FromBase64String(base64));
-            return texture;
-        }
-
-        private static Texture2D CreateSolidTexture(Color color) {
-            Texture2D texture = new Texture2D(4, 4);
-            Color32[] pixels = new Color32[16];
-            for (int i = 0; i < pixels.Length; i++) {
-                pixels[i] = color;
-            }
-            texture.SetPixels32(pixels);
-            texture.Apply();
-            return texture;
-        }
-
-        internal static readonly Texture2D TexGuiWindowOn;
-        internal static readonly Texture2D TexGuiWindowOff;
-        internal static readonly Texture2D TexGuiWindowFoldOn;
-        internal static readonly Texture2D TexGuiWindowFoldOff;
-        internal static readonly Texture2D TexGuiBackgroundOn;
-        internal static readonly Texture2D TexGuiButtonNormal;
-        internal static readonly Texture2D TexGuiButtonHover;
-        internal static readonly Texture2D TexGuiButtonActive;
-        internal static readonly Texture2D TexGuiInputNormal;
-        internal static readonly Texture2D TexGuiInputActive;
-        internal static readonly Texture2D TexBlack;
-        internal static readonly Texture2D TexGray;
-
-        private const string Base64TexWindowOn = "iVBORw0KGgoAAAANSUhEUgAAABgAAAAkCAYAAACTz/ouAAAAtElEQVR42uyX0QqAIAxFnfjsL6e/7A+YlsayMsvZQ+yCIFT3bBPTgfdelAKAKU2NaFN+zx6eRAAeQdHcvxxT6a9OIt+ids41ha+13mUSArXBa/XMJcLmrcY3oKVcksq8+NbkckGadJtfZSLFYEFafbLoyyyGZ8AABjAA7eRRUvjgIY08nQe8yAxgwF8ABm9tyt/EJ/eirO1G3avaTbsbUjM/QJ6A7nqEKqS3AYEKhKSFmgUYAGTwBp/Tq57RAAAAAElFTkSuQmCC";
-        private const string Base64TexWindowOff = "iVBORw0KGgoAAAANSUhEUgAAABgAAAAkCAYAAACTz/ouAAAAxklEQVR42uyX0Q3DIAxETcQsLMCAhf1gAZahoYIILqWirdOPynxFinPPJ5STrXLOhCfGeKuPjtbOo85a6/GFQkAVXxU+gRAyAFDcGLOkmlKaQg5AL74q/AJ0QDYucfjWtXtUIQQW8ZmTjS4+xUHm7B5dXO5AAAIQAJGeRC4/YI9XVuE9TeWSBSCAvwK4/tfmjImfzEUF4Dld9N2X+bQ5YIGg+BDXFdIG17ciHJoaxncNtb7fWD5wc1pA9JMij6vRNyvUXYABAFQxZQThBU+WAAAAAElFTkSuQmCC";
-        private const string Base64TexWindowFoldOn = "iVBORw0KGgoAAAANSUhEUgAAABgAAAASCAYAAABB7B6eAAAAfUlEQVR42uyT0QqAIAxFnfTsL6u/vB9YWlvYKpJyb14YCOq5dxOBiJwWAEReJtcnOZcvO9WgraIKp48VNX+5SX6kRsSu+CGEUyclaC6snSkjauG94BejbVx+FFzdTTIu4MVv+FMn3hkL+PWHpdddmHcwDabBNGh+spVWAQYAeaxBMZcK1SAAAAAASUVORK5CYII=";
-        private const string Base64TexWindowFoldOff = "iVBORw0KGgoAAAANSUhEUgAAABgAAAASCAYAAABB7B6eAAAAeklEQVR42uyUwQnAIAxFo3QWF3DA2v3MAi6TUrHS/mLJId78J0F9Lx9BJyKEYea9LRPpUs/FGA/ccChocC34I0LJS4DwEIKKWkoZSrrgCdeCf0Rd4q3gcDfd7+hyzibwURNPk3M1EMvpscX0BkuwBEtAtA2+XLOcAgwAe189mW2MybwAAAAASUVORK5CYII=";
-        private const string Base64TexBackgroundOn = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAjElEQVR42uyXUQrAIAxDm13c7eTdHArDdd2PrT8JFAuCeRSEBqoqowCU1u4yR/2d43VTAZ51qZprUBUXYDSfJRfCMo+SCZFl7kGkmVsQmywWGolY3zHUGLjP5RMgAAEIQAACEIAABNh6aOgbSuY2VL2XTyB9M/ZS0ppg8gWRFs3+IKLDKRyIlHh+CjAAfuTkaxIqAb4AAAAASUVORK5CYII=";
-        private const string Base64TexButtonNormal = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAoklEQVR42uyXMQ7DIAxFbZSFlROFk6cnYmV0cIQrRJsRs3xLjoAM72GEkElEyLLF2VIWpzK+TH4+zLp46Y9aK62MGKMNc8uPCchq8IsIh777XXGyHof37scqBNocEIAABCAAgWNecHyOfyvg8SjNjOAJ/8cK3vBZArcAAhCAgArklJI7uDMz97mUUnYIsB3BUwWPSgycTNYmj72aV3tucQswAKPmcSH9pvfQAAAAAElFTkSuQmCC";
-        private const string Base64TexButtonHover = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAmElEQVR42uyXMQrAIAxFE+mip9L730fHVCVSETsal/8htLXDe/zSISQiNKYm1pHD0xgfcwWfzirC7YyZ9Z1dKrNfXL2JdC+RtfYr9NaCo8uBAAQgAAEIPOtBKeUo0Hv/38Bp+I7hLOE7lrOGrxL4CyAAAQg0gRRCMAcrM7E+S875hgCPT9BbsGhi4iQaa/K8q1mt5yOvAAMAfwPPqY0XyRgAAAAASUVORK5CYII=";
-        private const string Base64TexButtonActive = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAmUlEQVR42uyXwQqAIAyGl3RoVx/Ioz5z1x7Ia8da4UKM6OQWtMEPMoT/24YMAQCmSpG0dVasPYdyCKSZBDln6Bneez4m0sIAa2/jBxB0pXqtCEcHNunq6y44UA4DMAAD+AYAIoobs6drE5LmtxFIQLQe49sFewUGYAAGYAC/AEiK6zhdXzMKDQDkEZxdkFrHXD3nVL/nuwADAAyFRZEqr0SGAAAAAElFTkSuQmCC";
-        private const string Base64TexInputNormal = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAkUlEQVR42uyXQQrAIAwEE+nD6svUl9mfpaYYkUKPmkN3QSTksJO9LYsImUopZ/sqrVVs70opPQMrwMuYbblCzUtmkKMPas60R+ajIMw5Z7t+6eUfScTgYa5qfppEDeSs0Gl8AdwTAAAAAAAAAAAAAAAAwO8B4lSXXIrJ5RjA6IYjhd5YdpXT0Y5tv62e23ALMABi1TXAc3c4+wAAAABJRU5ErkJggg==";
-        private const string Base64TexInputActive = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAkElEQVR42uyXSw7AIAhEofFgev9DUWjxE+OyYhczCQuJybzMiiERoTqqrCObxzy658KYRqivZwZhWzKzLZhc/nGL1KvZ2DPpIkcYzx4OkrmSRJgv0pCLDovfVISPmP8hAQAAAAAAAAAAAAAAAADAAIo3o/CL+PHuhSX2NK91MPm7pbAbZEi7rPpgWD2vugUYAKxOtLWwqwjPAAAAAElFTkSuQmCC";
-    }
-
 
 }

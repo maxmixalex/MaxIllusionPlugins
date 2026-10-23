@@ -1,6 +1,6 @@
 # MaximumUI Gallery
 
-MaximumUI 的独立游戏内工作台。默认采用 Metro Dark，包含左侧导航、分层标题、可调整大小的内容区、表单、布局、表格、对话框、主题、自定义绘制和调试工具。主要代码在 `MaximumUIGalleryPlugin.cs`，展示 `MaximumUIRuntime.Mount` 与声明式控件的实际组合。功能插件继续使用原有 UI，未接入 MaximumUI。
+MaximumUI 的独立游戏内工作台。默认采用 Metro Dark，包含左侧导航、分层标题、可调整大小的内容区、表单、布局、表格、对话框、主题、自定义绘制和调试工具。主要代码在 `MaximumUIGalleryPlugin.cs`，展示 `MaximumUIRuntime.Mount` 与声明式控件的实际组合。四个功能编辑器已使用同一套 MaximumUI，Gallery 仍是可选的开发示例，不是它们的运行依赖。
 
 ## 页面和操作
 
@@ -14,7 +14,7 @@ MaximumUI 的独立游戏内工作台。默认采用 Metro Dark，包含左侧�
 | Large lists | 10,000 条可搜索记录；仅构建可视行，过滤后保留选中记录，空结果有说明 |
 | Diagnostics | 指标、输入、日志、状态、控件 ID 与使用说明 |
 
-默认显示窗口，按 `F8` 切换。`Ctrl+1` 至 `Ctrl+6` 分别打开 Controls、Composition、Dialogs、Appearance、Diagnostics、Large lists；`Ctrl+L` 操作日志示例。默认 F8 与 ClothingCompression 的高级面板入口相同，联合验证时可单独启用 Gallery。
+默认启动时隐藏，按 `F10` 切换。可在 `MaxMixAlex.MaximumUIGallery.cfg` 的 `General / Show gallery` 修改快捷键，以 `Show on startup` 控制是否启动即显示；键入文本或打开模态时不会触发窗口快捷键。`Ctrl+1` 至 `Ctrl+6` 分别打开 Controls、Composition、Dialogs、Appearance、Diagnostics、Large lists；`Ctrl+L` 操作日志示例。ClothingCompression 高级窗口沿用 `F8`。
 
 Gallery 设置 `BuildEveryFrame = false`，依赖状态失效构建，只创建当前页面；仅 Diagnostics 每 0.25 秒刷新指标。页面滚动区按窗口实际剩余高度排列，不再固定为 440px。10,000 条样本只在第一次打开时生成，文本筛选只在查询变化时重新执行。主题编辑先修改纯托管副本，Apply 才分配原生样式；替换与卸载释放 Gallery 拥有的自定义主题。
 

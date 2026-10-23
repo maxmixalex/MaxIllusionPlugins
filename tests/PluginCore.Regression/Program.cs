@@ -18,7 +18,8 @@ internal static class Program {
     private static int passed, failed;
     private static string temporary;
 
-    private static int Main() {
+    private static int Main(string[] args) {
+        if (args.Length != 0) return PresetFileValidation.Run(args);
         temporary = Path.Combine(Path.GetTempPath(), "MaxIllusionPlugins-core-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporary);
         try {

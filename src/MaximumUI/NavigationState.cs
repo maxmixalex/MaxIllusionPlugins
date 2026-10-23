@@ -17,6 +17,7 @@ namespace MaximumUI {
 
     public sealed class UiNavigationStore {
         private readonly List<NavigationItem> items = new List<NavigationItem>();
+        private readonly List<NavigationItem> itemPool = new List<NavigationItem>();
         private readonly Dictionary<string, NavigationItem> itemById = new Dictionary<string, NavigationItem>();
         private string focusedId;
         private string requestedFocusId;
@@ -56,19 +57,23 @@ namespace MaximumUI {
             // that event, while leaving a first disabled request pending.
             if (repeatedRequest) currentFocusRequests.Add(id);
             if (!enabled || !widget.Enabled) return;
-            NavigationItem item = new NavigationItem {
-                Id = id,
-                Key = widget.Key == null ? null : widget.Key.ToString(),
-                Path = path ?? string.Empty,
-                TypeName = widget.GetType().Name,
-                Rect = rect,
-                Enabled = enabled
-            };
+            int slot = items.Count;
+            NavigationItem item;
+            if (slot < itemPool.Count) item = itemPool[slot];
+            else {
+                item = new NavigationItem();
+                if (slot < 512) itemPool.Add(item);
+            }
+            item.Id = id;
+            item.Key = widget.IdentityKeyText;
+            item.Path = path ?? string.Empty;
+            item.TypeName = widget.IdentityTypeName;
+            item.Rect = rect;
+            item.Enabled = enabled;
 
             items.Add(item);
             itemById[id] = item;
-            itemById["path:" + item.Path] = item;
-            if (!string.IsNullOrEmpty(item.Key)) itemById["key:" + item.Key] = item;
+            itemById[widget.PathIdentity(path)] = item;
 
             if (widget.HasDefaultFocus && string.IsNullOrEmpty(defaultFocusId)) defaultFocusId = id;
             if (widget.RequestFocus) {
@@ -187,8 +192,7 @@ namespace MaximumUI {
         }
 
         private static string ItemId(Widget widget, string path) {
-            if (widget != null && widget.Key != null) return "key:" + widget.Key;
-            return "path:" + (path ?? string.Empty);
+            return widget == null ? "path:" + (path ?? string.Empty) : widget.Identity(path);
         }
     }
 }

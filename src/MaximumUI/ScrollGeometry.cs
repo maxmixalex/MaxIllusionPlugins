@@ -17,6 +17,7 @@ namespace MaximumUI {
             float height = viewport.Height;
             for (int i = 0; i < node.Children.Count; i++) {
                 LayoutNode child = node.Children[i];
+                if (child.Widget is Dialog) continue;
                 width = Math.Max(width, child.Rect.Right - node.Rect.X);
                 height = Math.Max(height, child.Rect.Bottom - node.Rect.Y);
             }

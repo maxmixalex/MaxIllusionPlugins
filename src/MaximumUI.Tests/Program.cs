@@ -54,9 +54,13 @@ namespace MaximumUI.Tests {
                 CoordinateTests.Run();
                 DialogLayoutTests.RunAll();
                 NumericInputTests.Run();
+                PluginEditorViewTests.RunAll();
+                EmbeddedUiTests.Run();
+                InlineDialogLayoutTests.RunAll();
                 if (Environment.GetEnvironmentVariable("MAXIMUMUI_BENCHMARK") == "1") MeasureBuildAndLayoutPerformance();
                 int count = 41 + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
-                    + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount;
+                    + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount
+                    + PluginEditorViewTests.TestCount + EmbeddedUiTests.TestCount + InlineDialogLayoutTests.TestCount;
                 Console.WriteLine("MaximumUI regression groups: " + count + " passed.");
                 Console.WriteLine("MaximumUI headless tests passed.");
                 return 0;
