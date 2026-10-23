@@ -23,6 +23,8 @@
 
 工作流位于 `.github/workflows/ci.yml`，在 push、pull_request 和手动 workflow_dispatch 时执行。使用 Ubuntu 24.04、.NET SDK 9，通过公开 NuGet 源恢复 net35 / Unity 5.6 编译引用，不需要上传本机游戏 DLL 或设置私有密钥。
 
+仓库的 `global.json` 使用 `9.0.100` 与 `latestFeature`，选择已安装的最新稳定 9.0 SDK，不跨到 runner 预装的更高主版本。工作流先记录实际 `dotnet --info`，结果随日志产物上传。SDK 选择规则见 Microsoft 的 [global.json 文档](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)。
+
 1. 安装 Pango / Inkscape、中文回退字体和固定版本的 Microsoft Selawik 开源字体。它们只用于预览，不进入游戏安装包。
 2. 验证打包器的依赖包含/排除规则、Gallery 覆盖检查以及文字边界检查的反例。
 3. 还原并单节点 Rebuild 整个解决方案。

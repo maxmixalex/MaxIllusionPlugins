@@ -37,6 +37,9 @@ jobs:
       - name: Prepare output directories
         run: mkdir -p artifacts/logs artifacts/previews
 
+      - name: Record selected .NET SDK
+        run: dotnet --info 2>&1 | tee artifacts/logs/dotnet-info.log
+
       - name: Install typography and rasterization tools
         run: |
           sudo apt-get update

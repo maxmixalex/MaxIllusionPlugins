@@ -4,6 +4,8 @@
 
 推荐 .NET SDK 9；统一测试脚本可使用 Python 3 或 PowerShell 7。各项目的编译引用由 NuGet 还原，来源配置在 `nuget.config`，版本集中在 `Directory.Packages.props`。
 
+根目录的 `global.json` 将 SDK 选择限制在稳定的 9.0 系列，并允许该系列的更新 feature band 和补丁。即使机器同时装有 SDK 10，仓库内的 `dotnet` 命令仍选择 SDK 9；CI 日志包含实际环境信息。
+
 ```sh
 dotnet restore MaxIllusionPlugins.sln -m:1 -nodeReuse:false
 dotnet build MaxIllusionPlugins.sln -c Release --no-restore -m:1 -nodeReuse:false
