@@ -15,7 +15,8 @@ plugin aggregation directory.
 
 The project links the actual production `ExpressionControlCompat.cs`,
 `RuntimeModCompat.cs`, `BreastmilkCompat.cs`, `HSceneOptionsCompat.cs`,
-`NativeUiHooks.cs`, `MultiTeamSelection.cs`, `BackgroundClimax.cs` and `CoroutineGuard.cs`; it does not maintain test copies
+`NativeUiHooks.cs`, `MultiTeamSelection.cs`, `BackgroundClimax.cs`,
+`ExpressionVoiceBinding.cs` and `CoroutineGuard.cs`; it does not maintain test copies
 of their implementations. `BoundaryStubs.cs` replaces only the external Unity,
 game, Harmony, logging, and `TeamSession` boundaries. Fault injection covers:
 
@@ -23,6 +24,11 @@ game, Harmony, logging, and `TeamSession` boundaries. Fault injection covers:
   cleanup, duplicate processing of unmanaged characters, and per-session cache
   cleanup, character refresh inside a scoped pass preserving existing settings
   and restoring the owning-team filter;
+- per-actor native face/eye/mouth callbacks and direct program/UI evaluation,
+  nested/exception-safe context restoration, both male and female team members,
+  old/new scene ownership, selected-actor state refresh, foreign face-controller
+  rejection, stable voice identity after focus changes, and independent versus
+  shared two-female voice request slots;
 - background automatic climax on finite, full male gauges, available inside /
   outside finishes, native request fields, focused/locked/pending-action guards,
   supported service/insertion states and actual Animator readiness;

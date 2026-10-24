@@ -53,6 +53,8 @@ namespace JuiceControl {
             model.SelectCharacter = Guard(token, isActive, targetsCurrent, model.SelectCharacter);
             model.SelectCharacterPreset = Guard(token, isActive, targetsCurrent, model.SelectCharacterPreset);
             model.SelectGroupPreset = Guard(token, isActive, targetsCurrent, model.SelectGroupPreset);
+            model.ChooseCharacterPreset = Guard(token, isActive, targetsCurrent, model.ChooseCharacterPreset);
+            model.ChooseGroupPreset = Guard(token, isActive, targetsCurrent, model.ChooseGroupPreset);
             model.ChangeName = Guard(token, isActive, targetsCurrent, model.ChangeName);
             model.LockAll = Guard(token, isActive, targetsCurrent, model.LockAll);
             for (int i = 0; i < model.Effects.Count; i++) {

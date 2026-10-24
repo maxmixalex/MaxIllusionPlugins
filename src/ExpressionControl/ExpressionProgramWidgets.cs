@@ -6,69 +6,72 @@ namespace ExpressionControl {
     // The production program editor only needs the serialized program model.
     // It can be exercised without a character or the Unity drawing backend.
     internal static class ExpressionProgramWidgets {
-        internal static Widget BuildUnit(ExpressionControl.Program.Unit unit, Action changed) {
+        internal static Widget BuildUnit(ExpressionControl.Program.Unit unit, Action changed,
+            string prefix = "", Func<bool> canEdit = null) {
             if (unit == null) return new HelpBox("选择或新增一个程序单位。");
-            return new VStack(gap: 10f, key: "unit-editor") {
-                new Label("动作类型") { Role = LabelRole.Heading }.Height(30f),
-                new Grid(3, 5f, 8f) {
-                    Check("爱抚", "aibu", unit.aibu, v => unit.aibu = v, changed),
-                    Check("侍奉", "houshi", unit.houshi, v => unit.houshi = v, changed),
-                    Check("插入", "sounyuu", unit.sounyuu, v => unit.sounyuu = v, changed),
-                    Check("口交", "fera", unit.fera, v => unit.fera = v, changed),
-                    Check("自慰", "masturbation", unit.masturbation, v => unit.masturbation = v, changed),
-                    Check("百合", "lesbian", unit.lesbian, v => unit.lesbian = v, changed)
-                },
-                new Separator(),
-                new Label("动作状态") { Role = LabelRole.Heading }.Height(30f),
-                new Grid(3, 5f, 8f) {
-                    Check("待机", "idle", unit.idle, v => unit.idle = v, changed),
-                    Check("接吻", "kiss", unit.kiss, v => unit.kiss = v, changed),
-                    Check("弱循环", "loopW", unit.loopW, v => unit.loopW = v, changed),
-                    Check("强循环", "loopS", unit.loopS, v => unit.loopS = v, changed),
-                    Check("男冲刺", "spurtM", unit.spurtM, v => unit.spurtM = v, changed),
-                    Check("女冲刺", "spurtF", unit.spurtF, v => unit.spurtF = v, changed),
-                    Check("男绝顶", "orgazumM", unit.orgazumM, v => unit.orgazumM = v, changed),
-                    Check("女绝顶", "orgazumF", unit.orgazumF, v => unit.orgazumF = v, changed),
-                    Check("男绝顶后", "afterOrgazumM", unit.afterOrgazumM, v => unit.afterOrgazumM = v, changed),
-                    Check("女绝顶后", "afterOrgazumF", unit.afterOrgazumF, v => unit.afterOrgazumF = v, changed),
-                    Check("精饮待机", "drinkVomitWait", unit.drinkVomitWait, v => unit.drinkVomitWait = v, changed)
-                },
-                new Separator(),
-                new Label("触发范围") { Role = LabelRole.Heading }.Height(30f),
-                new HStack(gap: 8f) {
-                    Number("敏感度下限", "feeling-min", unit.feelingL, 0, 100, delegate(int v) {
-                        unit.feelingL = Clamp(v, 0, unit.feelingH); changed();
-                    }).ExpandWidth(),
-                    Number("上限", "feeling-max", unit.feelingH, 0, 100, delegate(int v) {
-                        unit.feelingH = Clamp(v, unit.feelingL, 100); changed();
-                    }).ExpandWidth()
-                }.Height(30f),
-                new HStack(gap: 8f) {
-                    Number("绝顶次数下限", "orgasm-min", unit.orgazumNumL, 0, 10, delegate(int v) {
-                        unit.orgazumNumL = Clamp(v, 0, unit.orgazumNumH); changed();
-                    }).ExpandWidth(),
-                    Number("上限", "orgasm-max", unit.orgazumNumH, 0, 10, delegate(int v) {
-                        unit.orgazumNumH = Clamp(v, unit.orgazumNumL, 10); changed();
-                    }).ExpandWidth()
-                }.Height(30f),
-                new Separator(),
-                new Label("应用部位") { Role = LabelRole.Heading }.Height(30f),
-                new Grid(3, 5f, 8f) {
-                    Check("形态", "morph", unit.morph, v => unit.morph = v, changed),
-                    Check("泪", "tear", unit.tear, v => unit.tear = v, changed),
-                    Check("脸红", "hoho", unit.hoho, v => unit.hoho = v, changed),
-                    Check("高光", "highlight", unit.highlight, v => unit.highlight = v, changed),
-                    Check("瞳孔 Y", "eyeY", unit.eyeY, v => unit.eyeY = v, changed),
-                    Check("缩瞳", "eyeSmall", unit.eyeSmall, v => unit.eyeSmall = v, changed)
-                }
+            // The original editor shows every unit as one horizontal condition
+            // panel. Keep the columns and row ordering, rather than requiring
+            // selection in a separate master/detail editor.
+            return new HStack(8f, prefix + "unit-editor") {
+                new VStack(0f) {
+                    Check("爱抚", "aibu", unit.aibu, v => unit.aibu = v, changed, prefix, canEdit),
+                    Check("侍奉", "houshi", unit.houshi, v => unit.houshi = v, changed, prefix, canEdit),
+                    Check("插入", "sounyuu", unit.sounyuu, v => unit.sounyuu = v, changed, prefix, canEdit),
+                    Check("口交", "fera", unit.fera, v => unit.fera = v, changed, prefix, canEdit),
+                    Check("自慰", "masturbation", unit.masturbation, v => unit.masturbation = v, changed, prefix, canEdit),
+                    Check("百合", "lesbian", unit.lesbian, v => unit.lesbian = v, changed, prefix, canEdit)
+                }.Width(64f),
+                new VStack(0f) {
+                    Check("待机", "idle", unit.idle, v => unit.idle = v, changed, prefix, canEdit),
+                    Check("接吻", "kiss", unit.kiss, v => unit.kiss = v, changed, prefix, canEdit),
+                    Check("弱循环", "loopW", unit.loopW, v => unit.loopW = v, changed, prefix, canEdit),
+                    Check("强循环", "loopS", unit.loopS, v => unit.loopS = v, changed, prefix, canEdit)
+                }.Width(72f),
+                new VStack(0f) {
+                    Check("男冲刺", "spurtM", unit.spurtM, v => unit.spurtM = v, changed, prefix, canEdit),
+                    Check("女冲刺", "spurtF", unit.spurtF, v => unit.spurtF = v, changed, prefix, canEdit),
+                    Check("男绝顶", "orgazumM", unit.orgazumM, v => unit.orgazumM = v, changed, prefix, canEdit),
+                    Check("女绝顶", "orgazumF", unit.orgazumF, v => unit.orgazumF = v, changed, prefix, canEdit)
+                }.Width(80f),
+                new VStack(0f) {
+                    Check("男绝顶后", "afterOrgazumM", unit.afterOrgazumM, v => unit.afterOrgazumM = v, changed, prefix, canEdit),
+                    Check("女绝顶后", "afterOrgazumF", unit.afterOrgazumF, v => unit.afterOrgazumF = v, changed, prefix, canEdit),
+                    Check("精饮待机", "drinkVomitWait", unit.drinkVomitWait, v => unit.drinkVomitWait = v, changed, prefix, canEdit)
+                }.Width(88f),
+                new VStack(0f) {
+                    new Label("敏感度:").Height(28f),
+                    new HStack(4f) {
+                        Number("feeling-min", () => unit.feelingL, v => unit.feelingL = Clamp(v, 0, unit.feelingH), changed, prefix, canEdit).ExpandWidth(),
+                        new Label("～").Width(20f),
+                        Number("feeling-max", () => unit.feelingH, v => unit.feelingH = Clamp(v, unit.feelingL, 100), changed, prefix, canEdit).ExpandWidth()
+                    }.Height(28f),
+                    new Label("绝顶次数:").Height(28f),
+                    new HStack(4f) {
+                        Number("orgasm-min", () => unit.orgazumNumL, v => unit.orgazumNumL = Clamp(v, 0, unit.orgazumNumH), changed, prefix, canEdit).ExpandWidth(),
+                        new Label("～").Width(20f),
+                        Number("orgasm-max", () => unit.orgazumNumH, v => unit.orgazumNumH = Clamp(v, unit.orgazumNumL, 10), changed, prefix, canEdit).ExpandWidth()
+                    }.Height(28f)
+                }.Width(140f),
+                new VStack(0f) {
+                    Check("形态", "morph", unit.morph, v => unit.morph = v, changed, prefix, canEdit),
+                    Check("泪", "tear", unit.tear, v => unit.tear = v, changed, prefix, canEdit),
+                    Check("脸红", "hoho", unit.hoho, v => unit.hoho = v, changed, prefix, canEdit),
+                    Check("高光", "highlight", unit.highlight, v => unit.highlight = v, changed, prefix, canEdit)
+                }.Width(64f),
+                new VStack(0f) {
+                    Check("瞳孔Y", "eyeY", unit.eyeY, v => unit.eyeY = v, changed, prefix, canEdit),
+                    Check("缩瞳", "eyeSmall", unit.eyeSmall, v => unit.eyeSmall = v, changed, prefix, canEdit)
+                }.Width(78f)
             }.ExpandWidth();
         }
 
-        internal static Widget BuildFlags(ExpressionControl.Program program, Action changed) {
-            return new Grid(3, 6f, 8f, "program-flags") {
-                Check("应用嘴巴开合", "apply-mouth", program.applyMouthOpen, v => program.applyMouthOpen = v, changed),
-                Check("口交时不应用口型", "ignore-fera", program.ignoreMouthInFera, v => program.ignoreMouthInFera = v, changed),
-                Check("接吻时禁用程序", "ignore-kiss", program.ignoreKiss, v => program.ignoreKiss = v, changed)
+        internal static Widget BuildFlags(ExpressionControl.Program program, Action changed, Func<bool> canEdit = null) {
+            return new VStack(4f, "program-flags") {
+                new HStack(12f) {
+                    Check("应用嘴巴开合", "apply-mouth", program.applyMouthOpen, v => program.applyMouthOpen = v, changed, "", canEdit).Width(150f),
+                    Check("口交时不应用口型", "ignore-fera", program.ignoreMouthInFera, v => program.ignoreMouthInFera = v, changed, "", canEdit).Width(186f)
+                }.Height(28f),
+                Check("接吻时禁用程序", "ignore-kiss", program.ignoreKiss, v => program.ignoreKiss = v, changed, "", canEdit).Height(28f)
             };
         }
 
@@ -102,12 +105,27 @@ namespace ExpressionControl {
             return result;
         }
 
-        private static Checkbox Check(string label, string key, bool value, Action<bool> apply, Action changed) {
-            return new Checkbox(label, value, delegate(bool next) { apply(next); changed(); }, key).Height(28f).ExpandWidth();
+        private static Checkbox Check(string label, string key, bool value, Action<bool> apply, Action changed,
+            string prefix, Func<bool> canEdit) {
+            return new Checkbox(label, value, delegate(bool next) {
+                if (canEdit != null && !canEdit()) return;
+                apply(next); changed();
+            }, prefix + key).Height(28f).ExpandWidth();
         }
 
-        private static InputInt Number(string label, string key, int value, int min, int max, Action<int> apply) {
-            return new InputInt(label, value, apply, key) { HasMin = true, Min = min, HasMax = true, Max = max, StepFast = 5 };
+        private static TextField Number(string key, Func<int> current, Action<int> apply, Action changed,
+            string prefix, Func<bool> canEdit) {
+            TextField input = new TextField(current().ToString(), key: prefix + key) { Flags = TextInputFlags.Decimal };
+            Action<string> commit = delegate(string text) {
+                if (canEdit != null && !canEdit()) return;
+                int parsed;
+                apply(int.TryParse(text, out parsed) ? parsed : current());
+                input.Value = current().ToString();
+                changed();
+            };
+            input.OnSubmit = commit;
+            input.OnBlur = commit;
+            return input;
         }
 
         private static int Clamp(int value, int min, int max) { return Math.Max(min, Math.Min(max, value)); }

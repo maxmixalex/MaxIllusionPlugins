@@ -24,7 +24,7 @@ namespace MultiTeamH {
     public sealed class MultiTeamHPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MultiTeamH";
         public const string Name = "MultiTeamH";
-        public const string Version = "0.11.64";
+        public const string Version = "0.11.65";
 
         internal static MultiTeamHPlugin Instance { get; private set; }
         internal static ConfigEntry<bool> Enabled { get; private set; }

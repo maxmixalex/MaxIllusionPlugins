@@ -14,6 +14,17 @@ namespace ExpressionControl {
         private readonly Dictionary<int, string> mouthPtnNameDict = new Dictionary<int, string>();
 
         private void SetProgramTimer(FemaleData female) { TimerResets++; }
+        private void InvalidateMaximumUiViews() { }
+        private void SetMaximumUiVisible(bool value) { }
+        private void SetMaximumUiProgramVisible(bool value) { }
+        internal int ProgramWindowToggleCount;
+        private void ToggleMaximumUiProgram() { ProgramWindowToggleCount++; }
+        internal int ProgramApplications;
+        internal FemaleData LastProgramActor;
+        public bool ProcAllProgram(FemaleData female, bool fix, FaceListCtrl.FaceInfo info = null) {
+            ProgramApplications++; LastProgramActor = female; female.programTimerNow = 3f; return true;
+        }
+        private bool IsProgramControllingPart(FemaleData female, ExpressionPart part) { return false; }
         internal void TestReadError(System.Exception error) { presetReadError = error; }
         internal void TestReload() { ReloadMaximumUiPresets(); }
         internal bool TestDeleteExpression(string guid) { return XML_DeleteExpression(guid); }
@@ -29,9 +40,19 @@ namespace ExpressionControl {
             public PartType LastPart;
             public float LastValue;
             public Expression AppliedExpression;
+            public FemaleState state;
+            public FemaleState? NextState;
+            public bool NativeKiss, isKiss, isFeraMode;
+            public int EyeRestores, EyeSmallRestores, EyeUpdates, EyeSmallUpdates;
 
             public void Update() { Reads++; }
-            public void UpdateState(bool force, string motion, bool fera) { StateUpdates++; }
+            public void UpdateState(bool force, string motion, bool fera) { StateUpdates++; RefreshRuntimeState(force, motion, fera); }
+            private bool IsKissAction() { return NativeKiss; }
+            private FemaleState GetFemaleState(string motion) { return NextState.HasValue ? NextState.Value : state; }
+            public void RestoreEyeY() { EyeRestores++; }
+            public void RestoreEyeSmall() { EyeSmallRestores++; }
+            public void ProcEyeY() { EyeUpdates++; }
+            public void ProcEyeSmall() { EyeSmallUpdates++; }
             public void SetExpression(Expression value) { AppliedExpression = value; }
             public void SetProgram(Program value) { program = value; }
             public void SetPart(PartType part, int value) { AppliedParts++; LastPart = part; LastValue = value; }

@@ -79,8 +79,7 @@ namespace MaximumUI {
             else if (widget is Table) ArrangeTable(node, (Table)widget, rect);
             else if (widget is TableRow) ArrangeHStack(node, 1f, rect);
             else if (widget is TableCell) ArrangePanel(node, rect);
-            else if (widget is ScrollView) ArrangeStackChildren(node,
-                new MuiRect(rect.X, rect.Y, Math.Max(1f, rect.Width - 16f), rect.Height), 0f);
+            else if (widget is ScrollView) ArrangeScrollView(node, (ScrollView)widget, rect);
             else if (widget is Foldout) ArrangeFoldout(node, (Foldout)widget, rect);
             else if (widget is CollapsingHeader) ArrangeCollapsingHeader(node, ((CollapsingHeader)widget).Open, rect);
             else if (widget is ClosableCollapsingHeader) ArrangeCollapsingHeader(node, ((ClosableCollapsingHeader)widget).Open && ((ClosableCollapsingHeader)widget).Visible, rect);
@@ -203,12 +202,57 @@ namespace MaximumUI {
         private void MeasureScrollView(LayoutNode node, ScrollView scrollView, LayoutConstraints constraints) {
             // Content has unbounded vertical space. Measuring it against the viewport
             // previously clamped nested stacks and made their last rows unreachable.
-            LayoutConstraints contentConstraints = new LayoutConstraints(0f,
-                Math.Max(1f, constraints.MaxWidth - 16f), 0f, float.PositiveInfinity);
-            MeasureChildren(node, scrollView, contentConstraints, true);
+            float contentWidth = Math.Max(1f, constraints.MaxWidth - (scrollView.AlwaysShowVertical ? ScrollbarGeometry.GutterSize : 0f));
+            MeasureScrollContent(node, scrollView, contentWidth);
             MuiVec2 content = MeasureStackSize(node, 0f);
+            node.ScrollWideMeasureWidth = contentWidth;
+            node.ScrollWideContentHeight = content.Y;
+            float availableHeight = Math.Min(constraints.MaxHeight, scrollView.Height > 0f ? scrollView.Height : float.PositiveInfinity)
+                - (scrollView.AlwaysShowHorizontal ? ScrollbarGeometry.GutterSize : 0f);
+            float desiredWidth = content.X;
+            if (!scrollView.AlwaysShowVertical && content.Y > availableHeight) {
+                float narrowWidth = Math.Max(1f, constraints.MaxWidth - ScrollbarGeometry.GutterSize);
+                desiredWidth = Math.Min(desiredWidth, narrowWidth);
+                // A fixed-height host, or content already taller than the maximum,
+                // has its desired height before wrapping for the scrollbar. Doing
+                // that second recursive measurement here doubles work at every
+                // nested scroll host. Arrange reflows once at its final width.
+                // A natural-height host with a forced horizontal bar is the one
+                // case where wrapping can still change its unclamped height.
+                if (scrollView.Height <= 0f && content.Y < constraints.MaxHeight) {
+                    MeasureScrollContent(node, scrollView, narrowWidth);
+                    content = MeasureStackSize(node, 0f);
+                    desiredWidth = content.X;
+                }
+            }
             float height = scrollView.Height > 0f ? scrollView.Height : content.Y;
-            node.DesiredSize = new MuiVec2(content.X, height);
+            node.DesiredSize = new MuiVec2(desiredWidth, height);
+        }
+
+        private void MeasureScrollContent(LayoutNode node, ScrollView scrollView, float width) {
+            node.Children.Clear();
+            node.ScrollMeasureWidth = width;
+            MeasureChildren(node, scrollView, new LayoutConstraints(0f, width, 0f, float.PositiveInfinity), true);
+        }
+
+        private void ArrangeScrollView(LayoutNode node, ScrollView scrollView, MuiRect rect) {
+            float height = Math.Max(0f, rect.Height - (scrollView.AlwaysShowHorizontal ? ScrollbarGeometry.GutterSize : 0f));
+            if (!scrollView.AlwaysShowVertical && Math.Abs(Math.Max(1f, rect.Width) - node.ScrollWideMeasureWidth) > 0.01f) {
+                // Resolve overflow against the final full width first. A previous
+                // narrow measurement can wrap extra lines and otherwise keep a
+                // gutter alive even after a parent gives the host enough room.
+                MeasureScrollContent(node, scrollView, Math.Max(1f, rect.Width));
+                node.ScrollWideMeasureWidth = Math.Max(1f, rect.Width);
+                node.ScrollWideContentHeight = MeasureStackSize(node, 0f).Y;
+            }
+            bool vertical = scrollView.AlwaysShowVertical || node.ScrollWideContentHeight > height;
+            float width = Math.Max(1f, rect.Width - (vertical ? ScrollbarGeometry.GutterSize : 0f));
+            if (Math.Abs(width - node.ScrollMeasureWidth) > 0.01f) {
+                // Parent flex sizing may give the viewport less height than its
+                // initial measurement; reflow wrapping content for the actual gutter.
+                MeasureScrollContent(node, scrollView, width);
+            }
+            ArrangeStackChildren(node, new MuiRect(rect.X, rect.Y, width, height), 0f);
         }
 
         private void MeasureFoldout(LayoutNode node, Foldout foldout, LayoutConstraints constraints) {
@@ -399,7 +443,7 @@ namespace MaximumUI {
             } else if (widget is IListBoxWidget) {
                 IListBoxWidget listBox = (IListBoxWidget)widget;
                 width = 160f;
-                height = metrics.RowHeight * Math.Max(1, listBox.ListVisibleItems);
+                height = metrics.RowHeight * Math.Max(1, listBox.ListVisibleItems) + ScrollGeometry.FrameBorder * 2f;
                 if (widget is ISearchableListBoxWidget) height += metrics.RowHeight + 4f;
             } else if (widget is IDebugLinesWidget) {
                 IDebugLinesWidget debug = (IDebugLinesWidget)widget;
@@ -418,11 +462,17 @@ namespace MaximumUI {
                 }
             } else if (widget is HelpBox) {
                 HelpBox helpBox = (HelpBox)widget;
-                width = MeasureText(helpBox.Message) + 16f;
-                height = metrics.RowHeight + 10f;
+                width = MeasureText(helpBox.Message) + 24f;
+                float wrapWidth = widget.Layout.HasWidth ? widget.Layout.Width : constraints.MaxWidth;
+                if (widget.Layout.HasMaxWidth) wrapWidth = Math.Min(wrapWidth, widget.Layout.MaxWidth);
+                wrapWidth = Math.Max(1f, wrapWidth - 24f);
+                float textHeight = metrics.MeasureWrappedTextHeight != null
+                    ? metrics.MeasureWrappedTextHeight(helpBox.Message, wrapWidth)
+                    : Math.Max(1f, (float)Math.Ceiling((width - 24f) / wrapWidth)) * Math.Max(16f, metrics.RowHeight - 12f);
+                height = Math.Max(metrics.RowHeight, (float)Math.Ceiling((textHeight + 18f) / 4f) * 4f);
             } else if (widget is Selectable) {
                 Selectable selectable = (Selectable)widget;
-                width = MeasureText(selectable.Text) + 16f;
+                width = MeasureText(selectable.Text) + (selectable.ShowCheckbox ? 40f : 24f);
             } else if (widget is ColorButton) {
                 ColorButton colorButton = (ColorButton)widget;
                 width = Math.Max(72f, MeasureText(colorButton.Label) + 48f);

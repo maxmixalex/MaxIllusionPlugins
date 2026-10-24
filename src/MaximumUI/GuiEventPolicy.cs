@@ -15,5 +15,9 @@ namespace MaximumUI {
         public static bool ShouldReleasePointer(EventType type, int button) {
             return type == EventType.MouseUp && button == 0;
         }
+
+        public static bool ShouldBlurTextOnPress(EventType type, int button, bool acceptsInput, bool hovered, bool preserveTextFocus) {
+            return type == EventType.MouseDown && button == 0 && acceptsInput && hovered && !preserveTextFocus;
+        }
     }
 }

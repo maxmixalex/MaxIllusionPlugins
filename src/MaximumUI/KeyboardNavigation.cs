@@ -32,6 +32,22 @@ namespace MaximumUI {
             return Math.Max(0f, Math.Min(maxScroll, scroll));
         }
 
+        public static bool ScrollVertical(float position, float rowHeight, float viewportHeight, float contentHeight, KeyCode key, out float next) {
+            float maximum = Math.Max(0f, ScrollGeometry.FiniteNonNegative(contentHeight) - ScrollGeometry.FiniteNonNegative(viewportHeight));
+            double candidate = Math.Min(ScrollGeometry.FiniteNonNegative(position), maximum);
+            float row = Math.Max(1f, ScrollGeometry.FiniteNonNegative(rowHeight));
+            float page = Math.Max(row, ScrollGeometry.FiniteNonNegative(viewportHeight) - row);
+            if (key == KeyCode.Home) candidate = 0d;
+            else if (key == KeyCode.End) candidate = maximum;
+            else if (key == KeyCode.UpArrow) candidate -= row;
+            else if (key == KeyCode.DownArrow) candidate += row;
+            else if (key == KeyCode.PageUp) candidate -= page;
+            else if (key == KeyCode.PageDown) candidate += page;
+            else { next = (float)candidate; return false; }
+            next = (float)Math.Max(0d, Math.Min(maximum, candidate));
+            return true;
+        }
+
         public static bool MoveSlider(float value, float min, float max, KeyCode key, bool integer, bool fast, out float next) {
             next = value;
             if (float.IsNaN(min) || float.IsNaN(max) || float.IsInfinity(min) || float.IsInfinity(max)) return false;

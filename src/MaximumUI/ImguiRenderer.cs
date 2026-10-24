@@ -19,6 +19,8 @@ namespace MaximumUI {
         private GUIStyle disabledRightLabel;
         private GUIStyle disabledButtonText;
         private GUIStyle searchFieldStyle;
+        private GUIStyle helpTextStyle;
+        private GUIStyle disabledHelpTextStyle;
         private GUIStyle popupShortcutStyle;
         private readonly Func<string, float> popupTextMeasure;
         private readonly Func<string, float, float> tooltipTextHeightMeasure;
@@ -38,12 +40,21 @@ namespace MaximumUI {
         private DragState activeDrag;
         private WindowState resizingWindow;
         private readonly GuiCoordinates coordinates = new GuiCoordinates();
+        private struct ScrollInputFrame {
+            public MuiRect VisibleBounds;
+            public MuiVec2 Position;
+            public MuiVec2 Maximum;
+            public bool Enabled;
+        }
+        private ScrollInputFrame[] scrollInputs = new ScrollInputFrame[4];
+        private int scrollDepth;
         private int popupDepth;
         private TabsState activeTabs;
         private readonly List<Widget> ownerAncestors = new List<Widget>(8);
         private bool modelEnabled = true;
         private bool modelRootEnabled = true;
         private PopupOwnerState currentPopupOwner;
+        private readonly TextFocusSession textFocus = new TextFocusSession();
 
         internal bool HasPointerCapture {
             get { return ownedHotControl != 0 && GUIUtility.hotControl == ownedHotControl; }
@@ -61,6 +72,7 @@ namespace MaximumUI {
         }
 
         public void Dispose() {
+            ResetPendingTextFocus();
             CancelInput();
             layoutCache.Invalidate();
             wrappedLabels.Clear();
@@ -82,6 +94,16 @@ namespace MaximumUI {
             resizingWindow = null;
             activeTabs = null;
             mouseDownOnMaximumUi = false;
+        }
+
+        internal void ResetPendingTextFocus() {
+            textFocus.Reset();
+        }
+
+        private void CommitFocusedText() {
+            // The session already guards its original popup/source. Using the
+            // command currently being pressed as its owner would be incorrect.
+            MaximumUIRuntime.EnqueueCallback(textFocus.TakeBlur());
         }
 
         private void CapturePointer(int control) {
@@ -124,6 +146,8 @@ namespace MaximumUI {
             Event guiEvent = Event.current;
             try {
                 coordinates.Reset(Screen.width, Screen.height);
+                scrollDepth = 0;
+                if (!context.OwnsKeyboardInput) CommitFocusedText();
                 popupBlocksInput = PreparePopupInput(context);
                 if (context.ActiveContextMenu != null) context.ActiveContextMenu.Seen = false;
                 if (context.ActiveMenuBar != null) context.ActiveMenuBar.Seen = false;
@@ -140,6 +164,9 @@ namespace MaximumUI {
                     MaximumTheme.SetTextColor(hoveredLinkLabel, ToUnityColor(context.Theme.Tokens.AccentHover));
                     disabledLabel = new GUIStyle(context.Theme.Label);
                     MaximumTheme.SetTextColor(disabledLabel, ToUnityColor(context.Theme.Tokens.TextDisabled));
+                    helpTextStyle = new GUIStyle(context.Theme.Label) { wordWrap = true, alignment = TextAnchor.UpperLeft, padding = new RectOffset() };
+                    disabledHelpTextStyle = new GUIStyle(helpTextStyle);
+                    MaximumTheme.SetTextColor(disabledHelpTextStyle, ToUnityColor(context.Theme.Tokens.TextDisabled));
                     disabledCenterLabel = new GUIStyle(disabledLabel) { alignment = TextAnchor.MiddleCenter };
                     disabledRightLabel = new GUIStyle(disabledLabel) { alignment = TextAnchor.MiddleRight };
                     disabledButtonText = new GUIStyle(context.Theme.Button);
@@ -409,6 +436,8 @@ namespace MaximumUI {
                 } else if (widget is Panel) {
                     DrawStyle(context.Theme.Box, OffsetRect(node.Rect, offset), GUIContent.none, false, false, false, false);
                     RenderLayoutChildren(node, context, offset);
+                    if (((Panel)widget).Selected)
+                        DrawStrokeRect(OffsetRect(node.Rect, offset), ToUnityColor(GUI.enabled ? context.Theme.Tokens.Accent : context.Theme.Tokens.Border), 1f);
                 } else if (widget is TableHeaderRow) {
                     DrawFilledRect(OffsetRect(node.Rect, offset), ToUnityColor(context.Theme.Tokens.SelectedBg));
                     RenderLayoutChildren(node, context, offset);
@@ -1309,11 +1338,10 @@ namespace MaximumUI {
             bool clearHovered = false, clearPressed = false;
             Rect clearRect = new Rect(rect.xMax - 30f, rect.y + 2f, 28f, Mathf.Max(0f, rect.height - 4f));
             if (canClear) {
-                bool clear = DoButton(clearRect, string.Empty, null, false, out clearHovered, out clearPressed);
+                bool clear = DoButton(clearRect, string.Empty, null, false, out clearHovered, out clearPressed, true);
                 if (clear) {
                     if (string.IsNullOrEmpty(state.ControlName)) state.ControlName = id;
-                    state.EditingValue = string.Empty;
-                    state.HasEditingValue = true;
+                    TextEditingLifecycle.Edit(state, string.Empty);
                     GUI.FocusControl(state.ControlName);
                     if (widget.OnEdit != null) EnqueueCallback(delegate { widget.OnEdit(string.Empty); });
                     if (widget.OnChange != null) EnqueueCallback(delegate { widget.OnChange(string.Empty); });
@@ -1420,11 +1448,7 @@ namespace MaximumUI {
 
             string externalValue = value ?? string.Empty;
             bool focusedBefore = string.Equals(GUI.GetNameOfFocusedControl(), state.ControlName, StringComparison.Ordinal);
-            bool wasFocused = state.Focused || state.WasFocused || focusedBefore;
-            if (!state.HasEditingValue || (!focusedBefore && !string.Equals(state.EditingValue, externalValue, StringComparison.Ordinal))) {
-                state.EditingValue = ApplyTextInputFilter(externalValue, flags, charFilter, maxLength);
-                state.HasEditingValue = true;
-            }
+            bool wasFocused = TextEditingLifecycle.Synchronize(state, externalValue, focusedBefore, flags, charFilter, maxLength);
 
             Event keyEvent = Event.current;
             bool receivedKey = keyEvent != null && keyEvent.type == EventType.KeyDown;
@@ -1462,9 +1486,12 @@ namespace MaximumUI {
             }
 
             if (state.Focused && GUI.enabled && context.OwnsKeyboardInput && !IsInputBlockedByDialog()) MaximumUIRuntime.IsAnyTextFieldFocused = true;
+            if (state.Focused && GUI.enabled && context.OwnsKeyboardInput && !IsInputBlockedByDialog())
+                MaximumUIRuntime.EnqueueCallback(textFocus.Track(state, onBlur, currentWidget, currentPopupOwner));
 
             Event current = Event.current;
             bool handledKey = false;
+            bool submitRequested = false;
             if (state.Focused && GUI.enabled && context.OwnsKeyboardInput && !IsInputBlockedByDialog() && receivedKey) {
                 if (receivedKeyCode == KeyCode.Escape) {
                     if (HasTextInputFlag(flags, TextInputFlags.EscapeClearsAll)) {
@@ -1476,10 +1503,7 @@ namespace MaximumUI {
                     }
                 } else if ((receivedKeyCode == KeyCode.Return || receivedKeyCode == KeyCode.KeypadEnter) &&
                     (kind != TextInputKind.TextArea || HasTextInputFlag(flags, TextInputFlags.EnterReturnsTrue))) {
-                    if (onSubmit != null && !IsInputBlockedByDialog()) {
-                        string capturedSubmit = next;
-                        EnqueueCallback(delegate { onSubmit(capturedSubmit); });
-                    }
+                    submitRequested = onSubmit != null;
                     handledKey = true;
                 }
             }
@@ -1490,7 +1514,7 @@ namespace MaximumUI {
             }
 
             if (!HasTextInputFlag(flags, TextInputFlags.ReadOnly) && !string.Equals(next, state.EditingValue, StringComparison.Ordinal)) {
-                state.EditingValue = next;
+                TextEditingLifecycle.Edit(state, next);
                 Input.ResetInputAxes();
                 if (!IsInputBlockedByDialog()) {
                     if (onEdit != null) {
@@ -1504,6 +1528,12 @@ namespace MaximumUI {
                 }
             }
 
+            if (submitRequested) {
+                // Changes from this event must run first, so a model's submit
+                // normalization cannot be overwritten by its own OnChange.
+                EnqueueCallback(TextEditingLifecycle.CommitCallback(state, onSubmit));
+            }
+
             if (handledKey && current != null) {
                 current.Use();
                 Input.ResetInputAxes();
@@ -1511,10 +1541,8 @@ namespace MaximumUI {
 
             if (wasFocused && !state.Focused) {
                 state.HasFocusStartValue = false;
-                if (onBlur != null) {
-                    string capturedBlur = state.EditingValue ?? string.Empty;
-                    EnqueueCallback(delegate { onBlur(capturedBlur); });
-                }
+                if (textFocus.Owns(state)) CommitFocusedText();
+                else if (onBlur != null) EnqueueCallback(TextEditingLifecycle.CommitCallback(state, onBlur));
             }
             state.WasFocused = state.Focused;
         }
@@ -1544,7 +1572,12 @@ namespace MaximumUI {
         private void RenderHelpBoxAt(LayoutNode node, HelpBox widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
             if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.HelpBox, rect, GetContent(widget.Message), false, false, false, false);
+                ThemeTokens tokens = context.Theme.Tokens;
+                MuiColor background = widget.Type == HelpBoxType.Error ? tokens.ErrorBg : widget.Type == HelpBoxType.Warning ? tokens.WarningBg : tokens.PanelBg;
+                DrawFilledRect(rect, ToUnityColor(background));
+                DrawStrokeRect(rect, ToUnityColor(tokens.Border), tokens.BorderWidth);
+                DrawStyle(GUI.enabled ? helpTextStyle : disabledHelpTextStyle, ToUnityRect(ThemeTypography.HelpTextBounds(ToMuiRect(rect))),
+                    GetContent(widget.Message), false, false, false, false);
             }
         }
 
@@ -1553,41 +1586,54 @@ namespace MaximumUI {
             ListBoxState state = context.StateStore.GetOrCreate<ListBoxState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
             ISearchableListBoxWidget searchable = node.Widget as ISearchableListBoxWidget;
-            string filter = searchable == null ? string.Empty : searchable.ListFilterText;
-            if (filter == null) filter = string.Empty;
-
+            string filter = searchable == null ? string.Empty : searchable.ListFilterText ?? string.Empty;
             if (!ReferenceEquals(state.Owner, widget)) {
                 state.Owner = widget;
                 state.Formatter = widget.GetListText;
             }
+            if (!string.Equals(state.Filter, filter, StringComparison.Ordinal)) {
+                state.Filter = filter;
+                state.Position = Vector2.zero;
+            }
             state.Choices.Refresh(widget, widget.ListItems, state.Formatter, filter, contentRevision, context.CacheLayout);
             IList<object> values = state.Choices.Values;
-
             float rowHeight = controlRowHeight;
-            Rect listRect = rect;
+            bool filterFocused = false;
             if (searchable != null) {
-                Rect filterRect = new Rect(rect.x + 2f, rect.y + 2f, Mathf.Max(1f, rect.width - 4f), rowHeight);
-                string nextFilter = GUI.TextField(filterRect, filter, context.Theme.TextField);
-                if (!string.Equals(nextFilter, filter, StringComparison.Ordinal) && searchable.ListOnFilterChange != null && !IsInputBlockedByDialog()) {
-                    string capturedFilter = nextFilter ?? string.Empty;
-                    EnqueueCallback(delegate { searchable.ListOnFilterChange(capturedFilter); });
-                }
-                if (string.IsNullOrEmpty(filter) && !string.IsNullOrEmpty(searchable.ListFilterPlaceholder) && (Event.current == null || Event.current.type == EventType.Repaint)) {
-                    DrawStyle(context.Theme.Label, filterRect, GetContent(searchable.ListFilterPlaceholder), false, false, false, false);
-                }
-                listRect = new Rect(rect.x, filterRect.yMax + 3f, rect.width, Mathf.Max(1f, rect.yMax - filterRect.yMax - 3f));
+                Rect filterRect = ToUnityRect(ScrollGeometry.ListFilterBounds(ToMuiRect(rect), rowHeight));
+                if (state.FilterWidget.Key == null) state.FilterWidget.Key = id + ":filter";
+                string filterId = (string)state.FilterWidget.Key;
+                TextFieldState filterState = context.StateStore.GetOrCreate<TextFieldState>(filterId);
+                Widget previousWidget = currentWidget;
+                string previousPath = context.Path;
+                state.FilterWidget.Enabled = node.Widget.Enabled;
+                state.FilterWidget.Focusable = node.Widget.Focusable;
+                state.FilterNode.Rect = ToMuiRect(filterRect);
+                state.FilterNode.Path = filterId;
+                currentWidget = state.FilterWidget;
+                context.Path = state.FilterNode.Path;
+                try {
+                    RecordItemQuery(context, state.FilterNode, state.FilterWidget, Vector2.zero);
+                    RenderTextInputCore(filterRect, filterState, filterId, filter, searchable.ListFilterPlaceholder,
+                        0, searchFieldStyle, TextInputFlags.None, null, false, searchable.ListOnFilterChange,
+                        null, null, null, context, TextInputKind.TextField, '\0');
+                } finally { currentWidget = previousWidget; context.Path = previousPath; }
+                filterFocused = filterState.Focused;
+                DrawIcon(new Rect(filterRect.xMax - 28f, filterRect.y, 24f, filterRect.height), Mdl2Icon.Search, NativeTextColor(context), 1f);
             }
-
-            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, listRect.width - 16f), Mathf.Max(listRect.height, rowHeight * Mathf.Max(1, values.Count)));
-            if (HasNavigationKey(node.Widget, context) && widget.ListOnChange != null) {
+            ScrollFrameLayout frame = ScrollGeometry.ListFrame(ToMuiRect(rect), rowHeight, values.Count, searchable != null);
+            Rect listRect = ToUnityRect(frame.Viewport);
+            Rect viewRect = ToUnityRect(frame.Content);
+            state.Position = new Vector2(0f, frame.ClampY(state.Position.y));
+            if (!filterFocused && HasNavigationKey(node.Widget, context) && widget.ListOnChange != null) {
                 int selected = -1;
                 for (int i = 0; i < values.Count; i++) {
                     if (object.Equals(values[i], widget.ListValue)) { selected = i; break; }
                 }
                 int next;
                 if (KeyboardNavigation.MoveSelection(selected, values.Count, Event.current.keyCode,
-                    Math.Max(1, (int)(listRect.height / rowHeight)), out next)) {
-                    state.Position.y = KeyboardNavigation.RevealRow(state.Position.y, next, rowHeight, listRect.height, values.Count);
+                    Math.Max(1, (int)(frame.ContentViewport.Height / rowHeight)), out next)) {
+                    state.Position.y = KeyboardNavigation.RevealRow(state.Position.y, next, rowHeight, frame.ContentViewport.Height, values.Count);
                     if (next != selected) {
                         object captured = values[next];
                         Delegate callback = widget.ListOnChange;
@@ -1596,18 +1642,14 @@ namespace MaximumUI {
                     ConsumeKey();
                 }
             }
-            if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, listRect, GUIContent.none, false, false, false, false);
-            }
-
-            state.Position = BeginScrollView(context, listRect, state.Position, viewRect, false, viewRect.height > listRect.height);
+            DrawFilledRect(ToUnityRect(frame.Bounds), ToUnityColor(context.Theme.Tokens.FieldBg));
+            state.Position = BeginScrollView(context, listRect, state.Position, viewRect, false, frame.Vertical);
             try {
-                int first;
-                int end;
-                ScrollGeometry.VisibleRows(state.Position.y, listRect.height, rowHeight, values.Count, out first, out end);
+                int first, end;
+                ScrollGeometry.VisibleRows(state.Position.y, frame.ContentViewport.Height, rowHeight, values.Count, out first, out end);
                 for (int i = first; i < end; i++) {
                     object item = values[i];
-                    Rect rowRect = new Rect(2f, i * rowHeight + 1f, Mathf.Max(1f, viewRect.width - 4f), Mathf.Max(1f, rowHeight - 2f));
+                    Rect rowRect = new Rect(0f, i * rowHeight, viewRect.width, rowHeight);
                     bool selected = object.Equals(item, widget.ListValue);
                     if (DoButton(rowRect, state.Choices.Labels[i], context.Theme.NavigationItem, selected) && widget.ListOnChange != null && !IsInputBlockedByDialog()) {
                         object captured = item;
@@ -1615,9 +1657,8 @@ namespace MaximumUI {
                         EnqueueCallback(delegate { callback.DynamicInvoke(captured); });
                     }
                 }
-            } finally {
-                EndScrollView();
-            }
+            } finally { EndScrollView(); }
+            DrawScrollFrame(frame.Bounds, context);
         }
 
         private void RenderDebugLinesAt(LayoutNode node, IDebugLinesWidget widget, RenderContext context, Vector2 offset) {
@@ -1626,15 +1667,12 @@ namespace MaximumUI {
             Rect rect = OffsetRect(node.Rect, offset);
             float rowHeight = controlRowHeight;
             IList<string> lines = widget.GetDebugLines();
-            int visibleRows = Mathf.Max(1, widget.VisibleRows);
-            float contentHeight = rowHeight * Mathf.Max(visibleRows + 1, lines.Count + 1) + 4f;
-            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, rect.width - 16f), Mathf.Max(rect.height, contentHeight));
+            ScrollFrameLayout frame = ScrollGeometry.DebugFrame(ToMuiRect(rect), rowHeight, lines.Count);
+            Rect viewRect = ToUnityRect(frame.Content);
+            state.Position = new Vector2(0f, frame.ClampY(state.Position.y));
 
-            if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
-            }
-
-            state.Position = BeginScrollView(context, rect, state.Position, viewRect, false, viewRect.height > rect.height);
+            DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+            state.Position = BeginScrollView(context, ToUnityRect(frame.Viewport), state.Position, viewRect, false, frame.Vertical);
             try {
                 Rect title = new Rect(2f, 2f, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
                 if (Event.current == null || Event.current.type == EventType.Repaint) {
@@ -1651,6 +1689,7 @@ namespace MaximumUI {
                 EndScrollView();
             }
 
+            DrawScrollFrame(frame.Bounds, context);
             RegisterInputRegion(rect, true);
         }
 
@@ -1660,16 +1699,13 @@ namespace MaximumUI {
             Rect rect = OffsetRect(node.Rect, offset);
             ThemeTokens tokens = widget.Tokens ?? new ThemeTokens();
             float rowHeight = controlRowHeight;
-            int visibleRows = Mathf.Max(1, ThemeEditorTokens.VisibleRowCount(widget));
-            int totalRows = Mathf.Max(1, ThemeEditorTokens.TotalRowCount(widget));
-            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, rect.width - 16f), rowHeight * (totalRows + (widget.ShowTitle ? 1 : 0)) + 4f);
+            ScrollFrameLayout frame = ScrollGeometry.ThemeEditorFrame(ToMuiRect(rect), rowHeight, widget);
+            Rect viewRect = ToUnityRect(frame.Content);
+            state.Position = new Vector2(0f, frame.ClampY(state.Position.y));
             float colorLabelWidth = ThemeEditorTokens.MeasureLabelWidth(widget, popupTextMeasure, Mathf.Max(0f, viewRect.width - 4f));
 
-            if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
-            }
-
-            state.Position = BeginScrollView(context, rect, state.Position, viewRect, false, totalRows > visibleRows);
+            DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+            state.Position = BeginScrollView(context, ToUnityRect(frame.Viewport), state.Position, viewRect, false, frame.Vertical);
             try {
                 Rect title = new Rect(2f, 2f, Mathf.Max(1f, viewRect.width - 4f), rowHeight);
                 if (widget.ShowTitle && (Event.current == null || Event.current.type == EventType.Repaint)) {
@@ -1699,6 +1735,7 @@ namespace MaximumUI {
                 EndScrollView();
             }
 
+            DrawScrollFrame(frame.Bounds, context);
             RegisterInputRegion(rect, true);
         }
 
@@ -2168,7 +2205,9 @@ namespace MaximumUI {
             bool additive = current != null && (current.control || current.command);
             bool range = current != null && current.shift;
             bool doubleClick = current != null && current.clickCount > 1;
-            bool clicked = DoButton(rect, widget.Text, context.Theme.NavigationItem, widget.Selected) || ConsumeActivation(widget, context);
+            bool clicked = DoButton(rect, widget.ShowCheckbox ? string.Empty : widget.Text, context.Theme.NavigationItem, widget.Selected) || ConsumeActivation(widget, context);
+            if (widget.ShowCheckbox) DrawSelectionControl(new Rect(rect.x + 8f, rect.y, Mathf.Max(0f, rect.width - 16f), rect.height),
+                widget.Text, widget.Selected, false, context);
             if (clicked && !IsInputBlockedByDialog()) {
                 bool captured = !widget.Selected;
                 if (widget.OnSelect != null) {
@@ -2506,21 +2545,23 @@ namespace MaximumUI {
             VirtualListState state = context.StateStore.GetOrCreate<VirtualListState>(id);
             Rect rect = OffsetRect(node.Rect, offset);
             float rowHeight = Mathf.Max(1f, widget.RowHeight);
-            float totalHeight = Mathf.Max(rect.height, widget.ItemCount * rowHeight);
-            Rect viewRect = new Rect(0f, 0f, Mathf.Max(1f, rect.width - 16f), totalHeight);
-
-            if (Event.current == null || Event.current.type == EventType.Repaint) {
-                DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
+            ScrollFrameLayout frame = ScrollGeometry.VerticalFrame(ToMuiRect(rect), Math.Max(0, widget.ItemCount) * rowHeight, widget.AlwaysShowVertical);
+            Rect viewRect = ToUnityRect(frame.Content);
+            DrawFilledRect(rect, ToUnityColor(context.Theme.Tokens.FieldBg));
+            Vector2 before = widget.ScrollPosition == null ? new Vector2(0f, frame.ClampY(state.Position.y)) : widget.ScrollPosition.Resolve(frame.Viewport, frame.Content, false, frame.Vertical);
+            Vector2 requested = before;
+            float keyboardScroll;
+            if (HasNavigationKey(widget, context) && KeyboardNavigation.ScrollVertical(before.y, rowHeight,
+                frame.ContentViewport.Height, frame.Content.Height, Event.current.keyCode, out keyboardScroll)) {
+                requested.y = keyboardScroll;
+                ConsumeKey();
             }
-
-            bool vertical = widget.AlwaysShowVertical || totalHeight > rect.height;
-            Vector2 before = widget.ScrollPosition == null ? state.Position : widget.ScrollPosition.Resolve(ToMuiRect(rect), ToMuiRect(viewRect), false, vertical);
-            state.Position = BeginScrollView(context, rect, before, viewRect, false, vertical);
+            state.Position = BeginScrollView(context, ToUnityRect(frame.Viewport), requested, viewRect, false, frame.Vertical);
             if (widget.ScrollPosition != null) widget.ScrollPosition.Publish(before, state.Position, GUI.enabled && !IsInputBlockedByDialog());
             try {
                 int first;
                 int last;
-                ScrollGeometry.VisibleRows(state.Position.y, rect.height, rowHeight, widget.ItemCount, out first, out last);
+                ScrollGeometry.VisibleRows(state.Position.y, frame.ContentViewport.Height, rowHeight, widget.ItemCount, out first, out last);
                 bool cache = context.CacheLayout && widget.CacheItems;
                 if (cache) state.Rows.BeginRange(widget, first, last, contentRevision, layoutEngine);
 
@@ -2547,6 +2588,7 @@ namespace MaximumUI {
                 EndScrollView();
             }
 
+            DrawScrollFrame(frame.Bounds, context);
             RegisterInputRegion(rect, true);
         }
 
@@ -2965,6 +3007,8 @@ namespace MaximumUI {
             Event current = Event.current;
             if (!HasNavigationKey(widget, context) ||
                 !KeyboardNavigation.IsActivation(current.keyCode, current.control, current.alt, current.command)) return false;
+            CommitFocusedText();
+            GUI.FocusControl(null);
             ConsumeKey();
             return true;
         }
@@ -3050,7 +3094,7 @@ namespace MaximumUI {
             return DoButton(rect, text, style, on, out hover, out active);
         }
 
-        private bool DoButton(Rect rect, string text, GUIStyle style, bool on, out bool hover, out bool active) {
+        private bool DoButton(Rect rect, string text, GUIStyle style, bool on, out bool hover, out bool active, bool preserveTextFocus = false) {
             int controlId = GUIUtility.GetControlID(FocusType.Passive, rect);
             Event current = Event.current;
             bool acceptsInput = GUI.enabled && !IsInputBlockedByDialog();
@@ -3060,6 +3104,13 @@ namespace MaximumUI {
 
             if (GUI.enabled && !IsInputBlockedByDialog() && current != null) {
                 if (current.type == EventType.MouseDown && current.button == 0 && hover) {
+                    // Commit a prior text field on press; button callbacks run on
+                    // release. Native scrollbar capture does not use this path.
+                    if (GuiEventPolicy.ShouldBlurTextOnPress(current.type, current.button, acceptsInput, hover, preserveTextFocus))
+                    {
+                        CommitFocusedText();
+                        GUI.FocusControl(null);
+                    }
                     CapturePointer(controlId);
                     active = true;
                     current.Use();
@@ -3454,15 +3505,39 @@ namespace MaximumUI {
 
         private Vector2 BeginScrollView(RenderContext context, Rect viewport, Vector2 position, Rect content,
             bool horizontal, bool vertical) {
+            MuiRect visibleBounds = coordinates.ClipToScreen(ToMuiRect(viewport));
             Vector2 result = context.Theme.BeginScrollView(viewport, position, content, horizontal, vertical);
-            MuiRect clippedViewport = ScrollGeometry.ContentViewport(ToMuiRect(viewport), ToMuiRect(content), horizontal, vertical, 16f);
+            MuiRect clippedViewport = ScrollGeometry.ContentViewport(ToMuiRect(viewport), ToMuiRect(content), horizontal, vertical, ScrollbarGeometry.GutterSize);
+            if (scrollDepth == scrollInputs.Length) {
+                ScrollInputFrame[] expanded = new ScrollInputFrame[scrollInputs.Length * 2];
+                Array.Copy(scrollInputs, expanded, scrollInputs.Length);
+                scrollInputs = expanded;
+            }
+            scrollInputs[scrollDepth++] = new ScrollInputFrame {
+                VisibleBounds = visibleBounds,
+                Position = new MuiVec2(result.x, result.y),
+                Maximum = new MuiVec2(Math.Max(0f, content.width - clippedViewport.Width), Math.Max(0f, content.height - clippedViewport.Height)),
+                Enabled = GUI.enabled && !context.SuppressInput && !IsInputBlockedByDialog()
+            };
             coordinates.PushScroll(clippedViewport, new MuiVec2(result.x, result.y), ToMuiRect(content));
             return result;
         }
 
+        private static void DrawScrollFrame(MuiRect bounds, RenderContext context) {
+            DrawStrokeRect(ToUnityRect(bounds), ToUnityColor(GUI.enabled ? context.Theme.Tokens.ControlBorder : context.Theme.Tokens.Border), ScrollGeometry.FrameBorder);
+        }
+
         private void EndScrollView() {
+            ScrollInputFrame input = scrollInputs[--scrollDepth];
+            Event current = Event.current;
+            bool handleWheel = true;
+            if (current != null && current.type == EventType.ScrollWheel) {
+                MuiVec2 mouse = coordinates.ToScreen(new MuiVec2(current.mousePosition.x, current.mousePosition.y));
+                handleWheel = input.Enabled && input.VisibleBounds.Contains(mouse) &&
+                    ScrollWheelRouting.CanConsume(input.Position, new MuiVec2(current.delta.x, current.delta.y), input.Maximum);
+            }
             coordinates.Pop();
-            GUI.EndScrollView();
+            GUI.EndScrollView(handleWheel);
         }
 
         private Rect ToComboButtonStateRect(Rect buttonRect) {

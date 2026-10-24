@@ -156,40 +156,59 @@ namespace MaximumUI {
         public MuiRect Track;
         public MuiRect Thumb;
         public bool Visible;
+        public bool Scrollable;
     }
 
-    /// <summary>Matches the native 12px scroll track, 4px gutter and 2px track inset.</summary>
+    /// <summary>Shared native/managed geometry: a 16px track, 8px thumb and 24px minimum handle.</summary>
     public static class ScrollbarGeometry {
         public const float GutterSize = 16f;
+        public const float ThumbWidth = 8f;
+        public const float MinimumThumbSize = 24f;
+        public const float EndInset = 2f;
 
-        public static ScrollbarLayout Vertical(MuiRect gutter, float contentHeight, float viewportHeight, float offset) {
-            return Calculate(gutter, contentHeight, viewportHeight, offset, false);
+        public static ScrollbarLayout Vertical(MuiRect gutter, float contentHeight, float viewportHeight, float offset, bool alwaysVisible = false) {
+            return Calculate(gutter, contentHeight, viewportHeight, offset, false, alwaysVisible);
         }
 
-        public static ScrollbarLayout Horizontal(MuiRect gutter, float contentWidth, float viewportWidth, float offset) {
-            return Calculate(gutter, contentWidth, viewportWidth, offset, true);
+        public static ScrollbarLayout Horizontal(MuiRect gutter, float contentWidth, float viewportWidth, float offset, bool alwaysVisible = false) {
+            return Calculate(gutter, contentWidth, viewportWidth, offset, true, alwaysVisible);
         }
 
-        private static ScrollbarLayout Calculate(MuiRect gutter, float content, float viewport, float offset, bool horizontal) {
-            float cross = Math.Max(0f, horizontal ? gutter.Height : gutter.Width);
-            float gap = Math.Min(4f, cross);
-            MuiRect track = horizontal
-                ? new MuiRect(gutter.X, gutter.Y + gap, gutter.Width, cross - gap)
-                : new MuiRect(gutter.X + gap, gutter.Y, cross - gap, gutter.Height);
-            MuiRect inner = PopupGeometry.Inset(track, 2f, 2f, 2f, 2f);
+        private static ScrollbarLayout Calculate(MuiRect gutter, float content, float viewport, float offset, bool horizontal, bool alwaysVisible) {
+            MuiRect track = new MuiRect(gutter.X, gutter.Y, Math.Max(0f, gutter.Width), Math.Max(0f, gutter.Height));
+            float cross = horizontal ? track.Height : track.Width;
+            float side = Math.Max(0f, (cross - ThumbWidth) * 0.5f);
+            float inset = NativeEndInset(horizontal ? track.Width : track.Height);
+            MuiRect inner = horizontal ? PopupGeometry.Inset(track, inset, side, inset, side)
+                : PopupGeometry.Inset(track, side, inset, side, inset);
             float length = horizontal ? inner.Width : inner.Height;
-            bool visible = content > viewport && content > 0f && viewport > 0f && length > 0f;
-            float thumbLength = Math.Min(length, Math.Max(12f, length * Math.Max(0f, viewport) / Math.Max(1f, content)));
-            float fraction = content <= viewport ? 0f : Math.Max(0f, Math.Min(1f, offset / (content - viewport)));
+            bool scrollable = content > viewport && content > 0f && viewport > 0f;
+            bool visible = (alwaysVisible || scrollable) && length > 0f && cross > 0f;
+            float minimum = NativeMinimumThumb(length);
+            // Unity's SliderHandler adds the minimum handle to the proportional
+            // section; using max(minimum, ratio * length) makes previews disagree.
+            float ratio = Math.Max(0f, Math.Min(1f, viewport / Math.Max(1f, content)));
+            float thumbLength = Math.Min(length, minimum + Math.Max(0f, length - minimum) * ratio);
+            float fraction = content <= viewport ? 0f : Math.Max(0f, Math.Min(1f, ScrollGeometry.FiniteNonNegative(offset) / (content - viewport)));
             float start = Math.Max(0f, length - thumbLength) * fraction;
             MuiRect thumb = horizontal ? new MuiRect(inner.X + start, inner.Y, thumbLength, inner.Height)
                 : new MuiRect(inner.X, inner.Y + start, inner.Width, thumbLength);
-            return new ScrollbarLayout { Track = track, Thumb = thumb, Visible = visible };
+            return new ScrollbarLayout { Track = track, Thumb = thumb, Visible = visible, Scrollable = scrollable };
         }
 
-        public static MuiColor TrackColor(ThemeTokens theme) { return theme.FieldBg; }
-        public static MuiColor ThumbColor(ThemeTokens theme, bool hovered, bool pressed) {
-            return pressed ? theme.Text : hovered ? theme.ControlHoverBorder : theme.TextMuted;
+        public static float NativeMinimumThumb(float trackLength) {
+            // Native SliderHandler divides the drag delta by (track - minimum).
+            // Even a very small visible track must retain positive travel.
+            return Math.Min(MinimumThumbSize, (float)Math.Floor(Math.Max(0f, ScrollGeometry.FiniteNonNegative(trackLength) - 1f)));
+        }
+
+        public static float NativeEndInset(float trackLength) {
+            return Math.Min(EndInset, (float)Math.Floor(Math.Max(0f, (ScrollGeometry.FiniteNonNegative(trackLength) - 1f) * 0.5f)));
+        }
+
+        public static MuiColor TrackColor(ThemeTokens theme) { return theme.PanelBg; }
+        public static MuiColor ThumbColor(ThemeTokens theme, bool hovered, bool pressed, bool enabled = true) {
+            return !enabled ? theme.TextDisabled : pressed ? theme.Text : hovered ? theme.TextMuted : theme.ControlBorder;
         }
     }
 
@@ -280,10 +299,10 @@ namespace MaximumUI {
             DrawPopupScrollbar(drawing, theme, layout, scrollY);
         }
 
-        public static void DrawScrollbar(DrawList drawing, ThemeTokens theme, ScrollbarLayout scrollbar, bool hovered = false, bool pressed = false) {
+        public static void DrawScrollbar(DrawList drawing, ThemeTokens theme, ScrollbarLayout scrollbar, bool hovered = false, bool pressed = false, bool enabled = true) {
             if (drawing == null || theme == null || !scrollbar.Visible) return;
             drawing.FillRect(scrollbar.Track, ScrollbarGeometry.TrackColor(theme));
-            drawing.FillRect(scrollbar.Thumb, ScrollbarGeometry.ThumbColor(theme, hovered, pressed));
+            drawing.FillRect(scrollbar.Thumb, ScrollbarGeometry.ThumbColor(theme, hovered, pressed, enabled && scrollbar.Scrollable));
         }
 
         public static void DrawSurface(DrawList drawing, ThemeTokens theme, MuiRect bounds) {

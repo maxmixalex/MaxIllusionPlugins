@@ -44,18 +44,28 @@ def validate_manifest(manifest: dict) -> list[str]:
     names = [preview["file"] for preview in previews]
     if len(names) != len(set(names)):
         errors.append("Duplicate snapshot names overwrite a scene.")
-    for expected in manifest.get("galleryCases", []):
+    for expected in manifest.get("galleryCases", []) + manifest.get("pluginCases", []):
         if not any(all(preview.get(key) == value for key, value in expected.items()) for preview in previews):
             errors.append(f"Missing catalog case: {expected['file']}.")
     for preview in previews:
+        errors.extend(validate_shared_scroll(preview))
         for area in preview.get("scrollAreas", []):
             if area["Virtual"] and area.get("RowHeight", 0) > 0:
                 budget = min(area["ItemCount"], math.ceil(area["ViewHeight"] / area["RowHeight"]) + 4)
                 if area["BuiltRows"] > budget:
                     errors.append(f"Virtual list exceeded visible-row budget: {preview['file']} {area['Key']} ({area['BuiltRows']} > {budget}).")
-        if not preview.get("page") or preview.get("scrollOf") or preview.get("popups") or preview.get("paintState"):
+        errors.extend(validate_scroll_frames(preview))
+        if preview.get("scrollOf") or preview.get("popups") or preview.get("paintState"):
             continue
         for area in preview.get("scrollAreas", []):
+            if area.get("MaximumX", 0) > 1 and area.get("ViewWidth", 0) >= 24:
+                horizontal = [area]
+                for other in previews:
+                    if other.get("scrollOf") == preview["file"]:
+                        horizontal.extend(s for s in other.get("scrollAreas", []) if s["Path"] == area["Path"])
+                horizontal = [s for s in horizontal if s.get("VisibleWidth", 0) >= min(24, area["ViewWidth"])]
+                if not interval_coverage([(s["VisibleContentLeft"], s["VisibleContentLeft"] + s["VisibleWidth"]) for s in horizontal], area["FullWidth"]):
+                    errors.append(f"Horizontal scroll content not fully covered: {preview['file']} {area['Key']}.")
             if area["Maximum"] <= 1 or area["ViewHeight"] < 24:
                 continue
             samples = [area]
@@ -74,6 +84,94 @@ def validate_manifest(manifest: dict) -> list[str]:
             elif not interval_coverage([(s["VisibleContentStart"], s["VisibleContentStart"] + s["VisibleHeight"]) for s in samples], area["ContentHeight"]):
                 errors.append(f"Scroll content not fully covered: {preview['file']} {area['Key']}.")
     return errors
+
+
+def validate_shared_scroll(preview: dict) -> list[str]:
+    groups = {}
+    for area in preview.get("scrollAreas", []):
+        binding = area.get("SharedScrollBinding")
+        if binding:
+            groups.setdefault(binding, []).append(area)
+    errors = []
+    for binding, areas in groups.items():
+        if len(areas) < 2:
+            continue
+        # A shorter pane clamps locally; it must not pull a longer sibling back.
+        # A shared request therefore equals the largest displayed offset, up to
+        # each pane's own limit. The same identity is checked in both axes.
+        for offset, limit in (("Offset", "Maximum"), ("HorizontalOffset", "MaximumX")):
+            requested = max(area.get(offset, 0) for area in areas)
+            if any(abs(area.get(offset, 0) - min(requested, area.get(limit, 0))) > .1 for area in areas):
+                errors.append(f"Shared scroll panes disagree: {preview['file']} {binding} {offset}.")
+    return errors
+
+
+
+def validate_scroll_frames(preview: dict) -> list[str]:
+    errors = []
+    for area in preview.get("scrollAreas", []):
+        if not area.get("Framed"):
+            continue
+        frame, content = area["FrameBounds"], area["ContentBounds"]
+        left, top, right, bottom = frame[0], frame[1], frame[0] + frame[2], frame[1] + frame[3]
+        # A one-pixel frame is a separate surface from both the content clip and
+        # the native scrollbar host. These checks deliberately have no page exceptions.
+        if (content[0] < left + .99 or content[1] < top + .99 or
+                content[0] + content[2] > right - .99 or content[1] + content[3] > bottom - .99):
+            errors.append(f"Scroll content covers its frame: {preview['file']} {area['Path']}.")
+        if area.get("VerticalBarVisible"):
+            track, thumb = area["VerticalTrack"], area["VerticalThumb"]
+            if track[0] < left + .99 or track[1] < top + .99 or track[0] + track[2] > right - .99 or track[1] + track[3] > bottom - .99:
+                errors.append(f"Scrollbar covers its frame: {preview['file']} {area['Path']}.")
+            if thumb[0] < track[0] or thumb[1] < track[1] or thumb[0] + thumb[2] > track[0] + track[2] + .01 or thumb[1] + thumb[3] > track[1] + track[3] + .01:
+                errors.append(f"Scrollbar thumb escapes its track: {preview['file']} {area['Path']}.")
+    return errors
+
+
+def verify_frame_pixels(image, preview: dict) -> tuple[int, list[dict]]:
+    """Check the rendered right border beside a scrollbar, after all overpainting.
+
+    Modal dimming and other popup surfaces intentionally cover the underlying
+    window, so their geometry is checked but those frames are not pixel samples.
+    Only the actually visible part of an edge contributes to a check.
+    """
+    checked, issues = 0, []
+    if preview.get("dialogs", 0) or preview.get("popups"):
+        return checked, issues
+    rgb = image.convert("RGB")
+    for area in preview.get("scrollAreas", []):
+        if not area.get("Framed") or not area.get("VerticalBarVisible"):
+            continue
+        frame, visible = area["FrameBounds"], area["VisibleFrameBounds"]
+        right = frame[0] + frame[2]
+        if visible[2] < 3 or visible[0] + visible[2] < right - .1:
+            continue
+        start = max(frame[1] + 2, visible[1] + 1)
+        end = min(frame[1] + frame[3] - 2, visible[1] + visible[3] - 1)
+        if end - start < 8:
+            continue
+        border = [round(c * 255) for c in area["FrameRgb"]]
+        track = [round(c * 255) for c in area["TrackRgb"]]
+        direction = [border[i] - track[i] for i in range(3)]
+        magnitude = sum(c * c for c in direction)
+        if magnitude < 48:
+            continue
+        # The complete 1px stroke is inside the declared frame; a fractional
+        # edge may cover two raster columns. Accept at least 35% of its color
+        # contribution, never merely the existence of an earlier SVG command.
+        columns = range(max(0, math.floor(right - 1)), min(rgb.width, math.ceil(right)))
+        rows = range(max(0, math.ceil(start)), min(rgb.height, math.floor(end)), max(1, math.floor((end - start) / 9)))
+        strengths = []
+        for y in rows:
+            strengths.append(max((sum((rgb.getpixel((x, y))[i] - track[i]) * direction[i] for i in range(3)) / magnitude for x in columns), default=0))
+        if len(strengths) < 3:
+            continue
+        checked += 1
+        visible_samples = sum(value >= .35 for value in strengths)
+        if visible_samples / len(strengths) < .8:
+            issues.append(dict(Scene=preview["file"], Kind="rendered-scroll-frame", Path=area["Path"],
+                               Detail=f"Right border visible at {visible_samples}/{len(strengths)} sampled positions beside the scrollbar."))
+    return checked, issues
 
 
 def intersect(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, float, float, float]:
@@ -131,7 +229,7 @@ def verify_rendered_text(root: ET.Element, query: str, scene: str) -> list[dict]
     return issues
 
 
-def rasterize(path: Path, preview: dict, inkscape: str) -> tuple[str, list[dict]]:
+def rasterize(path: Path, preview: dict, inkscape: str) -> tuple[str, list[dict], int, list[dict]]:
     from PIL import Image
     source = path / preview["file"]
     tree = ET.parse(source)
@@ -150,7 +248,8 @@ def rasterize(path: Path, preview: dict, inkscape: str) -> tuple[str, list[dict]
     with Image.open(target) as image:
         if abs(image.width - expected["width"]) > 1 or abs(image.height - expected["height"]) > 1:
             raise ValueError(f"Unexpected raster dimensions: {target}")
-    return target.name, verify_rendered_text(root, rendered.stdout, source.stem)
+        checked_frames, frame_issues = verify_frame_pixels(image, preview)
+    return target.name, verify_rendered_text(root, rendered.stdout, source.stem), checked_frames, frame_issues
 
 
 def contact_sheets(path: Path, previews: list[dict]) -> list[str]:
@@ -211,12 +310,15 @@ for(const [id,list] of groups){const b=document.createElement('button');b.datase
     report = [f"# {title} render verification", "", manifest.get("disclosure", ""), "",
               f"- Production pages: {len(manifest.get('galleryPages', []))}",
               f"- Rendered snapshots: {len(manifest['previews'])}",
-              f"- Structural/coverage failures: {len(quality['errors'])}",
+              f"- Structural/coverage/frame failures: {len(quality['errors'])}",
               f"- Text review items: {len(quality['textIssues'])}",
+              f"- Visible scrollbar frame pixel checks: {quality['checkedScrollFrames']}",
+              f"- Business window/state/size cases: {quality['pluginCaseCount']}",
               f"- Typography: {manifest.get('typography', '')}", "",
               manifest.get("fontNotes", ""), "",
               "Open `index.html` to select every page, theme, size, state and scroll position.", "",
-              "Regular scroll content is covered from top to bottom at each theme, size and Gallery state. Coverage counts only the portion visible through ancestor clips. Virtual lists are sampled at top, middle and bottom; exporting every data row would defeat virtualization.", "",
+              "Regular scroll content is covered continuously in both axes at each theme, size and Gallery state, including business windows. Coverage counts only the portion visible through ancestor clips. Virtual lists are sampled at top, middle and bottom; exporting every data row would defeat virtualization.", "",
+              "Scroll frames, content clips and tracks use production geometry. The final PNG right border is sampled beside each visible vertical scrollbar, so an earlier stroke covered by a later draw cannot pass. Intentionally occluded modal/popup backgrounds receive geometry checks only.", "",
               "Open dropdowns and menus use production PopupGeometry, PopupPresentation and ChoiceCache. Modal content comes from actual Gallery declarations and invoked DialogService buttons.", ""]
     if quality["errors"]:
         report.extend(["## Failures", ""] + ["- " + error for error in quality["errors"]])
@@ -241,20 +343,24 @@ def main(argv: list[str] | None = None) -> int:
     sheets = contact_sheets(path, previews)
     quality = {"pages": manifest.get("galleryPages", []), "snapshotCount": len(previews),
                "pngCount": len(outputs), "contactSheets": sheets, "errors": errors,
-               "textIssues": manifest.get("issues", []) + [issue for _, issues in outputs for issue in issues],
+               "textIssues": manifest.get("issues", []) + [issue for _, issues, _, _ in outputs for issue in issues],
                "measuredTextIssues": manifest.get("issues", []),
-               "renderedTextIssues": [issue for _, issues in outputs for issue in issues],
+               "renderedTextIssues": [issue for _, issues, _, _ in outputs for issue in issues],
+               "checkedScrollFrames": sum(checked for _, _, checked, _ in outputs),
+               "renderedFrameIssues": [issue for _, _, _, issues in outputs for issue in issues],
                "typography": manifest.get("typography"), "primaryFont": manifest.get("primaryFont"),
                "fontNotes": manifest.get("fontNotes"),
                "missingGlyphs": manifest.get("missingGlyphs", 0),
                "catalogStateCount": len(manifest.get("galleryStates", [])),
                "catalogCaseCount": len(manifest.get("galleryCases", [])),
+               "pluginCaseCount": len(manifest.get("pluginCases", [])),
                "declaredWidgetTypes": sorted({kind for preview in previews if preview.get("page") for kind in preview.get("declaredWidgetTypes", [])}),
                "widgetTypes": sorted({kind for preview in previews if preview.get("page") for kind in preview.get("widgetTypes", [])}),
                "visibleWidgetTypes": sorted({kind for preview in previews if preview.get("page") for kind in preview.get("visibleWidgetTypes", [])}),
                "boundary": "Production C# composition, layout and drawing; Pango/SVG/Inkscape rasterization; no Unity host or live game."}
+    errors.extend(issue["Scene"] + ": " + issue["Detail"] for issue in quality["renderedFrameIssues"])
     write_index(path, manifest, quality)
-    print(f"Rendered {len(outputs)} PNGs and {len(sheets)} contact sheets; {len(errors)} structural/coverage failures, {len(quality['textIssues'])} text review items.")
+    print(f"Rendered {len(outputs)} PNGs and {len(sheets)} contact sheets; {len(errors)} structural/coverage/frame failures, {len(quality['textIssues'])} text review items; {quality['checkedScrollFrames']} raster frame checks.")
     print(path / "index.html")
     return 1 if errors or args.strict and quality["textIssues"] else 0
 

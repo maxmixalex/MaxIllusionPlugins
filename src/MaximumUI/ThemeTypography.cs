@@ -54,6 +54,10 @@ namespace MaximumUI {
                 Math.Max(32f, LineHeight(tokens, LabelRole.Heading)));
         }
 
+        public static MuiRect HelpTextBounds(MuiRect bounds) {
+            return PopupGeometry.Inset(bounds, 12f, 9f, 12f, 9f);
+        }
+
         public static TextFormat Format(ThemeTokens tokens, LabelRole role = LabelRole.Body,
             bool wordWrap = false, TextAlignment alignment = TextAlignment.Start) {
             return new TextFormat(FontSize(tokens, role), alignment,

@@ -121,7 +121,9 @@ namespace BepInEx.Bootstrap {
     }
 }
 namespace ExpressionControl {
-    public static class ExpressionControlPlugin { public const string Name = "ExpressionControl", Version = "test"; }
+    // Keep display metadata synchronized with the production plugin; preview
+    // exports must exercise its actual window title rather than rewrite it.
+    public static class ExpressionControlPlugin { public const string Name = "ExpressionControl", Version = "0.3.1"; }
 }
 namespace JuiceControl {
     internal static class JuiceControl { internal static void LogDebug(object value) { } }

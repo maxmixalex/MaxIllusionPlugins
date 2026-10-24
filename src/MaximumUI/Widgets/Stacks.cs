@@ -23,6 +23,8 @@ namespace MaximumUI {
     }
 
     public sealed class Panel : Widget {
+        public bool Selected;
+
         public Panel(object key = null)
             : base(key) {
         }

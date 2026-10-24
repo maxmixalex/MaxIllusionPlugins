@@ -230,17 +230,37 @@ namespace MaximumUI {
         public string FocusedPath;
         public string OpenPopupPath;
         public int OpenMenuIndex = -1;
+        /// <summary>Offsets for native-style list panels when using the managed painter.</summary>
+        public readonly System.Collections.Generic.Dictionary<string, MuiVec2> ScrollPositions =
+            new System.Collections.Generic.Dictionary<string, MuiVec2>(System.StringComparer.Ordinal);
+
+        public MuiVec2 GetScrollPosition(LayoutNode node) {
+            MuiVec2 position;
+            return node != null && node.Path != null && ScrollPositions.TryGetValue(node.Path, out position)
+                ? position : new MuiVec2(0f, 0f);
+        }
+
+        public string HoveredScrollbarPath;
+        public string ActiveScrollbarPath;
+
+        public bool IsScrollbarHovered(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(HoveredScrollbarPath) && string.Equals(node.Path, HoveredScrollbarPath, System.StringComparison.Ordinal);
+        }
+
+        public bool IsScrollbarActive(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(ActiveScrollbarPath) && string.Equals(node.Path, ActiveScrollbarPath, System.StringComparison.Ordinal);
+        }
 
         public bool IsHovered(LayoutNode node) {
-            return node != null && string.Equals(node.Path, HoveredPath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(HoveredPath) && string.Equals(node.Path, HoveredPath, System.StringComparison.Ordinal);
         }
 
         public bool IsActive(LayoutNode node) {
-            return node != null && string.Equals(node.Path, ActivePath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(ActivePath) && string.Equals(node.Path, ActivePath, System.StringComparison.Ordinal);
         }
 
         public bool IsFocused(LayoutNode node) {
-            return node != null && string.Equals(node.Path, FocusedPath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(FocusedPath) && string.Equals(node.Path, FocusedPath, System.StringComparison.Ordinal);
         }
 
         public bool IsPopupOpen(LayoutNode node) {

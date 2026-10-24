@@ -8,26 +8,31 @@ using MaximumUI;
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
-        yield return Juice(false);
-        yield return Juice(true);
-        yield return Accessory(false);
-        yield return Accessory(true);
+        yield return Juice("main");
+        yield return Juice("name");
+        yield return Juice("xml-error");
+        yield return Juice("empty");
+        yield return Accessory(0);
+        yield return Accessory(1);
+        yield return Accessory(2);
+        yield return Accessory(0, true);
     }
 
-    private static PreviewScene Juice(bool presets) {
+    private static PreviewScene Juice(string state) {
         JuiceEditorModel model = new JuiceEditorModel {
-            Version = "0.2.0", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
+            Version = "0.2.1", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
             CharacterIndex = 0, HasCharacter = true, AllLocked = false,
             CharacterPresets = new[] { "自然效果", "雨后", "舞台妆容" },
             GroupPresets = new[] { "场景示例 A", "场景示例 B" },
             CharacterPresetIndex = 0, GroupPresetIndex = 0, CanSave = true,
-            Error = string.Empty, Status = "已选择示例角色 A。效果变化将保留到当前角色。",
+            Error = string.Empty, Status = "已选择角色: 示例角色 A",
             Integration = "SkinEffects：示例扩展效果已连接。",
             NameDialogVisible = false, NamePrompt = string.Empty, Name = string.Empty, NameError = string.Empty,
             SelectCharacter = delegate { }, SelectCharacterPreset = delegate { }, SelectGroupPreset = delegate { },
+            ChooseCharacterPreset = delegate { }, ChooseGroupPreset = delegate { },
             LockAll = delegate { }, ChangeName = delegate { }, Execute = delegate { }
         };
-        string[] labels = { "脸部", "胸部", "腹部", "背部", "下半身", "泪水", "脸红", "SkinEffects 汗水", "SkinEffects 水滴", "SkinEffects 光泽", "SkinEffects 红印", "SkinEffects 眼影" };
+        string[] labels = { "脸部精液", "前上精液", "前下精液", "后上精液", "后下精液", "泪水", "脸红", "[Ex] 汗水", "[Ex] 水滴", "[Ex] 光泽", "[Ex] 红印", "[Ex] 眼影" };
         for (int i = 0; i < labels.Length; i++) {
             int maximum = i == 6 ? 100 : 3;
             int value = i == 6 ? 35 : i % 4;
@@ -37,37 +42,41 @@ internal static class PluginPreviewScenes {
                 Change = delegate { }, Lock = delegate { }
             });
         }
-        JuiceEditorView view = new JuiceEditorView { Model = model };
-        if (presets) {
-            Widget original = view.Build(new BuildContext());
-            Selectable page = (Selectable)Find(original, "juice-page-1");
-            page.OnChange(true);
+        if (state == "name") {
+            model.NameDialogVisible = true; model.NamePrompt = "请输入汁液预设名"; model.Name = "自然效果";
+        } else if (state == "xml-error") {
+            model.CanSave = false;
+            model.Error = "example.xml: Invalid data at line 8. Expected closing element.";
+        } else if (state == "empty") {
+            model.Characters = new string[0]; model.HasCharacter = false; model.Effects.Clear();
+            model.CharacterPresets = new string[0]; model.GroupPresets = new string[0]; model.Status = "就绪。";
         }
+        JuiceEditorView view = new JuiceEditorView { Model = model };
         return new PreviewScene {
-            Slug = "juicecontrol-" + (presets ? "presets" : "effects") + "-preview",
-            Title = "JuiceControl / " + (presets ? "角色与场景预设" : "效果与锁定"),
-            Source = "JuiceControl.JuiceEditorView.Build", Detail = "Anonymous fixture; production " + (presets ? "presets" : "effects") + " page",
-            Widget = view.Build(new BuildContext()),
-            RequiredKeys = presets ? new[] { "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
-                : new[] { "juice-effects", "juice-lock-all", "juice-command-Fill" }
+            Slug = "juicecontrol-" + state + "-preview", Title = "JuiceControl",
+            Source = "JuiceControl.JuiceEditorView.Build", Detail = "Anonymous fixture; restored pre-migration single window, " + state,
+            Widget = view.Build(new BuildContext()), StateId = state == "main" ? "default" : state,
+            RequiredKeys = state == "empty" ? new[] { "juice-no-character", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
+                : new[] { "juice-effects", "juice-lock-all", "juice-command-Fill", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
         };
     }
 
-    private static PreviewScene Accessory(bool copy) {
+    private static PreviewScene Accessory(int page, bool confirming = false) {
+        bool copy = page == 1;
         string[] names = {
             "发夹 / 左", "发夹 / 右", "丝带", "耳环 / 左", "耳环 / 右", "项链", "胸针", "腕饰 / 左", "腕饰 / 右", "戒指", "腰带装饰", "肩饰"
         };
         AccessoryEditorModel model = new AccessoryEditorModel {
-            Version = "0.7.0", Available = true, Page = copy ? 1 : 0,
-            Status = copy ? "将来源的 3 个饰品按顺序映射到目标选区。Shift 可连续选择。" : "已选中 3 个饰品。移除前会显示确认；整理保持原有顺序。",
-            Summary = "已选 3 / 48", Mapping = "来源 3 项 → 目标 3 项，按槽位顺序映射。",
-            Sources = new[] { "校服", "便服", "运动服", "泳装", "坐标卡（示例）" },
-            Destinations = new[] { "校服", "便服", "运动服", "泳装" },
+            Version = "0.7.1", Available = true, Page = page,
+            Status = "就绪。",
+            Summary = "饰品 12 / 槽位 48", Mapping = "按槽位编号从小到大一一对应，共 3 组。",
+            Sources = new[] { "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣", "服装卡（示例）" },
+            Destinations = new[] { "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣" },
             SourceIndex = 0, DestinationIndex = 1, FollowCoordinate = false,
             ImmediateSync = true, SelectionHighlight = true, ClearAfter = false,
             ReverseParent = false, SyncScroll = true,
             CanCopy = true, CanMove = true, CanInsert = true, CanAdjust = true,
-            Confirming = false, Confirmation = string.Empty,
+            Confirming = confirming, Confirmation = confirming ? "确定移除选中的 3 个槽位内容吗？" : string.Empty,
             ChangePage = delegate { }, ChangeSource = delegate { }, ChangeDestination = delegate { },
             SelectSlot = delegate { }, SelectionCommand = delegate { }, ChangeSetting = delegate { }, Execute = delegate { }
         };
@@ -76,11 +85,12 @@ internal static class PluginPreviewScenes {
         model.Destination = List(AccessoryListRole.Destination, 48, names, new[] { 3, 4, 5 });
         model.Destination.Scroll = model.Source.Scroll;
         return new PreviewScene {
-            Slug = "accessory-batch-manager-" + (copy ? "copy" : "batch") + "-preview",
-            Title = "AccessoryBatchManager / " + (copy ? "复制与移动" : "批量管理"),
-            Source = "AccessoryBatchManager.AccessoryEditorView.Build", Detail = "Anonymous fixture; production " + (copy ? "copy" : "batch") + " page",
+            Slug = "accessory-batch-manager-" + (page == 2 ? "settings" : copy ? "copy" : "batch") + (confirming ? "-confirm" : "") + "-preview",
+            Title = "AccessoryBatchManager / " + (page == 2 ? "设置" : copy ? "复制与移动" : "批量管理"),
+            StateId = confirming ? "confirmation" : "default",
+            Source = "AccessoryBatchManager.AccessoryEditorView.Build", Detail = "Anonymous fixture; production " + (page == 2 ? "settings" : copy ? "copy" : "batch") + " page",
             Widget = new AccessoryEditorView { Model = model }.Build(new BuildContext()),
-            RequiredKeys = copy ? new[] { "accessory-list-Source", "accessory-list-Destination", "accessory-command-Copy", "accessory-command-Adjust2UpDown" }
+            RequiredKeys = page == 2 ? new[] { "accessory-setting-ImmediateSync", "accessory-setting-SelectionHighlight" } : copy ? new[] { "accessory-list-Source", "accessory-list-Destination", "accessory-command-Copy", "accessory-command-Adjust2UpDown" }
                 : new[] { "accessory-list-Batch", "accessory-command-Remove", "accessory-command-Compact" }
         };
     }
@@ -89,7 +99,7 @@ internal static class PluginPreviewScenes {
         return new AccessoryListModel {
             Role = role, Count = count, Clothing = false, CanToggleKind = true,
             Selection = new HashSet<int>(selected),
-            GetName = i => (i + 1).ToString("00") + "  " + (i < names.Length ? names[i] : "（空槽位）")
+            GetName = i => (i + 1) + "  " + (i < names.Length ? names[i] : "空")
         };
     }
 
@@ -129,6 +139,7 @@ internal sealed class PreviewScene {
     internal int PopupMenuIndex;
     internal int PopupSubmenuIndex = -1;
     internal bool PopupBottom;
+    internal readonly Dictionary<string, float> HorizontalOffsets = new Dictionary<string, float>(StringComparer.Ordinal);
     internal readonly Dictionary<string, float> ScrollOffsets = new Dictionary<string, float>(StringComparer.Ordinal);
 
     internal PreviewScene Copy(string slug) {
@@ -143,6 +154,7 @@ internal sealed class PreviewScene {
             PopupSubmenuIndex = PopupSubmenuIndex, PopupBottom = PopupBottom
         };
         foreach (KeyValuePair<string, float> pair in ScrollOffsets) copy.ScrollOffsets.Add(pair.Key, pair.Value);
+        foreach (KeyValuePair<string, float> pair in HorizontalOffsets) copy.HorizontalOffsets.Add(pair.Key, pair.Value);
         return copy;
     }
 }

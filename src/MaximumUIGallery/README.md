@@ -1,6 +1,6 @@
 # MaximumUI Gallery
 
-MaximumUI 0.4.0 的独立控件工作台，默认使用 **Metro Light**。以 Windows 10 MDL2 的排版、方形控件、蓝色强调、平面导航与清晰状态反馈为基础。Gallery 是可选的开发示例，不是四个业务编辑器的运行依赖。
+MaximumUI 0.5.0 的独立控件工作台，默认使用 **Metro Light**。以 Windows 10 MDL2 的排版、方形控件、蓝色强调、平面导航与清晰状态反馈为基础。Gallery 是可选的开发示例，不是四个业务编辑器的运行依赖。
 
 ## 页面与功能
 
@@ -13,13 +13,13 @@ MaximumUI 0.4.0 的独立控件工作台，默认使用 **Metro Light**。以 Wi
 | Selection | ToggleSwitch、勾选框、单选框、下拉、搜索下拉、分段选择、列表、多选和树 |
 | Colors | RGB/RGBA 编辑、颜色按钮、颜色选择器及通用颜色编辑 |
 | Drawing | 图片、图片按钮、折线/直方图、DrawCanvas、DrawList、拖放 |
-| Layout | 菜单、标签页、栈、空白、网格、可排序表格、虚拟列表、分栏与可折叠区域 |
+| Layout | 菜单、标签页、栈、空白、网格、可排序表格、虚拟列表、长/短/空列表、横向和嵌套滚动、分栏与可折叠区域 |
 | Dialogs | 消息、确认和带文本/下拉输入的模态编辑器 |
 | Appearance | 四个内置主题、文字大小、全部受支持颜色/尺寸令牌、控件状态预览与应用/撤销 |
 | Large lists | 10,000 条可搜索记录；只构建可视行，筛选时保留选择 |
 | Diagnostics | 运行指标、输入、日志、状态、控件路径、选择器、示例目录与使用指南 |
 
-窗口默认 1000 × 760，最小 820 × 600。页面按实际剩余高度滚动，导航保持可见。普通行高从 32 起按 4 像素步长随文字大小增加，避免放大文字后输入被裁切。外观页的 Apply/Revert 始终位于滚动内容之外。
+窗口默认 1000 × 760，最小 820 × 600。页面按实际剩余高度滚动，导航保持可见；内容放得下时不显示无作用的整高滚动条。普通行高从 32 起按 4 像素步长随文字大小增加，避免放大文字后输入被裁切。外观页的 Apply/Revert 始终位于滚动内容之外。
 
 默认启动时隐藏，按 **F10** 切换。在 `MaxMixAlex.MaximumUIGallery.cfg` 的 `General / Show gallery` 修改快捷键，`Show on startup` 控制启动时是否显示。编辑文本或打开模态时不触发窗口快捷键。`Ctrl+1` 至 `Ctrl+6` 分别打开 Buttons、Layout、Dialogs、Appearance、Diagnostics、Large lists；`Ctrl+L` 添加日志示例。
 
@@ -46,8 +46,8 @@ View view = GalleryScenes.Create("dialogs", ThemePalettes.MetroLight(), "dialog-
 Widget window = view.Build(new BuildContext());
 ```
 
-当前有 12 个页面、26 个确定性页面状态，包括禁用、编辑后、选择、折叠、各标签页、打开的输入对话框、待应用主题、筛选结果和空列表。创建场景不会挂载窗口或初始化 Unity，返回的仍是游戏内使用的 `GalleryView`，所有声明和操作回调共用生产实现。
+当前有 12 个页面；公开状态目录包含禁用、编辑后、选择、折叠、各标签页、打开的输入对话框、待应用主题、筛选结果和清空滚动列表。创建场景不会挂载窗口或初始化 Unity，返回的仍是游戏内使用的 `GalleryView`，所有声明和操作回调共用生产实现。
 
-渲染工具进一步覆盖主题、尺寸、字号、滚动分片和控件反馈，生成可浏览索引、绘制预览与检查报告。具体命令和输出见 [MaximumUI.Preview](../../tests/MaximumUI.Preview/README.md)。
+渲染工具进一步覆盖主题、尺寸、字号、横纵滚动分片和控件反馈，生成可浏览索引、绘制预览与检查报告。内建列表、主题编辑器和日志使用真实滚动偏移；滚动条悬停/按下样式也参与导出。严格检查包含最终 PNG 右边框，防止轨道再次遮挡列表边框。具体命令和输出见 [MaximumUI.Preview](../../tests/MaximumUI.Preview/README.md)。
 
 模拟渲染检查布局、字体度量、绘制命令、控件覆盖和状态，不等同于 Unity 游戏截图。原生图片资源仅在游戏运行时提供；无 Unity 的导出保持真实空图像状态。中文输入法、鼠标捕获、游戏快捷键及最终帧耗时仍需实机检查。

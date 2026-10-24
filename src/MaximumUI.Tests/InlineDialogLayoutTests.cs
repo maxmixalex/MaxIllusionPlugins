@@ -52,22 +52,19 @@ namespace MaximumUI.Tests {
             view.Model.Name = "Example";
             view.Model.NamePrompt = "Save preset";
             view.Model.Effects.Add(new JuiceEffectRow { Id = "example", Name = "Effect", Maximum = 3 });
-            for (int page = 0; page < 2; page++) {
-                ((Selectable)FindWidget(view.Build(null), "juice-page-" + page)).OnChange(true);
-                for (int minimum = 0; minimum < 2; minimum++) {
-                    view.Model.NameDialogVisible = false;
-                    Window closed = (Window)view.Build(null);
-                    MuiRect viewport = WindowViewport(closed, minimum != 0);
-                    LayoutNode before = Engine().Layout(closed, viewport);
-                    view.Model.NameDialogVisible = true;
-                    Window opened = (Window)view.Build(null);
-                    LayoutNode after = Engine().Layout(opened, viewport);
-                    SameFlow(before, after, "Juice page " + page + " name dialog");
-                    string list = page == 0 ? "juice-effects" : "juice-presets-scroll";
-                    Require(Find(after, list).Rect.Height > 0f, "opening the name dialog keeps Juice content usable");
-                    Require(Find(after, "juice-name-dialog").Path == "0.1", "Juice name modal retains its declared child path");
-                    Require(WidgetVisibility.ContainsRootDialog(opened, null, "0"), "Juice name modal remains discoverable");
-                }
+            for (int minimum = 0; minimum < 2; minimum++) {
+                view.Model.NameDialogVisible = false;
+                Window closed = (Window)view.Build(null);
+                MuiRect viewport = WindowViewport(closed, minimum != 0);
+                LayoutNode before = Engine().Layout(closed, viewport);
+                view.Model.NameDialogVisible = true;
+                Window opened = (Window)view.Build(null);
+                LayoutNode after = Engine().Layout(opened, viewport);
+                SameFlow(before, after, "Juice single-window name dialog");
+                Require(Find(after, "juice-effects").Rect.Height > 0f, "opening the name dialog keeps Juice content usable");
+                Require(Find(after, "juice-presets").Rect.Height > 0f, "opening the name dialog preserves both preset toolbars");
+                Require(Find(after, "juice-name-dialog").Path == "0.1", "Juice name modal retains its declared child path");
+                Require(WidgetVisibility.ContainsRootDialog(opened, null, "0"), "Juice name modal remains discoverable");
             }
         }
 

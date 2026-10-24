@@ -8,6 +8,8 @@ namespace MaximumUI {
         private readonly TextFormat bodyFormat;
         private readonly TextFormat centerFormat;
         private bool ancestorDisabled;
+        private readonly List<object> listValues = new List<object>();
+        private readonly List<string> listLabels = new List<string>();
 
         public WidgetPainter()
             : this(ThemePalettes.MetroLight()) {
@@ -28,7 +30,48 @@ namespace MaximumUI {
             return drawList;
         }
 
+        /// <summary>Returns the exact frame used by built-in scroll panels, for diagnostics and render hosts.</summary>
+        public bool TryGetScrollFrame(LayoutNode node, out ScrollFrameLayout frame) {
+            frame = new ScrollFrameLayout();
+            if (node == null || node.Widget == null) return false;
+            IListBoxWidget list = node.Widget as IListBoxWidget;
+            if (list != null) {
+                ISearchableListBoxWidget searchable = node.Widget as ISearchableListBoxWidget;
+                string filter = searchable == null ? string.Empty : searchable.ListFilterText ?? string.Empty;
+                int count = 0;
+                if (list.ListItems != null) foreach (object item in list.ListItems)
+                    if (MatchesFilter(list.GetListText(item), filter)) count++;
+                frame = ScrollGeometry.ListFrame(node.Rect, metrics.RowHeight, count, searchable != null);
+                return true;
+            }
+            IDebugLinesWidget debug = node.Widget as IDebugLinesWidget;
+            if (debug != null) { frame = ScrollGeometry.DebugFrame(node.Rect, metrics.RowHeight, debug.GetDebugLines().Count); return true; }
+            ThemeEditor editor = node.Widget as ThemeEditor;
+            if (editor != null) { frame = ScrollGeometry.ThemeEditorFrame(node.Rect, metrics.RowHeight, editor); return true; }
+            VirtualList virtualList = node.Widget as VirtualList;
+            if (virtualList != null) {
+                frame = ScrollGeometry.VerticalFrame(node.Rect, Math.Max(1f, virtualList.RowHeight) * Math.Max(0, virtualList.ItemCount), virtualList.AlwaysShowVertical);
+                return true;
+            }
+            return false;
+        }
+
         public void Paint(LayoutNode node, WidgetPaintState state, DrawList drawList) {
+            PaintCore(node, state, drawList, null, true);
+        }
+
+        /// <summary>
+        /// Paints one node's own commands without traversing its children.
+        /// A render host can clip or transform children between these two lists
+        /// without guessing which commands belong to a subtree. ParentEnabled
+        /// must describe the host's inherited enabled state.
+        /// </summary>
+        public void PaintNode(LayoutNode node, WidgetPaintState state, DrawList beforeChildren, DrawList afterChildren) {
+            if (afterChildren == null) throw new ArgumentNullException("afterChildren");
+            PaintCore(node, state, beforeChildren, afterChildren, false);
+        }
+
+        private void PaintCore(LayoutNode node, WidgetPaintState state, DrawList drawList, DrawList afterChildren, bool includeChildren) {
             if (node == null || node.Widget == null || node.Widget is EmptyWidget || drawList == null) return;
 
             Widget widget = node.Widget;
@@ -106,9 +149,9 @@ namespace MaximumUI {
 
             if (!(widget is TextField) && !(widget is TextArea) && !(widget is PasswordField) && !(widget is SearchBox))
                 PaintFocus(node, state, drawList);
-            for (int i = 0; i < node.Children.Count; i++) {
-                Paint(node.Children[i], state, drawList);
-            }
+            if (includeChildren) for (int i = 0; i < node.Children.Count; i++) Paint(node.Children[i], state, drawList);
+            if (widget is Panel && ((Panel)widget).Selected)
+                (afterChildren ?? drawList).StrokeRect(node.Rect, IsEnabled(node) ? theme.Accent : theme.Border, 1f);
             } finally { ancestorDisabled = previousDisabled; }
         }
 
@@ -505,89 +548,98 @@ namespace MaximumUI {
         }
 
         private void PaintListBox(LayoutNode node, IListBoxWidget listBox, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, FieldBg(node, state));
-            drawList.StrokeRect(node.Rect, theme.ControlBorder, 2f);
-            drawList.PushClip(node.Rect);
             ISearchableListBoxWidget searchable = node.Widget as ISearchableListBoxWidget;
-            float top = node.Rect.Y;
             float rowHeight = metrics.RowHeight;
-            string filter = string.Empty;
+            string filter = searchable == null ? string.Empty : searchable.ListFilterText ?? string.Empty;
             if (searchable != null) {
-                filter = searchable.ListFilterText ?? string.Empty;
-                MuiRect filterRect = new MuiRect(node.Rect.X, node.Rect.Y, Math.Max(1f, node.Rect.Width), rowHeight);
+                MuiRect filterRect = ScrollGeometry.ListFilterBounds(node.Rect, rowHeight);
                 PaintField(filterRect, node, state, drawList);
                 string filterText = string.IsNullOrEmpty(filter) ? searchable.ListFilterPlaceholder : filter;
                 drawList.Text(new MuiRect(filterRect.X + 8f, filterRect.Y, Math.Max(0f, filterRect.Width - 40f), filterRect.Height), filterText, null, string.IsNullOrEmpty(filter) && IsEnabled(node) ? theme.TextMuted : TextColor(node));
                 Mdl2IconGeometry.Draw(drawList, new MuiRect(filterRect.Right - 28f, filterRect.Y, 24f, filterRect.Height), Mdl2Icon.Search, TextColor(node), 1f);
-                top = filterRect.Bottom + 4f;
             }
-            int index = 0;
-            System.Collections.IEnumerable items = listBox.ListItems;
-            if (items != null) foreach (object item in items) {
+            listValues.Clear();
+            listLabels.Clear();
+            if (listBox.ListItems != null) foreach (object item in listBox.ListItems) {
                 string text = listBox.GetListText(item);
                 if (!MatchesFilter(text, filter)) continue;
-                float y = top + index * rowHeight;
-                if (y >= node.Rect.Bottom) break;
-                MuiRect row = new MuiRect(node.Rect.X + 2f, y + 1f, Math.Max(0f, node.Rect.Width - 20f), Math.Max(1f, rowHeight - 2f));
-                bool selected = object.Equals(item, listBox.ListValue);
-                if (selected) {
+                listValues.Add(item);
+                listLabels.Add(text);
+            }
+            MuiRect bounds = ScrollGeometry.ListBodyBounds(node.Rect, rowHeight, searchable != null);
+            ScrollFrameLayout frame = ScrollGeometry.ListFrame(node.Rect, rowHeight, listValues.Count, searchable != null);
+            float scrollY = frame.ClampY(state.GetScrollPosition(node).Y);
+            drawList.FillRect(bounds, FieldBg(node, state));
+            drawList.PushClip(frame.ContentViewport);
+            int first, end;
+            ScrollGeometry.VisibleRows(scrollY, frame.ContentViewport.Height, rowHeight, listValues.Count, out first, out end);
+            for (int i = first; i < end; i++) {
+                MuiRect row = new MuiRect(frame.ContentViewport.X, frame.ContentViewport.Y + i * rowHeight - scrollY, frame.Content.Width, rowHeight);
+                if (object.Equals(listValues[i], listBox.ListValue)) {
                     drawList.FillRect(row, IsEnabled(node) ? theme.SelectedBg : theme.ButtonDisabledBg);
                     drawList.FillRect(new MuiRect(row.X, row.Y, 3f, row.Height), IsEnabled(node) ? theme.Accent : theme.TextDisabled);
                 }
-                drawList.Text(new MuiRect(row.X + 14f, row.Y, Math.Max(0f, row.Width - 24f), row.Height), text, null, TextColor(node));
-                index++;
+                drawList.Text(new MuiRect(row.X + 14f, row.Y, Math.Max(0f, row.Width - 24f), row.Height), listLabels[i], null, TextColor(node));
             }
             drawList.PopClip();
+            PaintScrollChrome(node, frame, scrollY, state, drawList);
         }
 
         private void PaintDebugLines(LayoutNode node, IDebugLinesWidget debug, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, FieldBg(node, state));
-            drawList.StrokeRect(node.Rect, theme.ControlBorder, 2f);
-            drawList.PushClip(node.Rect);
             float rowHeight = metrics.RowHeight;
-            MuiRect title = new MuiRect(node.Rect.X + 2f, node.Rect.Y + 2f, Math.Max(0f, node.Rect.Width - 20f), rowHeight);
+            IList<string> lines = debug.GetDebugLines();
+            ScrollFrameLayout frame = ScrollGeometry.DebugFrame(node.Rect, rowHeight, lines.Count);
+            float scrollY = frame.ClampY(state.GetScrollPosition(node).Y);
+            drawList.FillRect(node.Rect, FieldBg(node, state));
+            drawList.PushClip(frame.ContentViewport);
+            MuiRect title = new MuiRect(frame.ContentViewport.X + 2f, frame.ContentViewport.Y + 2f - scrollY, Math.Max(0f, frame.Content.Width - 4f), rowHeight);
             drawList.FillRect(title, theme.SelectedBg);
             drawList.Text(new MuiRect(title.X + 4f, title.Y, Math.Max(0f, title.Width - 8f), title.Height), debug.DebugTitle, null, TextColor(node), centerFormat);
-
-            IList<string> lines = debug.GetDebugLines();
-            int maxRows = Math.Max(1, debug.VisibleRows);
-            for (int i = 0; i < lines.Count && i < maxRows; i++) {
-                float y = title.Bottom + i * rowHeight;
-                if (y >= node.Rect.Bottom) break;
-
-                drawList.Text(new MuiRect(node.Rect.X + 6f, y, Math.Max(0f, node.Rect.Width - 28f), rowHeight), lines[i], null, TextColor(node));
+            int first, end;
+            ScrollGeometry.VisibleRows(Math.Max(0f, scrollY - rowHeight - 2f), frame.ContentViewport.Height, rowHeight, lines.Count, out first, out end);
+            for (int i = first; i < end; i++) {
+                drawList.Text(new MuiRect(frame.ContentViewport.X + 6f, title.Bottom + i * rowHeight, Math.Max(0f, frame.Content.Width - 12f), rowHeight), lines[i], null, TextColor(node));
             }
             drawList.PopClip();
+            PaintScrollChrome(node, frame, scrollY, state, drawList);
         }
 
         private void PaintThemeEditor(LayoutNode node, ThemeEditor editor, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, FieldBg(node, state));
-            drawList.StrokeRect(node.Rect, theme.ControlBorder, 2f);
-            drawList.PushClip(node.Rect);
             ThemeTokens tokens = editor.Tokens ?? ThemePalettes.MetroLight();
             float rowHeight = metrics.RowHeight;
-            float top = node.Rect.Y + 2f;
+            ScrollFrameLayout frame = ScrollGeometry.ThemeEditorFrame(node.Rect, rowHeight, editor);
+            float scrollY = frame.ClampY(state.GetScrollPosition(node).Y);
+            drawList.FillRect(node.Rect, FieldBg(node, state));
+            drawList.PushClip(frame.ContentViewport);
+            float top = frame.ContentViewport.Y + 2f - scrollY;
             if (editor.ShowTitle) {
-                MuiRect title = new MuiRect(node.Rect.X + 2f, top, Math.Max(0f, node.Rect.Width - 20f), rowHeight);
+                MuiRect title = new MuiRect(frame.ContentViewport.X + 2f, top, Math.Max(0f, frame.Content.Width - 4f), rowHeight);
                 drawList.Text(title, editor.Title, null, TextColor(node), ThemeTypography.Format(theme, LabelRole.Subheading));
                 top = title.Bottom;
             }
             int row = 0;
-            int maxRows = Math.Max(1, ThemeEditorTokens.VisibleRowCount(editor));
-            float labelWidth = ThemeEditorTokens.MeasureLabelWidth(editor, metrics.MeasureText, Math.Max(0f, node.Rect.Width - 20f));
-            if (editor.ShowColors) for (int i = 0; i < ThemeEditorTokens.GetColors(editor).Length && row < maxRows; i++) {
+            float labelWidth = ThemeEditorTokens.MeasureLabelWidth(editor, metrics.MeasureText, Math.Max(0f, frame.Content.Width - 4f));
+            if (editor.ShowColors) for (int i = 0; i < ThemeEditorTokens.GetColors(editor).Length; i++) {
                 ThemeColorToken token = ThemeEditorTokens.GetColors(editor)[i];
-                MuiRect rect = ThemeRowRect(node, top, rowHeight, row++);
-                rect.Width = Math.Max(0f, rect.Width - 16f);
+                MuiRect rect = new MuiRect(frame.ContentViewport.X + 2f, top + row++ * rowHeight, Math.Max(0f, frame.Content.Width - 4f), rowHeight);
+                if (rect.Bottom <= frame.ContentViewport.Y || rect.Y >= frame.ContentViewport.Bottom) continue;
                 PaintColorFields(rect, ThemeEditorTokens.ColorName(token), tokens.GetColor(token), true, ColorDisplayMode.Byte, true, state, node, drawList, labelWidth);
             }
-            if (editor.ShowScalars) for (int i = 0; i < ThemeEditorTokens.GetScalars(editor).Length && row < maxRows; i++) {
+            if (editor.ShowScalars) for (int i = 0; i < ThemeEditorTokens.GetScalars(editor).Length; i++) {
                 ThemeScalarToken token = ThemeEditorTokens.GetScalars(editor)[i];
-                MuiRect rect = ThemeRowRect(node, top, rowHeight, row++);
-                rect.Width = Math.Max(0f, rect.Width - 16f);
+                MuiRect rect = new MuiRect(frame.ContentViewport.X + 2f, top + row++ * rowHeight, Math.Max(0f, frame.Content.Width - 4f), rowHeight);
+                if (rect.Bottom <= frame.ContentViewport.Y || rect.Y >= frame.ContentViewport.Bottom) continue;
                 PaintThemeScalarRow(rect, ThemeEditorTokens.ScalarName(token), tokens.GetScalar(token), drawList, node);
             }
             drawList.PopClip();
+            PaintScrollChrome(node, frame, scrollY, state, drawList);
+        }
+
+        private void PaintScrollChrome(LayoutNode node, ScrollFrameLayout frame, float scrollY, WidgetPaintState state, DrawList drawList) {
+            PopupPresentation.DrawScrollbar(drawList, theme,
+                ScrollbarGeometry.Vertical(frame.VerticalGutter, frame.Content.Height, frame.ContentViewport.Height, scrollY, frame.Vertical),
+                state.IsScrollbarHovered(node), state.IsScrollbarActive(node), IsEnabled(node));
+            drawList.StrokeRect(frame.Bounds, IsEnabled(node) ? theme.ControlBorder : theme.Border, ScrollGeometry.FrameBorder);
         }
 
         private void PaintThemeScalarRow(MuiRect rect, string name, float value, DrawList drawList, LayoutNode node) {
@@ -601,10 +653,6 @@ namespace MaximumUI {
             Mdl2IconGeometry.Draw(drawList, plus, Mdl2Icon.Add, TextColor(node), 1f);
         }
 
-        private static MuiRect ThemeRowRect(LayoutNode node, float startY, float rowHeight, int row) {
-            return new MuiRect(node.Rect.X + 2f, startY + row * rowHeight, Math.Max(0f, node.Rect.Width - 4f), rowHeight);
-        }
-
         private void PaintHelpBox(LayoutNode node, HelpBox helpBox, WidgetPaintState state, DrawList drawList) {
             MuiColor bg = theme.PanelBg;
             if (helpBox.Type == HelpBoxType.Warning) bg = theme.WarningBg;
@@ -612,7 +660,9 @@ namespace MaximumUI {
 
             drawList.FillRect(node.Rect, bg);
             drawList.StrokeRect(node.Rect, theme.Border, theme.BorderWidth);
-            drawList.Text(new MuiRect(node.Rect.X + 6f, node.Rect.Y + 2f, Math.Max(0f, node.Rect.Width - 12f), Math.Max(0f, node.Rect.Height - 4f)), helpBox.Message, null, TextColor(node));
+            TextFormat format = ThemeTypography.Format(theme, LabelRole.Body, true);
+            format.VerticalAlignment = TextVerticalAlignment.Top;
+            drawList.Text(ThemeTypography.HelpTextBounds(node.Rect), helpBox.Message, null, TextColor(node), format);
         }
 
         private void PaintSeparator(LayoutNode node, DrawList drawList) {
@@ -650,7 +700,14 @@ namespace MaximumUI {
             if (selectable.Selected || state.IsHovered(node) || state.IsActive(node))
                 drawList.FillRect(node.Rect, selectable.Selected && IsEnabled(node) ? theme.SelectedBg : ControlBg(node, state));
             if (selectable.Selected) drawList.FillRect(new MuiRect(node.Rect.X, node.Rect.Y, 3f, node.Rect.Height), IsEnabled(node) ? theme.Accent : theme.TextDisabled);
-            drawList.Text(new MuiRect(node.Rect.X + 14f, node.Rect.Y, Math.Max(0f, node.Rect.Width - 24f), node.Rect.Height), selectable.Text, null, TextColor(node));
+            if (selectable.ShowCheckbox) {
+                MuiRect box = Mdl2ControlChrome.SelectionBounds(new MuiRect(node.Rect.X + 8f, node.Rect.Y, Math.Max(0f, node.Rect.Width - 16f), node.Rect.Height), theme.ToggleBoxSize);
+                MuiColor color = Mdl2ControlChrome.SelectionColor(theme, IsEnabled(node), state.IsHovered(node), state.IsActive(node));
+                drawList.FillRect(box, selectable.Selected ? color : IsEnabled(node) ? theme.FieldBg : theme.ButtonDisabledBg);
+                if (selectable.Selected) Mdl2IconGeometry.Draw(drawList, box, Mdl2Icon.Check, theme.OnAccent, 1.5f);
+                else drawList.StrokeRect(box, Mdl2ControlChrome.ControlBorderColor(theme, IsEnabled(node), state.IsHovered(node)), 2f);
+                drawList.Text(new MuiRect(box.Right + 8f, node.Rect.Y, Math.Max(0f, node.Rect.Right - box.Right - 16f), node.Rect.Height), selectable.Text, null, TextColor(node));
+            } else drawList.Text(new MuiRect(node.Rect.X + 14f, node.Rect.Y, Math.Max(0f, node.Rect.Width - 24f), node.Rect.Height), selectable.Text, null, TextColor(node));
         }
 
         private void PaintTreeNode(LayoutNode node, TreeNode treeNode, WidgetPaintState state, DrawList drawList) {
@@ -848,8 +905,8 @@ namespace MaximumUI {
         }
 
         private void PaintVirtualList(LayoutNode node, VirtualList virtualList, WidgetPaintState state, DrawList drawList) {
-            drawList.FillRect(node.Rect, theme.FieldBg);
-            drawList.StrokeRect(node.Rect, theme.Border, theme.BorderWidth);
+            drawList.FillRect(node.Rect, FieldBg(node, state));
+            drawList.StrokeRect(node.Rect, IsEnabled(node) ? theme.ControlBorder : theme.Border, ScrollGeometry.FrameBorder);
         }
 
         private void PaintTabs(LayoutNode node, Tabs tabs, WidgetPaintState state, DrawList drawList) {

@@ -226,6 +226,8 @@ namespace MaximumUI {
         public string Text;
         public object Value;
         public bool Selected;
+        /// <summary>Draw a checkbox while retaining selection, range and double-click semantics.</summary>
+        public bool ShowCheckbox;
         public Action<bool> OnChange;
         public Action<SelectionRequest> OnSelect;
         public Action OnDoubleClick;

@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Linq.Expressions;
 using MultiTeamH;
 
-internal static class Program {
+internal static partial class Program {
     const BindingFlags Private = BindingFlags.Static | BindingFlags.NonPublic;
     static readonly Type Expressions = typeof(ExpressionControlCompat);
     static readonly Type Runtime = typeof(RuntimeModCompat);
@@ -21,6 +21,7 @@ internal static class Program {
             Run("Scoped character refresh preserves both teams and reapplies filtering", ScopedExpressionRefresh);
             Run("Background character refresh does not replay unmanaged characters", BackgroundExpressionRefresh);
             Run("Character refresh failure releases expression scope", FailedExpressionRefresh);
+            RunExpressionTeamContextTests();
             BackgroundClimaxRegression.Run(Run);
             Run("HCtrl partial prefix failure restores previous team", PartialHCtrlPrefixFailure);
             Run("HCtrl exception restores UI, cursor, context and saved state", HCtrlException);
@@ -65,11 +66,14 @@ internal static class Program {
         TeamSession.Snapshot.Add(session);
         Set(Expressions, "forcedTeam", -1);
         Set(Expressions, "activeProcScope", null);
+        Set(Expressions, "activeCharacterScope", null);
         Set(Expressions, "lastActiveFemale", null);
         ((IDictionary)Get(Expressions, "States")).Clear();
         ExpressionHost.hFrag = new HFlag();
+        ExpressionHost.hsceneProc = session.Proc;
         Set(Expressions, "femaleListField", typeof(ExpressionHost).GetField("femaleList"));
         Set(Expressions, "hFlagField", typeof(ExpressionHost).GetField("hFrag"));
+        Set(Expressions, "hSceneProcField", typeof(ExpressionHost).GetField("hsceneProc"));
         Set(Expressions, "orgasmField", typeof(ExpressionHost).GetField("orgazumCount"));
         Set(Expressions, "motionField", typeof(ExpressionHost).GetField("nowMotion"));
         Set(Expressions, "actionField", typeof(ExpressionHost).GetField("nowHAction"));
@@ -461,13 +465,16 @@ internal static class Program {
         public void Kiss(bool active) { kissFlag = active; }
         public IEnumerator Loop() { yield return female; }
     }
-    internal sealed class ExpressionData { public ChaControl female; }
+    internal sealed class ExpressionData { public ChaControl female; public object instMono; }
     internal sealed class ExpressionHost {
         public static HFlag hFrag;
+        public static HSceneProc hsceneProc;
         public List<ExpressionData> femaleList;
         public int orgazumCount;
         public string nowMotion = "", nowHAction = "";
         public bool isFeraAction, updateState;
+        public int ReplayCalls;
+        public void Replay() { ReplayCalls++; }
     }
     internal sealed class HCtrlHost {
         public int loopSpeed;

@@ -13,7 +13,8 @@ namespace ClothingCompression {
 
         internal static string FormatEntryLabel(int index, DeformationEntry entry) {
             string item = entry == null || entry.BindingKind == BoundItemKind.None || string.IsNullOrEmpty(entry.BindingName) ? "未绑定" : entry.BindingName;
-            return (index + 1) + " " + item + "（" + KindName(entry == null ? DeformationKind.Thigh : entry.Kind) + "）";
+            string kind = entry != null && entry.Kind == DeformationKind.LowerThigh ? "整腿" : KindName(entry == null ? DeformationKind.Thigh : entry.Kind);
+            return (index + 1) + " " + item + "（" + kind + "）";
         }
 
         internal static void SetKind(DeformationEntry entry, DeformationKind kind) {

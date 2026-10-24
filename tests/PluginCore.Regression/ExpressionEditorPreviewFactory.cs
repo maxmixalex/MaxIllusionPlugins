@@ -16,7 +16,7 @@ public static class ExpressionEditorPreviewFactory {
             guid = "preview-expression-" + i, name = names[i % names.Length] + " " + (i / names.Length + 1),
             eyebrowPtn = i % 4, eyesPtn = i % 6, mouthPtn = i % 3, eyeOpen = 0.8f, blink = true, mouthOpen = 0.1f
         });
-        var program = new EC.Program { guid = "preview-program", name = "自然表情 · 场景示例", applyMouthOpen = true, ignoreMouthInFera = true };
+        var program = new EC.Program { guid = "preview-program", name = "自然表情", applyMouthOpen = true, ignoreMouthInFera = true };
         for (int i = 0; i < 6; i++) program.units.Add(new EC.Program.Unit {
             aibu = true, houshi = true, sounyuu = true, idle = true, loopW = true, morph = true, highlight = true,
             feelingL = i * 10, feelingH = 100, orgazumNumH = 10,
@@ -31,20 +31,8 @@ public static class ExpressionEditorPreviewFactory {
                 programValid = true, programTimer = 7f, programTimerNow = 4.5f
             });
         }
-        var view = new EC.ExpressionEditorView(owner);
+        var view = new EC.ExpressionEditorView(owner, programPage);
         var context = new BuildContext { Dialogs = new DialogService() };
-        Widget tree = view.Build(context);
-        if (programPage) {
-            SelectProgramPage(tree);
-            tree = view.Build(context);
-        }
-        ((Window)tree).Title = "EXPRESSION CONTROL / 匿名示例";
-        return tree;
-    }
-
-    private static bool SelectProgramPage(Widget widget) {
-        if (widget is Button && Equals(widget.Key, "page-1")) { ((Button)widget).OnClick(); return true; }
-        for (int i = 0; i < widget.Children.Count; i++) if (SelectProgramPage(widget.Children[i])) return true;
-        return false;
+        return view.Build(context);
     }
 }

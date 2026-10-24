@@ -102,6 +102,18 @@ namespace JuiceControl {
                 SelectCharacter = delegate(int i) { SelectCharacter(characters, i); RefreshEditor(); },
                 SelectCharacterPreset = delegate(int i) { SelectCharacterPreset(i); RefreshEditor(); },
                 SelectGroupPreset = delegate(int i) { SelectGroupPreset(i); RefreshEditor(); },
+                ChooseCharacterPreset = delegate(int i) {
+                    if (i < 0 || i >= presetXml.CharacterPresets.Count) return;
+                    SelectCharacterPreset(i);
+                    statusText = "已选择汁液预设: " + characterPresetName;
+                    RefreshEditor();
+                },
+                ChooseGroupPreset = delegate(int i) {
+                    if (i < 0 || i >= presetXml.GroupPresets.Count) return;
+                    SelectGroupPreset(i);
+                    statusText = "已选择场景预设: " + groupPresetName;
+                    RefreshEditor();
+                },
                 ChangeName = delegate(string text) {
                     nameDialogText = text; editorView.Model.Name = text;
                     MaximumUIRuntime.MarkDirty(editorView);
@@ -109,7 +121,7 @@ namespace JuiceControl {
                 LockAll = delegate(bool locked) {
                     if (selectedCharacter == null) return;
                     if (locked) CaptureAllEffectLocks(selectedCharacter); else ClearLockedEffects(selectedCharacter);
-                    statusText = locked ? "已锁定全部效果。" : "已解除全部效果锁定。";
+                    statusText = locked ? "已锁定全部汁液。" : "已解除全部汁液锁定。";
                     RefreshEditor();
                 }
             };
@@ -192,16 +204,16 @@ namespace JuiceControl {
                     return;
                 case JuiceEditorCommand.Refresh:
                     if (selectedCharacter != null) RefreshCurrentState(selectedCharacter);
-                    statusText = "已获取当前效果状态。"; break;
+                    statusText = "已获取当前汁液状态。"; break;
                 case JuiceEditorCommand.Clear:
                     if (selectedCharacter != null) { ApplyState(selectedCharacter, new CharaSkinState()); ClearLockedEffects(selectedCharacter); }
-                    statusText = "已清空效果。"; break;
+                    statusText = "已清空汁液。"; break;
                 case JuiceEditorCommand.Fill:
                     if (selectedCharacter != null) {
                         ApplyState(selectedCharacter, CharaSkinState.CreateMax(SiruMaxLevel, TearMaxLevel, BlushMaxLevel, SkinEffectsBridge.Effects));
                         RefreshCurrentState(selectedCharacter);
                     }
-                    statusText = "已设置为全部效果最大值。"; break;
+                    statusText = "已设置为全满汁液。"; break;
                 case JuiceEditorCommand.ApplyCharacter: ApplyCurrentCharacterPresetToSelected(); break;
                 case JuiceEditorCommand.ApplyGroup: ApplyCurrentGroupPreset(GetCharacters()); break;
                 case JuiceEditorCommand.CreateCharacter: OpenNameDialog(NameDialogMode.CreateCharacter, string.Empty); break;

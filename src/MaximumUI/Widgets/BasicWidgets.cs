@@ -431,19 +431,34 @@ namespace MaximumUI {
     public static class TextInputFilter {
         public static string Apply(string value, TextInputFlags flags, Func<char, bool> charFilter = null, int maxLength = 0) {
             if (string.IsNullOrEmpty(value)) return string.Empty;
+            const TextInputFlags characterFlags = TextInputFlags.Decimal | TextInputFlags.Hexadecimal | TextInputFlags.Scientific |
+                TextInputFlags.Uppercase | TextInputFlags.NoBlank;
+            if ((flags & characterFlags) == TextInputFlags.None && charFilter == null)
+                return maxLength > 0 && value.Length > maxLength ? value.Substring(0, maxLength) : value;
 
             string source = Has(flags, TextInputFlags.Uppercase) ? value.ToUpperInvariant() : value;
-            System.Text.StringBuilder builder = new System.Text.StringBuilder(source.Length);
+            System.Text.StringBuilder builder = null;
+            int length = 0;
             for (int i = 0; i < source.Length; i++) {
                 char ch = source[i];
-                if (Has(flags, TextInputFlags.NoBlank) && char.IsWhiteSpace(ch)) continue;
-                if (!PassesBuiltInFilter(ch, flags)) continue;
-                if (charFilter != null && !charFilter(ch)) continue;
-                builder.Append(ch);
-                if (maxLength > 0 && builder.Length >= maxLength) break;
+                bool keep = (!Has(flags, TextInputFlags.NoBlank) || !char.IsWhiteSpace(ch)) &&
+                    PassesBuiltInFilter(ch, flags) && (charFilter == null || charFilter(ch));
+                if (!keep) {
+                    if (builder == null) {
+                        builder = new System.Text.StringBuilder(source.Length);
+                        builder.Append(source, 0, i);
+                    }
+                    continue;
+                }
+                if (builder != null) builder.Append(ch);
+                length++;
+                if (maxLength > 0 && length >= maxLength)
+                    return builder == null ? (i == source.Length - 1 ? source : source.Substring(0, i + 1)) : builder.ToString();
             }
 
-            return builder.ToString();
+            // Most OnGUI calls return unchanged text. Reuse its buffer instead
+            // of allocating a builder and result for every field and event.
+            return builder == null ? source : builder.ToString();
         }
 
         public static bool Has(TextInputFlags flags, TextInputFlags flag) {
@@ -587,6 +602,9 @@ namespace MaximumUI {
         public bool AutoFocusApplied;
         public string FocusStartValue = string.Empty;
         public bool HasFocusStartValue;
+        internal int EditRevision;
+        internal int CommitEditRevision;
+        internal bool SynchronizeCommittedValue;
     }
 
     public enum HelpBoxType {

@@ -457,10 +457,35 @@ namespace MaximumUI {
             if (disposed) throw new ObjectDisposedException("MaximumTheme");
             GUISkin previous = GUI.skin;
             GUISkin themed = GetScrollSkin(previous);
+            MuiRect visible = ScrollGeometry.ContentViewport(new MuiRect(position.x, position.y, position.width, position.height),
+                new MuiRect(viewRect.x, viewRect.y, viewRect.width, viewRect.height), alwaysShowHorizontal, alwaysShowVertical, ScrollbarGeometry.GutterSize);
+            // Match the shared thumb formula even in an unusually short viewport.
+            int verticalInset = (int)ScrollbarGeometry.NativeEndInset(visible.Height);
+            int horizontalInset = (int)ScrollbarGeometry.NativeEndInset(visible.Width);
+            themed.verticalScrollbar.padding.top = themed.verticalScrollbar.padding.bottom = verticalInset;
+            themed.horizontalScrollbar.padding.left = themed.horizontalScrollbar.padding.right = horizontalInset;
+            int verticalMinimum = (int)ScrollbarGeometry.NativeMinimumThumb(visible.Height - verticalInset * 2f);
+            int horizontalMinimum = (int)ScrollbarGeometry.NativeMinimumThumb(visible.Width - horizontalInset * 2f);
+            themed.verticalScrollbarThumb.padding.top = verticalMinimum / 2;
+            themed.verticalScrollbarThumb.padding.bottom = verticalMinimum - verticalMinimum / 2;
+            themed.horizontalScrollbarThumb.padding.left = horizontalMinimum / 2;
+            themed.horizontalScrollbarThumb.padding.right = horizontalMinimum - horizontalMinimum / 2;
+            MuiRect content = new MuiRect(viewRect.x, viewRect.y, viewRect.width, viewRect.height);
+            MuiVec2 finitePosition = ScrollGeometry.ClampPosition(new MuiVec2(scrollPosition.x, scrollPosition.y), content, visible);
+            scrollPosition = new Vector2(finitePosition.X, finitePosition.Y);
             try {
                 GUI.skin = themed;
-                return GUI.BeginScrollView(position, scrollPosition, viewRect,
+                if (!ScrollGeometry.HasNativeScrollArea(visible)) {
+                    // A collapsed host cannot draw or hit a thumb. Keep native
+                    // control IDs and the paired scroll clip, but skip SliderHandler
+                    // so a captured drag cannot divide by a zero-length track.
+                    return GUI.BeginScrollView(new Rect(visible.X, visible.Y, visible.Width, visible.Height), scrollPosition, viewRect,
+                        alwaysShowHorizontal, alwaysShowVertical, GUIStyle.none, GUIStyle.none);
+                }
+                Vector2 next = GUI.BeginScrollView(position, scrollPosition, viewRect,
                     alwaysShowHorizontal, alwaysShowVertical, themed.horizontalScrollbar, themed.verticalScrollbar);
+                finitePosition = ScrollGeometry.ClampPosition(new MuiVec2(next.x, next.y), content, visible);
+                return new Vector2(finitePosition.X, finitePosition.Y);
             } finally {
                 GUI.skin = previous;
             }
@@ -478,18 +503,18 @@ namespace MaximumUI {
                 Texture2D active = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, false, true))));
 
                 GUIStyle vertical = new GUIStyle {
-                    fixedWidth = 12f, margin = new RectOffset(4, 0, 0, 0), padding = new RectOffset(2, 2, 2, 2)
+                    fixedWidth = ScrollbarGeometry.GutterSize, margin = new RectOffset(), padding = new RectOffset(4, 4, 2, 2)
                 };
                 GUIStyle horizontal = new GUIStyle {
-                    fixedHeight = 12f, margin = new RectOffset(0, 0, 4, 0), padding = new RectOffset(2, 2, 2, 2)
+                    fixedHeight = ScrollbarGeometry.GutterSize, margin = new RectOffset(), padding = new RectOffset(2, 2, 4, 4)
                 };
                 SetBackground(vertical, track);
                 SetBackground(horizontal, track);
                 GUIStyle verticalThumb = new GUIStyle {
-                    fixedWidth = 8f, padding = new RectOffset(0, 0, 6, 6)
+                    fixedWidth = ScrollbarGeometry.ThumbWidth, padding = new RectOffset(0, 0, 12, 12)
                 };
                 GUIStyle horizontalThumb = new GUIStyle {
-                    fixedHeight = 8f, padding = new RectOffset(6, 6, 0, 0)
+                    fixedHeight = ScrollbarGeometry.ThumbWidth, padding = new RectOffset(12, 12, 0, 0)
                 };
                 SetBackground(verticalThumb, thumb);
                 SetBackground(horizontalThumb, thumb);
@@ -498,12 +523,12 @@ namespace MaximumUI {
                 verticalThumb.active.background = horizontalThumb.active.background = active;
                 scrollSkin.verticalScrollbar = vertical;
                 scrollSkin.verticalScrollbarThumb = verticalThumb;
-                scrollSkin.verticalScrollbarUpButton = new GUIStyle { fixedWidth = 12f, fixedHeight = 0f };
-                scrollSkin.verticalScrollbarDownButton = new GUIStyle { fixedWidth = 12f, fixedHeight = 0f };
+                scrollSkin.verticalScrollbarUpButton = new GUIStyle { fixedWidth = ScrollbarGeometry.GutterSize, fixedHeight = 0f };
+                scrollSkin.verticalScrollbarDownButton = new GUIStyle { fixedWidth = ScrollbarGeometry.GutterSize, fixedHeight = 0f };
                 scrollSkin.horizontalScrollbar = horizontal;
                 scrollSkin.horizontalScrollbarThumb = horizontalThumb;
-                scrollSkin.horizontalScrollbarLeftButton = new GUIStyle { fixedWidth = 0f, fixedHeight = 12f };
-                scrollSkin.horizontalScrollbarRightButton = new GUIStyle { fixedWidth = 0f, fixedHeight = 12f };
+                scrollSkin.horizontalScrollbarLeftButton = new GUIStyle { fixedWidth = 0f, fixedHeight = ScrollbarGeometry.GutterSize };
+                scrollSkin.horizontalScrollbarRightButton = new GUIStyle { fixedWidth = 0f, fixedHeight = ScrollbarGeometry.GutterSize };
                 scrollSkin.scrollView = new GUIStyle();
             }
             Font font = source == null ? null : source.font;

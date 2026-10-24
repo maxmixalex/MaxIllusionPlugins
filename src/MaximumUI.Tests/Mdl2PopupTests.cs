@@ -304,7 +304,11 @@ namespace MaximumUI.Tests {
             ScrollbarLayout end = ScrollbarGeometry.Vertical(vertical, 1000f, 200f, float.MaxValue);
             Assert(start.Thumb.Y == start.Track.Y + 2f && end.Thumb.Bottom == end.Track.Bottom - 2f, "Scroll endpoints must align with the actual padded native track.");
             Assert(!ScrollbarGeometry.Vertical(vertical, 100f, 200f, 0f).Visible, "Content that fits must not show a scrollbar.");
-            Assert(!ScrollbarGeometry.Vertical(new MuiRect(0f, 0f, 2f, 2f), 100f, 20f, 1f).Visible, "A collapsed scrollbar must not create negative thumb extents.");
+            ScrollbarLayout tiny = ScrollbarGeometry.Vertical(new MuiRect(0f, 0f, 2f, 2f), 100f, 20f, 1f);
+            Assert(Contains(tiny.Track, tiny.Thumb) && tiny.Thumb.Width >= 0f && tiny.Thumb.Height >= 0f,
+                "Reduced end padding may expose a tiny track, but its thumb must remain finite and bounded.");
+            Assert(!ScrollbarGeometry.Vertical(new MuiRect(0f, 0f, 16f, 0f), 100f, 20f, 1f).Visible,
+                "A zero-length track has no visible or interactive thumb.");
         }
 
         private static void NativePopupGeometryDoesNotAllocateAfterWarmup() {

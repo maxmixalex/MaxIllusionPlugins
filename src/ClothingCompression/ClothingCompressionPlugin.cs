@@ -27,7 +27,7 @@ namespace ClothingCompression {
     internal sealed class ClothingCompressionPlugin : BaseUnityPlugin {
         internal const string Guid = "MaxMixAlex.ClothingCompression";
         internal const string Name = "Clothing Compression";
-        internal const string Version = "0.4.0";
+        internal const string Version = "0.4.1";
         internal static readonly string[] CoordinateNames = CompressionEditorSupport.CoordinateNames;
         private static readonly FieldInfo ControlObjectsField = typeof(BaseGuiEntry).GetField("_controlObjects", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo DropdownOptionsField = typeof(MakerDropdown).GetField("_options", BindingFlags.Instance | BindingFlags.NonPublic)

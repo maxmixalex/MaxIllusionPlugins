@@ -24,7 +24,7 @@ public static class CompressionEditorPreview {
         controller.Entries.Add(thigh);
         controller.Entries.Add(arm);
         controller.Entries.Add(knee);
-        CompressionEditorView view = new CompressionEditorView("Clothing Compression · 形变编辑器") {
+        CompressionEditorView view = new CompressionEditorView("Clothing Compression 0.4.1") {
             Controller = controller,
             BindingItems = new List<ItemDescriptor> { socks, gloves, band },
             ImportEntries = new List<DeformationEntry> { knee.Clone(true), arm.Clone(true) }

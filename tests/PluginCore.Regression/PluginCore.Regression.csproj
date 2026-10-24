@@ -18,7 +18,10 @@
     <Compile Include="../../src/ExpressionControl/ExpressionProgramWidgets.cs" Link="Production/ExpressionProgramWidgets.cs" />
     <Compile Include="../../src/ExpressionControl/ExpressionWindowLifecycle.cs" Link="Production/ExpressionWindowLifecycle.cs" />
     <Compile Include="../../src/ExpressionControl/ExpressionHSceneState.cs" Link="Production/ExpressionHSceneState.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionProcessing.cs" Link="Production/ExpressionProcessing.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionCharacterActions.cs" Link="Production/ExpressionCharacterActions.cs" />
     <Compile Include="../../src/ExpressionControl/FemaleDataExpressionState.cs" Link="Production/FemaleDataExpressionState.cs" />
+    <Compile Include="../../src/ExpressionControl/FemaleDataRuntimeState.cs" Link="Production/FemaleDataRuntimeState.cs" />
     <Compile Include="../../src/ExpressionControl/XmlMgr.cs" Link="Production/XmlMgr.cs" />
     <Compile Include="../../src/ExpressionControl/ShortCutKeyMgr.cs" Link="Production/ShortCutKeyMgr.cs" />
     <Compile Include="../../src/ExpressionControl/Utl.cs" Link="Production/Utl.cs" />

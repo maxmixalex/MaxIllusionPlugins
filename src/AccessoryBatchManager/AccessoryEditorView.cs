@@ -62,25 +62,21 @@ namespace AccessoryBatchManager {
 
         public override Widget Build(BuildContext context) {
             AccessoryEditorModel m = Model;
-            Window window = new Window("饰品批量管理  " + m.Version, 900f, 760f,
+            Window window = new Window("饰品批量管理 " + m.Version, 900f, 760f,
                 key: "accessory-window", minWidth: 740f, minHeight: 600f,
                 closable: true, onVisibleChange: delegate(bool value) {
                     if (!value) Execute(m, AccessoryEditorCommand.Close);
                 });
             VStack body = new VStack(10f) {
-                new HStack(8f) {
-                    new Label("饰品工作区") { Role = LabelRole.Heading }.ExpandWidth(),
-                    new Label("Shift  连续选择") { Role = LabelRole.Muted }.Width(140f)
-                }.Height(34f),
                 new HStack(6f) {
-                    Page(m, "批量管理", 0), Page(m, "复制 / 移动", 1), Page(m, "设置", 2)
+                    Page(m, "批量管理", 0), Page(m, "复制/移动", 1), Page(m, "设置", 2)
                 }.Height(32f),
                 new Separator()
             };
             if (!m.Available) body.Add(new HelpBox("正在等待角色编辑器加载……", HelpBoxType.Info).ExpandHeight());
             else body.Add((m.Page == 0 ? BuildBatch(m) : m.Page == 1 ? BuildCopy(m) : BuildSettings(m)).ExpandHeight().ExpandWidth());
             body.Add(new Separator());
-            body.Add(new Label(string.IsNullOrEmpty(m.Status) ? "选择槽位后执行操作。" : m.Status) {
+            body.Add(new Label(m.Status ?? string.Empty) {
                 Role = LabelRole.Muted, WordWrap = true
             }.MinHeight(26f));
             window.Add(body.ExpandHeight());
@@ -104,39 +100,36 @@ namespace AccessoryBatchManager {
         }
 
         private static Widget BuildBatch(AccessoryEditorModel m) {
-            return new VStack(10f) {
+            // Keep the original toolbar above the list, including its order.
+            return new VStack(8f) {
                 new HStack(8f) {
                     SelectionButton(m, m.Batch, "全选", AccessorySelectionCommand.All),
-                    SelectionButton(m, m.Batch, "全选非空", AccessorySelectionCommand.NonEmpty),
                     SelectionButton(m, m.Batch, "全不选", AccessorySelectionCommand.None),
-                    new Label(m.Summary) { Role = LabelRole.Muted }.ExpandWidth()
+                    Command(m, "移除选中饰品", AccessoryEditorCommand.Remove, m.Batch.Selection.Count > 0, width: 126f),
+                    Command(m, "一键整理（保持顺序）", AccessoryEditorCommand.Compact, width: 176f),
+                    new Spacer(),
+                    new Label(m.Summary, "accessory-summary") { Role = LabelRole.Muted }.Width(138f)
                 }.Height(32f),
-                BuildList(m, m.Batch).ExpandHeight(),
-                new HStack(8f) {
-                    Command(m, "移除选中饰品", AccessoryEditorCommand.Remove, m.Batch.Selection.Count > 0),
-                    Command(m, "一键整理（保持顺序）", AccessoryEditorCommand.Compact, true, true)
-                }.Height(34f)
+                BuildList(m, m.Batch).ExpandHeight()
             }.ExpandHeight();
         }
 
         private static Widget BuildCopy(AccessoryEditorModel m) {
-            return new VStack(10f) {
-                new HStack(14f) {
-                    Choice("来源", m.Sources, m.SourceIndex, m.ChangeSource, "accessory-source").ExpandWidth(),
-                    Choice("目标", m.Destinations, m.DestinationIndex, m.ChangeDestination, "accessory-destination")
+            return new VStack(8f) {
+                new HStack(12f) {
+                    CycleChoice("来源:", m.Sources, m.SourceIndex, m.ChangeSource, "accessory-source").ExpandWidth(),
+                    CycleChoice("目标:", m.Destinations, m.DestinationIndex, m.ChangeDestination, "accessory-destination", !m.FollowCoordinate)
                         .Enabled(!m.FollowCoordinate).ExpandWidth()
                 }.Height(32f),
-                new HStack(14f) {
+                new HStack(18f) {
                     BuildColumn(m, m.Source).ExpandWidth().ExpandHeight(),
                     BuildColumn(m, m.Destination).ExpandWidth().ExpandHeight()
                 }.ExpandHeight(),
                 new Label(m.Mapping) { Role = LabelRole.Muted, WordWrap = true }.MinHeight(24f),
-                new HStack(18f) {
-                    Setting(m, "位置左右交换", AccessoryEditorSetting.ReverseParent, m.ReverseParent).ExpandWidth(),
-                    Setting(m, "同步滚动", AccessoryEditorSetting.SyncScroll, m.SyncScroll).ExpandWidth()
-                }.Height(28f),
                 new HStack(8f) {
-                    Command(m, "复制", AccessoryEditorCommand.Copy, m.CanCopy, true),
+                    Setting(m, "位置左右交换", AccessoryEditorSetting.ReverseParent, m.ReverseParent).Width(132f),
+                    Setting(m, "同步滚动", AccessoryEditorSetting.SyncScroll, m.SyncScroll).Width(100f),
+                    Command(m, "复制", AccessoryEditorCommand.Copy, m.CanCopy),
                     Command(m, "移动", AccessoryEditorCommand.Move, m.CanMove),
                     Command(m, "最前插入", AccessoryEditorCommand.InsertFirst, m.CanInsert),
                     Command(m, "最后插入", AccessoryEditorCommand.InsertLast, m.CanInsert)
@@ -146,16 +139,16 @@ namespace AccessoryBatchManager {
         }
 
         private static Widget BuildColumn(AccessoryEditorModel m, AccessoryListModel list) {
-            return new VStack(8f) {
-                new HStack(6f) {
+            return new VStack(6f) {
+                new HStack(4f) {
+                    new Label(list.Role == AccessoryListRole.Source ? "来源" : "目标").Width(36f),
                     SelectionButton(m, list, "全选", AccessorySelectionCommand.All),
-                    SelectionButton(m, list, "非空", AccessorySelectionCommand.NonEmpty),
+                    SelectionButton(m, list, "全选非空", AccessorySelectionCommand.NonEmpty),
                     SelectionButton(m, list, "全不选", AccessorySelectionCommand.None),
                     SelectionButton(m, list, list.Clothing ? "服装" : "饰品", AccessorySelectionCommand.ToggleKind)
                         .Enabled(list.CanToggleKind)
                 }.Height(30f),
-                BuildList(m, list).ExpandHeight(),
-                new Label("已选 " + list.Selection.Count + " / " + list.Count) { Role = LabelRole.Muted }.Height(22f)
+                BuildList(m, list).ExpandHeight()
             };
         }
 
@@ -163,7 +156,7 @@ namespace AccessoryBatchManager {
             return new VirtualList(list.Count, 30f, delegate(int index) {
                 string label = list.GetName == null ? (index + 1).ToString() : list.GetName(index);
                 return new Selectable(label, list.Selection.Contains(index), key: "slot-" + list.Role + "-" + index) {
-                    Value = index,
+                    Value = index, ShowCheckbox = true,
                     OnSelect = delegate(SelectionRequest request) {
                         if (m.SelectSlot != null) m.SelectSlot(list.Role, index, request);
                     }
@@ -173,7 +166,7 @@ namespace AccessoryBatchManager {
 
         private static Widget Adjustment(AccessoryEditorModel m, int index) {
             return new HStack(8f) {
-                new Label(index == 0 ? "调整 ①" : "调整 ②") { Role = LabelRole.Muted }.Width(76f),
+                new Label(index == 0 ? "调整①" : "调整②") { Role = LabelRole.Muted }.Width(76f),
                 Command(m, "复制", index == 0 ? AccessoryEditorCommand.Adjust1 : AccessoryEditorCommand.Adjust2, m.CanAdjust),
                 Command(m, "左右反转", index == 0 ? AccessoryEditorCommand.Adjust1LeftRight : AccessoryEditorCommand.Adjust2LeftRight, m.CanAdjust),
                 Command(m, "上下反转", index == 0 ? AccessoryEditorCommand.Adjust1UpDown : AccessoryEditorCommand.Adjust2UpDown, m.CanAdjust)
@@ -182,33 +175,50 @@ namespace AccessoryBatchManager {
 
         private static Widget BuildSettings(AccessoryEditorModel m) {
             return new ScrollView("accessory-settings") {
-                new VStack(14f) {
-                    new Label("数据同步") { Role = LabelRole.Heading }.Height(32f),
-                    new Label("批量修改后可统一重建角色模型；立即同步会在每次操作后重建。") {
+                new VStack(12f) {
+                    new Label("数据同步") { Role = LabelRole.Subheading }.Height(28f),
+                    new Label("默认只修改角色数据；需要查看最终结果时可立即重建模型。") {
                         Role = LabelRole.Muted, WordWrap = true
                     }.MinHeight(32f),
-                    Setting(m, "每次操作后立即同步", AccessoryEditorSetting.ImmediateSync, m.ImmediateSync).Height(30f),
-                    Command(m, "立即刷新数据并更新角色模型", AccessoryEditorCommand.RefreshModel, true, true),
-                    new Separator(),
-                    new Label("选择与目标") { Role = LabelRole.Heading }.Height(32f),
-                    Setting(m, "高亮选中饰品（最近选择为橙色，其余为蓝色）", AccessoryEditorSetting.SelectionHighlight, m.SelectionHighlight).Height(30f),
+                    new HStack(12f) {
+                        Setting(m, "每次操作后总是立即同步", AccessoryEditorSetting.ImmediateSync, m.ImmediateSync).Width(285f),
+                        Command(m, "立即刷新数据并更新角色模型", AccessoryEditorCommand.RefreshModel)
+                    }.Height(34f),
+                    new Space(12f),
+                    new Label("饰品高亮") { Role = LabelRole.Subheading }.Height(28f),
+                    Setting(m, "启用选择高亮（最近选择为橙色，其余为蓝色）", AccessoryEditorSetting.SelectionHighlight, m.SelectionHighlight).Height(30f),
                     Setting(m, "操作完成后清除选区", AccessoryEditorSetting.ClearAfter, m.ClearAfter).Height(30f),
-                    Setting(m, "复制 / 移动目标跟随当前服装搭配", AccessoryEditorSetting.FollowCoordinate, m.FollowCoordinate).Height(30f)
+                    Setting(m, "复制/移动目标始终跟随当前服装搭配", AccessoryEditorSetting.FollowCoordinate, m.FollowCoordinate).Height(30f)
                 }.ExpandWidth()
             }.ExpandHeight();
+        }
+
+        private static Widget CycleChoice(string label, string[] names, int selected, Action<int> changed, string key, bool enabled = true) {
+            return new HStack(4f) {
+                new Label(label).Width(42f),
+                new ArrowButton(ArrowDirection.Left, delegate { Cycle(names, selected, -1, changed); }, key + "-previous")
+                    .Enabled(enabled && names.Length > 0).Width(28f),
+                Choice(string.Empty, names, selected, changed, key).Enabled(enabled && names.Length > 0).ExpandWidth(),
+                new ArrowButton(ArrowDirection.Right, delegate { Cycle(names, selected, 1, changed); }, key + "-next")
+                    .Enabled(enabled && names.Length > 0).Width(28f)
+            };
+        }
+
+        private static void Cycle(string[] names, int selected, int direction, Action<int> changed) {
+            if (changed != null && names.Length > 0) changed((selected + direction + names.Length) % names.Length);
         }
 
         private static Widget Choice(string label, string[] names, int selected, Action<int> changed, string key) {
             int[] ids = new int[names.Length];
             for (int i = 0; i < ids.Length; i++) ids[i] = i;
             return new ComboBox<int>(label, selected, ids,
-                delegate(int i) { return i >= 0 && i < names.Length ? names[i] : "无"; }, changed, key) { LabelWidth = 42f };
+                delegate(int i) { return i >= 0 && i < names.Length ? names[i] : "无"; }, changed, key) { LabelWidth = string.IsNullOrEmpty(label) ? 0f : 42f };
         }
 
         private static Widget SelectionButton(AccessoryEditorModel m, AccessoryListModel list, string text, AccessorySelectionCommand command) {
             return new Button(text, delegate {
                 if (m.SelectionCommand != null) m.SelectionCommand(list.Role, command);
-            }, "selection-" + list.Role + "-" + command).Width(command == AccessorySelectionCommand.NonEmpty ? 84f : 64f);
+            }, "selection-" + list.Role + "-" + command).Width(command == AccessorySelectionCommand.NonEmpty ? 80f : command == AccessorySelectionCommand.None ? 64f : 52f);
         }
 
         private static Widget Setting(AccessoryEditorModel m, string text, AccessoryEditorSetting setting, bool value) {
@@ -218,10 +228,11 @@ namespace AccessoryBatchManager {
         }
 
         private static Widget Command(AccessoryEditorModel m, string text, AccessoryEditorCommand command,
-            bool enabled = true, bool primary = false) {
-            return new Button(text, delegate { Execute(m, command); }, "accessory-command-" + command) {
+            bool enabled = true, bool primary = false, float width = 0f) {
+            Button button = new Button(text, delegate { Execute(m, command); }, "accessory-command-" + command) {
                 Variant = primary ? ButtonVariant.Primary : ButtonVariant.Default
-            }.Enabled(enabled).ExpandWidth().Height(32f);
+            }.Enabled(enabled).Height(32f);
+            return width > 0f ? button.Width(width) : button.ExpandWidth();
         }
 
         private static void Execute(AccessoryEditorModel m, AccessoryEditorCommand command) {

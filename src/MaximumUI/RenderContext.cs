@@ -152,9 +152,16 @@ namespace MaximumUI {
 
     internal sealed class ListBoxState {
         public Vector2 Position;
+        public string Filter;
         public readonly ChoiceCache Choices = new ChoiceCache();
         public IListBoxWidget Owner;
         public System.Func<object, string> Formatter;
+        public readonly TextField FilterWidget = new TextField(string.Empty);
+        public readonly LayoutNode FilterNode;
+
+        public ListBoxState() {
+            FilterNode = new LayoutNode { Widget = FilterWidget };
+        }
     }
 
     internal sealed class VirtualListState {

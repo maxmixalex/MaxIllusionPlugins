@@ -13,6 +13,7 @@
     <Compile Include="../../src/MultiTeamH/HSceneOptionsCompat.cs" Link="Production/HSceneOptionsCompat.cs" />
     <Compile Include="../../src/MultiTeamH/CoroutineGuard.cs" Link="Production/CoroutineGuard.cs" />
     <Compile Include="../../src/MultiTeamH/ExpressionControlCompat.cs" Link="Production/ExpressionControlCompat.cs" />
+    <Compile Include="../../src/MultiTeamH/ExpressionVoiceBinding.cs" Link="Production/ExpressionVoiceBinding.cs" />
     <Compile Include="../../src/MultiTeamH/RuntimeModCompat.cs" Link="Production/RuntimeModCompat.cs" />
   </ItemGroup>
 </Project>

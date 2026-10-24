@@ -37,7 +37,7 @@ dotnet build src/ExpressionControl/ExpressionControl.csproj -c Release
 | MaximumUI.Runner → MaximumUI.Tests | 加载真实 MaximumUI DLL，执行 net461 类库的 `Program.Main`；布局、状态、输入、绘制命令及 Juice/Accessory 实际 View 与会话守卫 |
 | MultiTeamH.Regression | 链接实际兼容补丁、会话选择和协程清理实现；游戏、Harmony 与可选插件边界使用明确测试替身 |
 | AccessoryClothing.Regression | 链接实际饰品操作/会话、高亮、材质桥、形变控制器、XML/目录、Clothing View/适配器与缓存；模拟外部角色、网格与事件服务 |
-| PluginCore.Regression | 链接实际表情四页 View、编辑/删除/重载、筛选、快捷键、XML、SkinEffects 反射桥；使用真实文件和序列化器，模拟外部 Unity/游戏服务 |
+| PluginCore.Regression | 链接实际表情主窗/程序窗 View、编辑/删除/重载、程序处理循环与角色动作入口、快捷键、XML、SkinEffects 反射桥；使用真实文件和序列化器，模拟外部 Unity/游戏服务 |
 
 MaximumUI.Tests 本身是类库；不能把单独运行 `dotnet test` 当成这些断言已执行。原来的 `scripts/Test-MaximumUI.ps1` 仍可单独运行 UI 测试，应该启动新的 `pwsh` 进程以免复用旧程序集。本次 Linux 验证使用 .NET 9 执行宿主，没有宣称已执行 PowerShell 脚本。
 
@@ -49,11 +49,13 @@ MaximumUI.Tests 本身是类库；不能把单独运行 `dotnet test` 当成这�
 
 2026-10-23 使用 .NET SDK 9.0.319 完成整仓修复和统一执行回归，具体数量、基线反例、性能数据与未验证内容记录在 [审计记录](Audit-2026-10-23.md)。ClothingCompression 的两处 `Application.loadedLevelName` CS0618 过时 API 警告属于已有代码；本次没有仅为消除警告而改变场景判断逻辑。饰品/服装 .NET 9 测试宿主还会提示共享 net35 源码使用 `XmlReaderSettings.ProhibitDtd` 已过时；这是旧目标框架所需的 API，不代表未阻止 DTD。最终全量编译共 3 个警告、0 个错误。
 
-上一轮完成整仓 Rebuild 和 226 组实际断言：MaximumUI 104、MultiTeamH 39、Accessory/Clothing 38、PluginCore 45，详见 [后续修复记录](Followup-2026-10-23.md)。四插件接入、性能缓存、真实 XML 往返、可下载 CI 与最新执行结果见 [接入记录](Integration-2026-10-23.md)。当前 MultiTeamH 为 0.11.64；原交接记录中的 0.11.62 相机行为，以及后续兼容/自动结束修复仍无游戏内验证结果，详见 [原交接说明](MultiTeamH-Handoff.md)。所有项目的构建成功均不代表已经完成全部游戏内回归。
+上一轮完成整仓 Rebuild 和 226 组实际断言：MaximumUI 104、MultiTeamH 39、Accessory/Clothing 38、PluginCore 45，详见 [后续修复记录](Followup-2026-10-23.md)。四插件接入、性能缓存、真实 XML 往返与可下载 CI 见 [接入记录](Integration-2026-10-23.md)，该轮 MultiTeamH 为 0.11.64。原交接记录中的 0.11.62 相机行为，以及后续兼容/自动结束修复仍无游戏内验证结果，详见 [原交接说明](MultiTeamH-Handoff.md)。所有项目的构建成功均不代表已经完成全部游戏内回归。
 
 MaximumUI 0.3.0 接入后的整仓 Rebuild 为 0 错误、4 警告：上述三条旧 API 提示与 AccessoryClothing 测试宿主引用旧框架 UI 的 NU1702。实际执行 **303 组**：MaximumUI 139、MultiTeamH 39、Accessory/Clothing 56、PluginCore 69；另有 5 项打包规则测试。三份上传 XML 通过生产加载器的临时副本往返校验。Actions 重复公开构建/测试/预览/打包流程，私人配置不参与线上执行。
 
-MaximumUI 0.4.0 MDL2 本轮完成整仓 Release Rebuild 和 **343 组**实际断言：MaximumUI 179、MultiTeamH 39、Accessory/Clothing 56、PluginCore 69；另有 **16 项** Python 打包/预览检查。构建仍为 0 错误、4 个上述已有警告。Gallery 全页、主题、字号、弹层和连续滚动的模拟渲染及边界检查详见 [MDL2 记录](MDL2-2026-10-23.md)。
+MaximumUI 0.4.0 MDL2 轮次完成整仓 Release Rebuild 和 **343 组**实际断言：MaximumUI 179、MultiTeamH 39、Accessory/Clothing 56、PluginCore 69；另有 **16 项** Python 打包/预览检查。构建仍为 0 错误、4 个上述已有警告。该轮 Gallery 全页、主题、字号、弹层和连续滚动的模拟渲染及边界检查详见 [MDL2 记录](MDL2-2026-10-23.md)。
+
+2026-10-24 的 MaximumUI 0.5.0 扩展了实际 PNG 右边框、横向与业务滚动覆盖，并修复文本提交、列表焦点与嵌套滚轮。四插件恢复迁移前的实际布局和原文；MultiTeamH 0.11.65 / ExpressionControl 0.3.1 增加按角色上下文、稳定声音身份和程序触发回归。最终执行数量、性能计数和视觉反例见 [本轮 UI 验证](UI-Maturity-2026-10-24.md)、[业务布局核对](UI-Parity-2026-10-24.md) 和 [运行时审计](Runtime-Audit-2026-10-24.md)。本轮没有恢复到此前私人 XML/IL 文件，不把历史私人配置结果当作本次重跑结果。
 
 ## 维护约定
 

@@ -11,7 +11,7 @@ namespace MaximumUIGallery {
     [BepInPlugin(GUID, "MaximumUI Gallery", Version)]
     public sealed class MaximumUIGalleryPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MaximumUIGallery";
-        public const string Version = "0.4.0";
+        public const string Version = "0.5.0";
 
         private const string MountId = GUID + ".main";
         private ConfigEntry<KeyboardShortcut> shortcut;
@@ -80,6 +80,7 @@ namespace MaximumUIGallery {
         public string Mode = "Normal";
         public string ListSelection = "Third item";
         public string ListFilter = string.Empty;
+        public bool EmptyScrollSamples;
         public string DropMessage = "Drop target";
         public int ClickCount;
         public int RadioIndex;
@@ -188,6 +189,7 @@ namespace MaximumUIGallery {
             }
             if (state == "activity-tab") State.ExampleTab = 1;
             if (state == "settings-tab") State.ExampleTab = 2;
+            if (state == "empty-lists") State.EmptyScrollSamples = true;
             if (state == "dialog-open") State.ShowInlineDialog = true;
             if (state == "pending") {
                 State.ThemePending = true; State.EditableTheme.FontSize = 16f;
@@ -248,9 +250,8 @@ namespace MaximumUIGallery {
                 case 11: return BuildDebugTab(context);
                 default: content = BuildOverview(context); break;
             }
-            return new ScrollView(key: "page-scroll-" + GalleryScenes.Ids[page]) {
-                AlwaysShowVertical = true
-            }.Content(content.Disabled(State.PreviewDisabled)).ExpandHeight().ExpandWidth();
+            return new ScrollView(key: "page-scroll-" + GalleryScenes.Ids[page])
+                .Content(content.Disabled(State.PreviewDisabled)).ExpandHeight().ExpandWidth();
         }
 
         private VStack Section(string title, params Widget[] children) {
@@ -670,6 +671,37 @@ namespace MaximumUIGallery {
             return text;
         }
 
+        private Widget BuildScrollExamples() {
+            string[] longRows = State.EmptyScrollSamples ? new string[0] : samples;
+            string[] shortRows = State.EmptyScrollSamples ? new string[0] : new[] { "First item", "Second item" };
+            HStack horizontal = new HStack(8f);
+            for (int i = 0; i < 10; i++) {
+                int column = i + 1;
+                horizontal.Add(new Button("Column " + column, delegate {
+                    SetState(delegate(GalleryState s) { s.Status = "Column " + column; });
+                }, "horizontal-column-" + column).Width(96f).Height(RowHeight));
+            }
+            return new VStack(16f) {
+                new HStack(16f) {
+                    Section("Overflow", new ListBox<string>(State.ListSelection, longRows,
+                        delegate(string value) { return value; }, delegate(string value) {
+                            SetState(delegate(GalleryState s) { s.ListSelection = value; });
+                        }, "scroll-overflow").Height(RowHeight * 4f + 2f).ExpandWidth()).ExpandWidth(),
+                    Section("Short list", new ListBox<string>(State.ListSelection, shortRows,
+                        delegate(string value) { return value; }, delegate(string value) {
+                            SetState(delegate(GalleryState s) { s.ListSelection = value; });
+                        }, "scroll-short").Height(RowHeight * 4f + 2f).ExpandWidth()).ExpandWidth()
+                }.ExpandWidth(),
+                new HStack(8f) {
+                    new Button("Clear", delegate { SetState(delegate(GalleryState s) { s.EmptyScrollSamples = true; }); }, "scroll-clear").Width(96f).Height(RowHeight),
+                    new Button("Restore", delegate { SetState(delegate(GalleryState s) { s.EmptyScrollSamples = false; }); }, "scroll-restore").Width(96f).Height(RowHeight)
+                }.Height(RowHeight),
+                Section("Horizontal scrolling", new ScrollView("horizontal-scroll") {
+                    horizontal.Width(1032f).Height(RowHeight)
+                }.Height(RowHeight + ScrollbarGeometry.GutterSize).ExpandWidth())
+            }.ExpandWidth();
+        }
+
         private Widget BuildLayoutTab(BuildContext context) {
             return new VStack(gap: 24f) {
                 Section("Menus and tabs",
@@ -705,6 +737,7 @@ namespace MaximumUIGallery {
                             new SmallButton("Select", delegate { SetState(delegate(GalleryState s) { s.Status = "Selected item " + index.ToString(); }); }).Width(72f).Height(28f)
                         };
                     }, key: "virtual-list") { Height = 160f }.ExpandWidth()),
+                BuildScrollExamples(),
                 Section("Split view",
                     new TwoPaneLayout(State.SplitRatio, delegate(float ratio) { SetState(delegate(GalleryState s) { s.SplitRatio = ratio; }); }, key: "split-pane") {
                         MinFirst = 120f, MinSecond = 120f, SplitterSize = 8f
@@ -785,7 +818,7 @@ namespace MaximumUIGallery {
 
         private Widget BuildStyleTab(BuildContext context) {
             return new VStack(gap: 12f) {
-                new ScrollView(key: "style-scroll") { AlwaysShowVertical = true }.Content(new VStack(gap: 24f) {
+                new ScrollView(key: "style-scroll").Content(new VStack(gap: 24f) {
                     Section("Theme",
                         new ThemeSelector("Palette", State.ThemeName, themeNames, delegate(string value) {
                             SwitchTheme(context, value);
@@ -869,7 +902,7 @@ namespace MaximumUIGallery {
         }
 
         private Widget BuildDebugTab(BuildContext context) {
-            return new ScrollView(key: "debug-scroll") { AlwaysShowVertical = true }.Content(new VStack(gap: 16f) {
+            return new ScrollView(key: "debug-scroll").Content(new VStack(gap: 16f) {
                 new HStack(gap: 8f) {
                     new Button("Add log", delegate { DebugLog.Info("Gallery entry " + State.ClickCount.ToString()); CountClick(); }, key: "debug-add-log").Width(96f),
                     new Button("Warning", delegate { DebugLog.Warning("Gallery warning " + State.ClickCount.ToString()); CountClick(); }).Width(96f),

@@ -49,6 +49,9 @@ namespace MaximumUI {
         public string Path;
         public MuiRect Rect;
         public MuiVec2 DesiredSize;
+        internal float ScrollMeasureWidth;
+        internal float ScrollWideMeasureWidth;
+        internal float ScrollWideContentHeight;
 
         public IList<LayoutNode> Children {
             get { return children; }

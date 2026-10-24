@@ -2333,9 +2333,9 @@ namespace MultiTeamH {
                 if (team == null || team.Female != female) continue;
                 face = team.Controllers.Face;
                 hand = team.Controllers.Hand;
-                voiceIndex = lesbianOwner >= 0 ? (i == lesbianOwner ? 0 : 1) : i;
-                if (Proc != null && Proc.voice != null && Proc.voice.nowVoices != null && Proc.voice.nowVoices.Length > 0)
-                    voice = Proc.voice.nowVoices[Mathf.Min(voiceIndex, Proc.voice.nowVoices.Length - 1)];
+                voiceIndex = ExpressionVoiceBinding.FlagVoiceIndex(i, lesbianOwner);
+                voice = ExpressionVoiceBinding.Resolve(i, voiceByTeam,
+                    Proc == null || Proc.voice == null ? null : Proc.voice.nowVoices, GetBoundTeamIndex());
                 return true;
             }
             return false;

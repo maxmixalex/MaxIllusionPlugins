@@ -24,9 +24,9 @@
 | [MaximumUI.Tests](src/MaximumUI.Tests/README.md) | MaximumUI 布局、输入、选择、绘制及导航的无界面断言测试 | `scripts/test.py` / `scripts/Test-All.ps1` |
 | [Common](src/Common/README.md) | 构建版本号、日志与原子 XML 读写辅助代码 | 共享库 |
 
-各项目的实际版本见对应 `.csproj` 和插件版本常量。AccessoryBatchManager、ClothingCompression 高级窗口、ExpressionControl 和 JuiceControl 已接入 MaximumUI 的真实声明式控件。MaximumUI 0.4.0 默认使用亮色 MDL2 主题，统一字体、输入、模态、菜单与滚动；四插件的编辑操作保持原有流程。ClothingCompression 的 Maker 原生页面继续提供编辑入口；MultiTeamH 保留现有游戏面板。Gallery 是可选的独立开发示例。
+各项目的实际版本见对应 `.csproj` 和插件版本常量。AccessoryBatchManager、ClothingCompression 高级窗口、ExpressionControl 和 JuiceControl 已接入 MaximumUI 的真实声明式控件。MaximumUI 0.5.0 默认使用亮色 MDL2 主题，本轮重做滚动框和滚动条，修复输入提交与嵌套滚动，并按迁移前 `c0380d6` 恢复四插件的布局、按钮原文和操作路径。之前迁移造成的偏移及逐项核对见 [业务 UI 复刻记录](docs/UI-Parity-2026-10-24.md)。ClothingCompression 的 Maker 原生页面继续提供编辑入口；MultiTeamH 保留现有游戏面板。Gallery 是可选的独立开发示例。
 
-Gallery 提供 12 个页面，CI 从真实 C# 控件树模拟渲染亮色、深色、最小窗口、放大字号与各类交互/滚动状态。下载 `maximumui-previews-…` 后打开 `index.html` 可查看整套 PNG、SVG 与检查结果。设计与验证记录见 [MDL2 Gallery](docs/MDL2-2026-10-23.md)。
+Gallery 提供 12 个页面，CI 从真实 C# 控件树模拟渲染亮色、深色、最小窗口、放大字号与各类交互/滚动状态；四插件也检查各窗口、最小尺寸、滚动与下拉框。质量检查包括最终 PNG 的滚动列表右边框，防止轨道覆盖边框后仍然通过。下载 `maximumui-previews-…` 后打开 `index.html` 可查看整套 PNG、SVG 与检查结果。设计与验证记录见 [UI 成熟度改进](docs/UI-Maturity-2026-10-24.md)。
 
 ## 构建与测试
 
@@ -66,6 +66,9 @@ pwsh -NoProfile -File scripts/Test-All.ps1
 
 - [工作区开发说明](docs/Development.md)
 - [GitHub Actions、安装包下载与本地复现](docs/CI.md)
+- [MaximumUI 0.5.0 滚动、输入、完整渲染与回归验证](docs/UI-Maturity-2026-10-24.md)
+- [四插件迁移前布局、按钮与文案复刻核对](docs/UI-Parity-2026-10-24.md)
+- [MultiTeamH 与 ExpressionControl 按角色上下文审计](docs/Runtime-Audit-2026-10-24.md)
 - [MaximumUI 0.4.0 亮色 MDL2、全 Gallery 渲染与验证](docs/MDL2-2026-10-23.md)
 - [MaximumUI 0.3.0 四插件接入、配置验证与 CI 交付](docs/Integration-2026-10-23.md)
 - [全仓审计、回归证据与待游戏内验证事项](docs/Audit-2026-10-23.md)

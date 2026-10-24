@@ -21,7 +21,7 @@ namespace ExpressionControl
 	public class ExpressionControlPlugin : BaseUnityPlugin
 	{
 		public const string GUID = "ExpressionControl";
-        public const string Version = "0.3.0";
+        public const string Version = "0.3.1";
 		public const string Name = GUID;
 		
 		public void Start()

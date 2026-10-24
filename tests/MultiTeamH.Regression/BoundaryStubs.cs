@@ -161,9 +161,10 @@ namespace MultiTeamH {
         internal static void RestoreManagedPortraitAfterNative3P(HSprite sprite) { sprite.PortraitDetached = false; sprite.PortraitRestores++; }
         internal static IList<TeamSession> Snapshot = new List<TeamSession>();
         internal readonly ChaControl[] Females = { new ChaControl(), new ChaControl() };
+        internal readonly ChaControl[] Males = { new ChaControl(), new ChaControl() };
         internal readonly HFlag[] Flags = { new HFlag(), new HFlag() };
         internal int ActiveTeam, BoundTeam, Pops, UiExits;
-        internal bool ThrowOnPush, ThrowOnUiExit, IsSwitching, IsLesbianActive;
+        internal bool ThrowOnPush, ThrowOnUiExit, IsSwitching, IsLesbianActive, RejectFaceWrite;
         internal int[] Targets = { 0, 1 };
         internal HSceneProc Proc = new HSceneProc();
         internal ChaControl ActiveFemaleObject { get { return Females[ActiveTeam]; } }
@@ -171,9 +172,10 @@ namespace MultiTeamH {
         internal HFlag ActiveFlagsObject { get { return Flags[ActiveTeam]; } }
         internal HandCtrl ActiveHandObject { get { return null; } }
         internal ChaControl GetFemaleObject(int index) { return Females[index]; }
-        internal ChaControl GetMaleObject(int index) { return null; }
+        internal ChaControl GetMaleObject(int index) { return Males[index]; }
         internal HFlag GetFlagsObject(int index) { return Flags[index]; }
         internal HFlag GetExpressionFlagsObject(int index) { return Flags[index]; }
+        internal bool AllowFaceWrite(FaceListCtrl face, ChaControl female) { return !RejectFaceWrite; }
         internal HandCtrl GetHandObject(int index) { return null; }
         internal bool ContainsFemale(ChaControl female) { return GetTeamIndex(female) >= 0; }
         internal bool IsActiveFemale(ChaControl female) { return female == Females[ActiveTeam]; }

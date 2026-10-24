@@ -19,6 +19,7 @@ internal static class ExpressionRuntimeRegression {
         run("Expression missing animation data is safe and can recover", MissingAnimationData);
         run("Expression action refresh does not require a motion change", ActionChangesInSameMotion);
         run("Expression orgasm counter changes once per transition and is capped", OrgasmTransitions);
+        ExpressionProcessingRegression.Run(run);
     }
 
     static void Assert(bool value, string message) { if (!value) throw new Exception(message); }
@@ -186,7 +187,7 @@ namespace ExpressionControl {
         internal static HSceneProc hsceneProc;
         internal static HFlag hFrag;
         public void UpdateFemale() { Updates++; }
-        public void Proc() { ProcCalls++; if (ThrowOnProc) throw new InvalidOperationException("simulated processing error"); }
+        public void Proc() { ProcCalls++; if (ThrowOnProc) throw new InvalidOperationException("simulated processing error"); ProcessExpressions(); }
         internal void TestUpdateHState() { UpdateHState(); }
     }
 }

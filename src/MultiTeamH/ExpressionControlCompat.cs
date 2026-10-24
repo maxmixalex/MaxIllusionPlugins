@@ -20,11 +20,16 @@ namespace MultiTeamH {
         private static FieldInfo feraField;
         private static FieldInfo updateStateField;
         private static FieldInfo hFlagField;
+        private static FieldInfo hSceneProcField;
+        private static Type femaleDataType;
+        private static FieldInfo femaleDataActorField;
+        private static FieldInfo femaleDataHostField;
         private static ChaControl lastActiveFemale;
         private static bool patched;
         private static readonly float[] lastListProbe = new float[2];
         private static int forcedTeam = -1;
         private static ProcScope activeProcScope;
+        private static CharacterScope activeCharacterScope;
 
         internal static void TryPatch(Harmony harmony, ManualLogSource log) {
             if (patched || harmony == null) return;
@@ -44,6 +49,7 @@ namespace MultiTeamH {
             feraField = AccessTools.Field(type, "isFeraAction");
             updateStateField = AccessTools.Field(type, "updateState");
             hFlagField = AccessTools.Field(type, "hFrag");
+            hSceneProcField = AccessTools.Field(type, "hsceneProc");
             if (femaleListField == null || hFlagField == null) {
                 log.LogWarning("ExpressionControl compatibility was not applied because its character list or H context field was not found.");
                 return;
@@ -55,8 +61,41 @@ namespace MultiTeamH {
             harmony.Patch(updateFemale,
                 prefix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(BeforeUpdateFemale)),
                 postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterUpdateFemale)));
+            // The native face hooks and eye/mouth blending coroutines also call
+            // these methods outside Proc. Their conditions must use the actor's
+            // team, including when the shared HSceneProc is focused elsewhere.
+            string[] characterMethods = { "ShouldBlockExpressionPatternChange", "ShouldBlockExpressionOpenChange",
+                "ShouldBlockHighlightChange", "ShouldBlockBlinkChange", "ShouldBlockHohoAkaChange" };
+            for (int i = 0; i < characterMethods.Length; i++) {
+                MethodInfo method = AccessTools.Method(type, characterMethods[i]);
+                if (method == null || method.GetParameters().Length == 0 ||
+                    method.GetParameters()[0].ParameterType != typeof(ChaControl)) continue;
+                PatchCharacterMethod(harmony, method, nameof(BeforeCharacterCall));
+            }
+            MethodInfo setFace = AccessTools.Method(type, "IsIgnoreSetFace");
+            if (setFace != null) {
+                ParameterInfo[] parameters = setFace.GetParameters();
+                if (setFace.ReturnType == typeof(bool) && parameters.Length >= 5 &&
+                    parameters[1].ParameterType == typeof(ChaControl) && parameters[4].ParameterType == typeof(FaceListCtrl))
+                    PatchCharacterMethod(harmony, setFace, nameof(BeforeSetFace));
+            }
+            string[] dataMethods = { "GetMatchedUnits", "ProcAllProgram", "RunCharacterAction",
+                "GetCharacterOrgasmCount", "AdjustCharacterOrgasmCount" };
+            for (int i = 0; i < dataMethods.Length; i++) {
+                MethodInfo method = AccessTools.Method(type, dataMethods[i]);
+                if (method != null && method.GetParameters().Length > 0)
+                    PatchCharacterMethod(harmony, method, nameof(BeforeFemaleDataCall));
+            }
+            Type femaleData = type.GetNestedType("FemaleData", BindingFlags.Public | BindingFlags.NonPublic);
+            MethodInfo updateState = femaleData == null ? null : AccessTools.Method(femaleData, "UpdateState");
+            if (updateState != null) {
+                ParameterInfo[] parameters = updateState.GetParameters();
+                if (parameters.Length == 3 && parameters[0].ParameterType == typeof(bool) &&
+                    parameters[1].ParameterType == typeof(string) && parameters[2].ParameterType == typeof(bool))
+                    PatchCharacterMethod(harmony, updateState, nameof(BeforeFemaleDataUpdate));
+            }
             patched = true;
-            log.LogInfo("MultiTeamH patched ExpressionControl at runtime; its DLL remains unmodified.");
+            log.LogInfo("MultiTeamH patched ExpressionControl at runtime with per-actor expression contexts.");
         }
 
         private static void BeforeProc(object __instance, ref ProcScope __state) {
@@ -66,6 +105,7 @@ namespace MultiTeamH {
             ChaControl active = session.GetFemaleObject(target);
             if (active == null) return;
             HFlag targetFlags = session.GetExpressionFlagsObject(target);
+            if (targetFlags == null) return;
             DiagnosticProbe.OnceInfo("expression-target-" + active.GetInstanceID(), "expression-target female=" + active.gameObject.name +
                 " flags=" + (targetFlags == null ? "null" : targetFlags.GetInstanceID().ToString()));
 
@@ -75,10 +115,12 @@ namespace MultiTeamH {
             object originalFlag = hFlagField.GetValue(null);
             IList original = femaleListField.GetValue(__instance) as IList;
             if (original == null) return;
-            IList filtered = FilterForTeam(original, session, active, forcedTeam < 0);
+            bool topLevel = forcedTeam < 0 && activeProcScope == null;
+            IList filtered = FilterForTeam(original, session, target, topLevel);
             if (filtered == null) return;
             __state = new ProcScope { OriginalFemaleList = original, OriginalFlag = originalFlag, Session = session,
-                Target = target, IsTopLevel = forcedTeam < 0, Instance = __instance, PreviousScope = activeProcScope };
+                Target = target, IsTopLevel = topLevel, Instance = __instance, PreviousScope = activeProcScope,
+                PreviousFemale = lastActiveFemale, PreviousState = ExpressionState.Capture(__instance) };
             activeProcScope = __state;
             SwitchExpressionState(__instance, active);
             hFlagField.SetValue(null, targetFlags);
@@ -95,16 +137,17 @@ namespace MultiTeamH {
 
         private static void AfterProc(object __instance, MethodBase __originalMethod, ProcScope __state) {
             RestoreProcContext(__instance, __state);
-            if (__state == null || !__state.IsTopLevel || __originalMethod == null) return;
+            if (__state == null || __state.SessionEnded || !__state.IsTopLevel || __originalMethod == null) return;
             int other = 1 - __state.Target;
-            if (__state.Session.GetFemaleObject(other) == null) return;
+            if (__state.Session.GetFemaleObject(other) == null || __state.Session.GetExpressionFlagsObject(other) == null) return;
+            int previousForced = forcedTeam;
             try {
                 forcedTeam = other;
                 __originalMethod.Invoke(__instance, null);
             } catch (Exception ex) {
                 DiagnosticProbe.Warning("ExpressionControl parallel Proc failed: " + ex);
             } finally {
-                forcedTeam = -1;
+                forcedTeam = previousForced;
                 if (hFlagField != null) hFlagField.SetValue(null, __state.OriginalFlag);
             }
         }
@@ -126,7 +169,128 @@ namespace MultiTeamH {
                     femaleListField.SetValue(instance, state.OriginalFemaleList);
             } finally {
                 try { if (hFlagField != null) hFlagField.SetValue(null, state.OriginalFlag); }
-                finally { if (ReferenceEquals(activeProcScope, state)) activeProcScope = state.PreviousScope; }
+                finally {
+                    try {
+                        if (!state.SessionEnded) {
+                            SaveCurrentExpressionState(instance);
+                            if (!state.IsTopLevel) RestoreExpressionState(instance, state.PreviousFemale, state.PreviousState);
+                        }
+                    } finally { if (ReferenceEquals(activeProcScope, state)) activeProcScope = state.PreviousScope; }
+                }
+            }
+        }
+
+        private static void PatchCharacterMethod(Harmony harmony, MethodInfo method, string prefix) {
+            harmony.Patch(method,
+                prefix: new HarmonyMethod(typeof(ExpressionControlCompat), prefix),
+                postfix: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(AfterCharacterCall)),
+                finalizer: new HarmonyMethod(typeof(ExpressionControlCompat), nameof(FinalizeCharacterCall)));
+        }
+
+        private static void BeforeCharacterCall(object __instance, ChaControl __0, ref CharacterScope __state) {
+            BeginCharacterCall(__instance, __0, ref __state);
+        }
+
+        private static void BeforeFemaleDataCall(object __instance, object __0, ref CharacterScope __state) {
+            BeginCharacterCall(__instance, GetFemale(__0), ref __state);
+        }
+
+        private static void BeforeFemaleDataUpdate(object __instance, ref string __1, ref bool __2, ref CharacterScope __state) {
+            ChaControl actor = GetFemale(__instance);
+            TeamSession session = FindSession(actor);
+            if (session == null) return;
+            CacheFemaleDataFields(__instance.GetType());
+            object host = femaleDataHostField == null ? null : femaleDataHostField.GetValue(__instance);
+            if (host == null) return;
+            HFlag flags = session.GetExpressionFlagsObject(GetActorTeam(session, actor));
+            if (flags == null) return;
+            BeginCharacterCall(host, actor, ref __state);
+            __1 = flags.nowAnimStateName ?? string.Empty;
+            if (flags.nowAnimationInfo != null) {
+                string action = flags.nowAnimationInfo.nameAnimation ?? string.Empty;
+                __2 = action.Contains("舐め") || action.Contains("フェラ") || action.Contains("咥え");
+            } else if (feraField != null) __2 = Convert.ToBoolean(feraField.GetValue(host));
+        }
+
+        private static bool BeforeSetFace(object __instance, ChaControl __1, FaceListCtrl __4,
+            ref bool __result, ref CharacterScope __state) {
+            TeamSession session = FindSession(__1);
+            // ExpressionControl's SetFace prefix writes the face itself. Reject
+            // a foreign controller here as well as at the native entry, so the
+            // result does not depend on the two plugins' Harmony patch order.
+            if (session != null && !session.AllowFaceWrite(__4, __1)) {
+                __result = true;
+                return false;
+            }
+            BeginCharacterCall(__instance, __1, ref __state);
+            return true;
+        }
+
+        private static void BeginCharacterCall(object instance, ChaControl actor, ref CharacterScope state) {
+            if (instance == null || actor == null || hFlagField == null) return;
+            TeamSession session = FindSession(actor);
+            if (session == null) return;
+            int team = GetActorTeam(session, actor);
+            ChaControl owner = session.GetFemaleObject(team);
+            HFlag flags = session.GetExpressionFlagsObject(team);
+            if (owner == null || flags == null) return;
+            object originalFlag = hFlagField.GetValue(null);
+            // Nested per-part callbacks from the same face/program already have
+            // the right state and need no extra scope or list allocation.
+            if (lastActiveFemale == owner && ReferenceEquals(originalFlag, flags)) return;
+            state = new CharacterScope { Instance = instance, Session = session, OriginalFlag = originalFlag,
+                PreviousFemale = lastActiveFemale, PreviousState = ExpressionState.Capture(instance),
+                PreviousScope = activeCharacterScope, Proc = activeProcScope };
+            activeCharacterScope = state;
+            SwitchExpressionState(instance, owner);
+            hFlagField.SetValue(null, flags);
+            if (state.Proc != null && ReferenceEquals(state.Proc.Instance, instance) && femaleListField != null)
+                femaleListField.SetValue(instance, state.Proc.OriginalFemaleList);
+        }
+
+        private static void AfterCharacterCall(object __instance, CharacterScope __state) {
+            RestoreCharacterContext(__state == null ? __instance : __state.Instance, __state);
+        }
+
+        private static Exception FinalizeCharacterCall(Exception __exception, object __instance, CharacterScope __state) {
+            try { RestoreCharacterContext(__state == null ? __instance : __state.Instance, __state); }
+            catch (Exception cleanupError) {
+                DiagnosticProbe.Warning("ExpressionControl character context cleanup failed: " + cleanupError);
+                if (__exception == null) return cleanupError;
+            }
+            return __exception;
+        }
+
+        private static void RestoreCharacterContext(object instance, CharacterScope state) {
+            if (state == null || state.Restored) return;
+            state.Restored = true;
+            try {
+                if (!state.SessionEnded) RestoreExpressionState(instance, state.PreviousFemale, state.PreviousState);
+            } finally {
+                try { if (hFlagField != null) hFlagField.SetValue(null, state.OriginalFlag); }
+                finally {
+                    if (ReferenceEquals(activeCharacterScope, state)) activeCharacterScope = state.PreviousScope;
+                    ProcScope proc = state.Proc;
+                    if (proc != null && !proc.Restored && ReferenceEquals(activeProcScope, proc) &&
+                        activeCharacterScope == null && femaleListField != null) {
+                        IList filtered = FilterForTeam(proc.OriginalFemaleList, proc.Session, proc.Target, proc.IsTopLevel);
+                        if (filtered != null) femaleListField.SetValue(instance, filtered);
+                    }
+                }
+            }
+        }
+
+        private static void SaveCurrentExpressionState(object instance) {
+            if (instance != null && lastActiveFemale != null) States[lastActiveFemale] = ExpressionState.Capture(instance);
+        }
+
+        private static void RestoreExpressionState(object instance, ChaControl previous, ExpressionState fallback) {
+            if (instance == null) return;
+            if (previous != null) SwitchExpressionState(instance, previous);
+            else {
+                SaveCurrentExpressionState(instance);
+                fallback.Restore(instance);
+                lastActiveFemale = null;
             }
         }
 
@@ -139,7 +303,10 @@ namespace MultiTeamH {
                 if (ReferenceEquals(lastActiveFemale, female)) lastActiveFemale = null;
             }
             forcedTeam = -1;
-            if (activeProcScope != null && ReferenceEquals(activeProcScope.Session, session)) activeProcScope = null;
+            for (ProcScope scope = activeProcScope; scope != null; scope = scope.PreviousScope)
+                if (ReferenceEquals(scope.Session, session)) scope.SessionEnded = true;
+            for (CharacterScope scope = activeCharacterScope; scope != null; scope = scope.PreviousScope)
+                if (ReferenceEquals(scope.Session, session)) scope.SessionEnded = true;
             Array.Clear(lastListProbe, 0, lastListProbe.Length);
         }
 
@@ -184,27 +351,30 @@ namespace MultiTeamH {
             }
             ProcScope scope = activeProcScope;
             if (scope != null && ReferenceEquals(scope.Instance, __instance)) {
-                IList filtered = FilterForTeam(list, scope.Session,
-                    scope.Session.GetFemaleObject(scope.Target), scope.IsTopLevel);
+                scope.OriginalFemaleList = list;
+                if (activeCharacterScope != null && ReferenceEquals(activeCharacterScope.Instance, __instance)) return;
+                IList filtered = FilterForTeam(list, scope.Session, scope.Target, scope.IsTopLevel);
                 if (filtered != null) {
-                    scope.OriginalFemaleList = list;
                     femaleListField.SetValue(__instance, filtered);
                 }
             }
         }
 
-        private static IList FilterForTeam(IList original, TeamSession session, ChaControl active, bool includeUnmanaged) {
+        private static IList FilterForTeam(IList original, TeamSession session, int target, bool includeUnmanaged) {
             IList filtered = Activator.CreateInstance(original.GetType()) as IList;
             if (filtered == null) return null;
-            bool activeAdded = false;
+            ChaControl femaleOwner = session.GetFemaleObject(target);
+            ChaControl maleOwner = session.GetMaleObject(target);
+            bool femaleAdded = false, maleAdded = false;
             for (int i = 0; i < original.Count; i++) {
                 object data = original[i];
                 ChaControl female = GetFemale(data);
-                if (female == null || !session.ContainsFemale(female)) {
+                int team = GetActorTeam(session, female);
+                if (team < 0) {
                     if (includeUnmanaged) filtered.Add(data);
-                } else if (female == active && !activeAdded) {
-                    filtered.Add(data);
-                    activeAdded = true;
+                } else if (team == target) {
+                    if (female == femaleOwner && !femaleAdded) { filtered.Add(data); femaleAdded = true; }
+                    else if (female == maleOwner && !maleAdded) { filtered.Add(data); maleAdded = true; }
                 }
             }
             return filtered;
@@ -220,21 +390,39 @@ namespace MultiTeamH {
         }
 
         private static TeamSession FindActiveSession() {
+            object scene = hSceneProcField == null ? null : hSceneProcField.GetValue(null);
+            if (hSceneProcField != null && scene == null) return null;
             IList<TeamSession> sessions = TeamSession.Snapshot;
-            for (int i = 0; i < sessions.Count; i++) if (sessions[i] != null && sessions[i].ActiveFemaleObject != null) return sessions[i];
+            for (int i = 0; i < sessions.Count; i++)
+                if (sessions[i] != null && sessions[i].ActiveFemaleObject != null &&
+                    (hSceneProcField == null || ReferenceEquals(sessions[i].Proc, scene))) return sessions[i];
             return null;
         }
 
         private static TeamSession FindSession(ChaControl female) {
             IList<TeamSession> sessions = TeamSession.Snapshot;
-            for (int i = 0; i < sessions.Count; i++) if (sessions[i] != null && sessions[i].ContainsFemale(female)) return sessions[i];
+            for (int i = 0; i < sessions.Count; i++) if (sessions[i] != null && GetActorTeam(sessions[i], female) >= 0) return sessions[i];
             return null;
+        }
+
+        private static int GetActorTeam(TeamSession session, ChaControl actor) {
+            if (session == null || actor == null) return -1;
+            for (int i = 0; i < 2; i++)
+                if (session.GetFemaleObject(i) == actor || session.GetMaleObject(i) == actor) return i;
+            return -1;
         }
 
         private static ChaControl GetFemale(object femaleData) {
             if (femaleData == null) return null;
-            FieldInfo field = AccessTools.Field(femaleData.GetType(), "female");
-            return field == null ? null : field.GetValue(femaleData) as ChaControl;
+            CacheFemaleDataFields(femaleData.GetType());
+            return femaleDataActorField == null ? null : femaleDataActorField.GetValue(femaleData) as ChaControl;
+        }
+
+        private static void CacheFemaleDataFields(Type type) {
+            if (femaleDataType == type) return;
+            femaleDataType = type;
+            femaleDataActorField = AccessTools.Field(type, "female");
+            femaleDataHostField = AccessTools.Field(type, "instMono") ?? AccessTools.Field(type, "<instMono>k__BackingField");
         }
 
         private static void SetFieldOrBackingField(object target, string name, object value) {
@@ -252,12 +440,26 @@ namespace MultiTeamH {
             internal bool Restored;
             internal object Instance;
             internal ProcScope PreviousScope;
+            internal ChaControl PreviousFemale;
+            internal ExpressionState PreviousState;
+            internal bool SessionEnded;
         }
 
-        private sealed class ExpressionState {
+        private sealed class CharacterScope {
+            internal object Instance;
+            internal TeamSession Session;
+            internal object OriginalFlag;
+            internal ChaControl PreviousFemale;
+            internal ExpressionState PreviousState;
+            internal CharacterScope PreviousScope;
+            internal ProcScope Proc;
+            internal bool Restored, SessionEnded;
+        }
+
+        private struct ExpressionState {
             private int orgasmCount;
-            private string motion = string.Empty;
-            private string action = string.Empty;
+            private string motion;
+            private string action;
             private bool fera;
             private bool updateState;
 
@@ -273,8 +475,8 @@ namespace MultiTeamH {
 
             internal void Restore(object instance) {
                 Set(orgasmField, instance, orgasmCount);
-                Set(motionField, instance, motion);
-                Set(actionField, instance, action);
+                Set(motionField, instance, motion ?? string.Empty);
+                Set(actionField, instance, action ?? string.Empty);
                 Set(feraField, instance, fera);
                 Set(updateStateField, instance, updateState);
             }

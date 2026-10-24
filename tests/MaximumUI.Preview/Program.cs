@@ -37,15 +37,16 @@ internal static class Program {
             List<PreviewScene> scenes = new List<PreviewScene>(GalleryPreviewScenes.Create(gallery));
             scenes.AddRange(PluginPreviewScenes.Create());
             AddHostScenes(scenes, directory);
+            AddPluginMinimumWindows(scenes);
             List<object> manifest = new List<object>();
             List<string> errors = new List<string>();
             foreach (PreviewScene scene in scenes) {
                 try {
                     ManagedPreviewLayout preview = Prepare(scene);
                     manifest.Add(Export(scene, args[1], preview));
-                    if (scene.Gallery) {
-                        foreach (PreviewScene sample in ScrollSamples(scene, preview)) manifest.Add(Export(sample, args[1], Prepare(sample)));
-                        if (scene.StateId == "default") {
+                    foreach (PreviewScene sample in ScrollSamples(scene, preview)) manifest.Add(Export(sample, args[1], Prepare(sample)));
+                    {
+                        if (scene.StateId == "default" || !scene.Gallery && preview.DialogCount == 0) {
                             foreach (PreviewScene sample in PopupSamples(scene, preview)) manifest.Add(Export(sample, args[1], Prepare(sample)));
                         }
                         if (scene.StateId == "default" && scene.SizeName == "standard" && scene.PaletteName == "Metro Light")
@@ -65,7 +66,7 @@ internal static class Program {
                     galleryAssembly = gallery.GetName().Name, galleryVersion = gallery.GetName().Version.ToString(),
                     uiVersion = typeof(WidgetPainter).Assembly.GetName().Version.ToString(),
                     galleryPages = GalleryPages(scenes), galleryCases = GalleryCases(scenes),
-                    galleryStates = GalleryStates(scenes), previews = manifest, errors, issues = Issues },
+                    galleryStates = GalleryStates(scenes), pluginCases = PluginCases(scenes), previews = manifest, errors, issues = Issues },
                     new JsonSerializerOptions { WriteIndented = true }) + "\n", new UTF8Encoding(false));
             Console.WriteLine("Gallery export: " + manifest.Count + " snapshots; " + errors.Count + " geometry errors; " + Issues.Count + " text review items; typography: " + Typography.Backend);
             return errors.Count == 0 ? 0 : 1;
@@ -88,6 +89,14 @@ internal static class Program {
         List<object> cases = new List<object>();
         foreach (PreviewScene scene in scenes) if (scene.Gallery) cases.Add(new {
             file = scene.Slug + ".svg", page = scene.PageId, state = scene.StateId, size = scene.SizeName, palette = scene.PaletteName
+        });
+        return cases;
+    }
+
+    private static List<object> PluginCases(List<PreviewScene> scenes) {
+        List<object> cases = new List<object>();
+        foreach (PreviewScene scene in scenes) if (!scene.Gallery) cases.Add(new {
+            file = scene.Slug + ".svg", source = scene.Source, state = scene.StateId, size = scene.SizeName
         });
         return cases;
     }
@@ -138,15 +147,15 @@ internal static class Program {
     private static IEnumerable<PreviewScene> ScrollSamples(PreviewScene scene, ManagedPreviewLayout preview) {
         int scrollIndex = 0;
         foreach (PreviewScrollArea area in preview.ScrollAreas) {
-            if (area.Maximum <= 1f || area.ViewHeight < 24f) continue;
+            if ((area.Maximum <= 1f || area.ViewHeight < 24f) && (area.MaximumX <= 1f || area.ViewWidth < 24f)) continue;
             scrollIndex++;
             PreviewScene visibleScene = scene.Copy(scene.Slug);
             ManagedPreviewLayout revealed = Reveal(visibleScene, area.Path, preview);
             PreviewScrollArea visible = revealed.ScrollAreas.Find(item => item.Path == area.Path);
             List<float> positions = new List<float>();
-            if (area.VisibleHeight < area.ViewHeight - 1f) positions.Add(0f);
-            if (area.Virtual) { positions.Add(area.Maximum * 0.5f); positions.Add(area.Maximum); }
-            else {
+            if (area.Maximum > 1f && area.VisibleHeight < area.ViewHeight - 1f) positions.Add(0f);
+            if (area.Virtual && area.Maximum > 1f) { positions.Add(area.Maximum * 0.5f); positions.Add(area.Maximum); }
+            else if (area.Maximum > 1f) {
                 float step = Math.Max(24f, visible.VisibleHeight * 0.85f);
                 for (float y = step; y < area.Maximum; y += step) positions.Add(y);
                 positions.Add(area.Maximum);
@@ -157,6 +166,20 @@ internal static class Program {
                 copy.Detail += "; " + area.Key + " offset " + F(positions[i]) + "/" + F(area.Maximum);
                 copy.ScrollOffsets[area.Path] = positions[i];
                 yield return copy;
+            }
+            if (area.MaximumX > 1f && area.ViewWidth >= 24f) {
+                positions.Clear();
+                if (area.VisibleWidth < area.ViewWidth - 1f) positions.Add(0f);
+                float step = Math.Max(24f, visible.VisibleWidth * 0.85f);
+                for (float x = step; x < area.MaximumX; x += step) positions.Add(x);
+                positions.Add(area.MaximumX);
+                for (int i = 0; i < positions.Count; i++) {
+                    PreviewScene copy = visibleScene.Copy(scene.Slug + "-hscroll" + scrollIndex + "-" + (i + 1));
+                    copy.ScrollOf = scene.Slug + ".svg";
+                    copy.Detail += "; " + area.Key + " horizontal offset " + F(positions[i]) + "/" + F(area.MaximumX);
+                    copy.HorizontalOffsets[area.Path] = positions[i];
+                    yield return copy;
+                }
             }
         }
     }
@@ -174,8 +197,12 @@ internal static class Program {
             float delta = target.Rect.Y < area.Viewport.Y ? target.Rect.Y - area.Viewport.Y :
                 target.Rect.Bottom > area.Viewport.Bottom ? target.Rect.Bottom - area.Viewport.Bottom : 0f;
             float next = Math.Max(0f, Math.Min(area.Maximum, area.Offset + delta));
-            if (Math.Abs(next - area.Offset) < 0.1f) continue;
+            float deltaX = target.Rect.X < area.Viewport.X ? target.Rect.X - area.Viewport.X :
+                target.Rect.Right > area.Viewport.Right ? target.Rect.Right - area.Viewport.Right : 0f;
+            float nextX = Math.Max(0f, Math.Min(area.MaximumX, area.HorizontalOffset + deltaX));
+            if (Math.Abs(next - area.Offset) < 0.1f && Math.Abs(nextX - area.HorizontalOffset) < 0.1f) continue;
             scene.ScrollOffsets[area.Path] = next;
+            scene.HorizontalOffsets[area.Path] = nextX;
             preview = Prepare(scene);
         }
         return preview;
@@ -207,6 +234,17 @@ internal static class Program {
             samples.Add(PopupSample(scene, "context-menu", "context", "context-actions"));
             samples.Add(PopupSample(scene, "tooltip", "tooltip", "context-actions"));
         }
+        if (!scene.Gallery) {
+            int index = 0;
+            foreach (LayoutNode node in preview.Nodes) {
+                string kind = node.Widget.GetType().Name;
+                if (!node.Widget.Enabled || node.Widget.Key == null ||
+                    !(kind.StartsWith("ComboBox`", StringComparison.Ordinal) || kind.StartsWith("SearchableComboBox`", StringComparison.Ordinal))) continue;
+                index++;
+                PreviewScene sample = PopupSample(scene, "selector-" + index, "combo", Convert.ToString(node.Widget.Key));
+                samples.Add(sample);
+            }
+        }
         foreach (PreviewScene sample in samples) {
             LayoutNode target = preview.Nodes.Find(node => Equals(node.Widget.Key, sample.PopupKey));
             if (target == null) throw new InvalidOperationException("Missing production popup target " + sample.PopupKey);
@@ -226,6 +264,18 @@ internal static class Program {
     }
 
     private static IEnumerable<PreviewScene> InteractionSamples(PreviewScene scene, ManagedPreviewLayout preview) {
+        int scrollbarIndex = 0;
+        foreach (PreviewScrollArea area in preview.ScrollAreas) {
+            if (!area.VerticalBarVisible || area.Maximum <= 1f || area.ViewHeight < 32f) continue;
+            scrollbarIndex++;
+            PreviewScene visible = scene.Copy(scene.Slug);
+            Reveal(visible, area.Path, preview);
+            foreach (string state in new[] { "scrollbar-hovered", "scrollbar-pressed" }) {
+                PreviewScene copy = visible.Copy(scene.Slug + "-scrollbar" + scrollbarIndex + "-" + state);
+                copy.PaintState = state; copy.PaintPath = area.Path; copy.StateId = state;
+                yield return copy;
+            }
+        }
         if (scene.PageId == "buttons") {
             LayoutNode target = preview.Nodes.Find(node => node.Widget is Button button && button.Variant == ButtonVariant.Primary);
             if (target != null) {
@@ -248,19 +298,34 @@ internal static class Program {
 
     private static void AddHostScenes(List<PreviewScene> scenes, string galleryDirectory) {
         AddHostScene(scenes, galleryDirectory, "PluginCore.Regression", "ExpressionEditorPreviewFactory", "CreatePreview",
-            "expressioncontrol-expressions-preview", "ExpressionControl / 表情编辑", "ExpressionControl.ExpressionControl.ExpressionEditorView.Build");
+            "expressioncontrol-expressions-preview", "ExpressionControl / 主窗口", "ExpressionControl.ExpressionControl.ExpressionEditorView.Build");
         AddHostScene(scenes, galleryDirectory, "PluginCore.Regression", "ExpressionEditorPreviewFactory", "CreateProgramPreview",
-            "expressioncontrol-program-preview", "ExpressionControl / 程序规则", "ExpressionControl.ExpressionControl.ExpressionEditorView.Build");
+            "expressioncontrol-program-preview", "ExpressionControl / 程序编辑", "ExpressionControl.ExpressionControl.ExpressionEditorView.Build");
         AddHostScene(scenes, galleryDirectory, "AccessoryClothing.Regression", "CompressionEditorPreview", "CreatePreview",
             "clothingcompression-editor-preview", "ClothingCompression / 服装压缩", "ClothingCompression.CompressionEditorView.Build");
+    }
+
+    private static void AddPluginMinimumWindows(List<PreviewScene> scenes) {
+        int count = scenes.Count;
+        for (int i = 0; i < count; i++) {
+            PreviewScene scene = scenes[i];
+            if (scene.Gallery || scene.StateId != "default" || !(scene.Widget is Window window)) continue;
+            if (window.MinWidth <= 0f || window.MinHeight <= 0f ||
+                (Math.Abs(window.MinWidth - window.Width) < 1f && Math.Abs(window.MinHeight - window.Height) < 1f)) continue;
+            PreviewScene minimum = scene.Copy(scene.Slug + "-minimum");
+            minimum.Width = window.MinWidth;
+            minimum.Height = window.MinHeight;
+            minimum.SizeName = "minimum";
+            minimum.Detail += "; declared minimum window";
+            scenes.Add(minimum);
+        }
     }
 
     private static void AddHostScene(List<PreviewScene> scenes, string galleryDirectory, string project,
         string typeName, string methodName, string slug, string title, string source) {
         string path = Path.GetFullPath(Path.Combine(galleryDirectory, "..", project, project + ".dll"));
         if (!File.Exists(path)) {
-            Console.WriteLine("Optional " + slug + " skipped: build tests/" + project + " first.");
-            return;
+            throw new InvalidOperationException("Missing required business preview " + slug + ": build tests/" + project + " first.");
         }
         Assembly host = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
         Type factory = host.GetType(typeName, true);

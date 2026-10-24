@@ -26,7 +26,7 @@ namespace MaximumUIGallery {
             if (pageId == "buttons" || pageId == "text-input" || pageId == "numeric-input")
                 return new[] { "default", "disabled" };
             if (pageId == "selection") return new[] { "default", "selected", "collapsed" };
-            if (pageId == "layout") return new[] { "default", "activity-tab", "settings-tab", "collapsed" };
+            if (pageId == "layout") return new[] { "default", "activity-tab", "settings-tab", "collapsed", "empty-lists" };
             if (pageId == "dialogs") return new[] { "default", "dialog-open" };
             if (pageId == "appearance") return new[] { "default", "pending" };
             if (pageId == "large-lists") return new[] { "default", "filtered", "empty", "selected" };

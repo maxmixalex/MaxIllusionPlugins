@@ -43,24 +43,31 @@ internal static class ExpressionProgramUiRegression {
 
     private static void CapturedUnit() {
         var selected = new EC.Program.Unit(); var next = new EC.Program.Unit();
-        Widget first = UI.BuildUnit(selected, delegate { });
+        bool editable = true;
+        Widget first = UI.BuildUnit(selected, delegate { }, "", () => editable);
         UI.BuildUnit(next, delegate { });
         Find<Checkbox>(first, "morph").OnChange(true);
         Assert(selected.morph && !next.morph, "deferred callback changed a different selected unit");
+        editable = false;
+        Find<Checkbox>(first, "morph").OnChange(false);
+        Find<TextField>(first, "feeling-min").OnSubmit("50");
+        Assert(selected.morph && selected.feelingL == 0, "removed or switched program still accepted a queued unit edit");
     }
 
     private static void Ranges() {
         var unit = new EC.Program.Unit { feelingL = 10, feelingH = 70, orgazumNumL = 2, orgazumNumH = 7 };
         Widget tree = UI.BuildUnit(unit, delegate { });
-        Find<InputInt>(tree, "feeling-min").OnChange(90);
+        Find<TextField>(tree, "feeling-min").OnSubmit("90");
         Assert(unit.feelingL == 70 && unit.feelingH == 70, "minimum crossed maximum");
-        Find<InputInt>(tree, "feeling-max").OnChange(1);
+        Find<TextField>(tree, "feeling-max").OnBlur("1");
         Assert(unit.feelingH == 70, "maximum crossed current minimum");
-        Find<InputInt>(tree, "feeling-max").OnChange(1000);
+        Find<TextField>(tree, "feeling-max").OnSubmit("1000");
         Assert(unit.feelingH == 100, "feeling cap ignored");
-        Find<InputInt>(tree, "orgasm-min").OnChange(-99);
-        Find<InputInt>(tree, "orgasm-max").OnChange(99);
+        Find<TextField>(tree, "orgasm-min").OnSubmit("-99");
+        Find<TextField>(tree, "orgasm-max").OnBlur("99");
         Assert(unit.orgazumNumL == 0 && unit.orgazumNumH == 10, "orgasm bounds ignored");
+        Find<TextField>(tree, "feeling-min").OnSubmit("not a number");
+        Assert(unit.feelingL == 70 && Find<TextField>(tree, "feeling-min").Value == "70", "invalid text changed or hid the last valid value");
     }
 
     private static void Flags() {

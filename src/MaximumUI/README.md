@@ -1,6 +1,6 @@
 # MaximumUI
 
-供 Unity IMGUI 插件使用的声明式 UI 库。支持以集合初始化器组织控件，包含布局引擎、输入分发、绘制命令、控件状态、主题、导航、快捷键及运行时挂载。
+供 Unity IMGUI 插件使用的声明式 UI 库，当前版本 **0.5.0**。支持以集合初始化器组织控件，包含布局引擎、输入分发、绘制命令、控件状态、主题、导航、快捷键及运行时挂载。
 
 - `MUI.cs`、`View.cs`、`Widget.cs`：界面与控件入口。
 - `LayoutEngine.cs`、`LayoutNode.cs`、`LayoutHints.cs`：布局和尺寸约束。
@@ -42,6 +42,8 @@ python scripts/test.py
 
 `Label.Role` 支持 `Body`、`Heading`、`Subheading`、`Muted`、`Caption`，已有显式 `Label.Style` 优先。`Button.Variant` 支持 `Default`、`Primary`、`Quiet`、`Danger`；`ToggleSwitch` 提供独立的立即生效开关，不改变原 `Toggle` / `Checkbox` 的语义。`DrawList.Text` 可携带 `TextFormat`，显式传递字号、字重、对齐、换行与垂直位置；没有字号时继续保留调用方的原生样式。`ThemeTypography.CreateLayoutMetrics` 统一布局度量，游戏端使用实际 `GUIStyle`，预览使用 Pango 排版测量。
 
+0.5.0 的 `Selectable.ShowCheckbox` 可为现有选择行显示真正的复选框几何，保留整行点击、Shift 范围选择、双击及原来的标签文字。`Panel.Selected` 为活动编辑单元显示 1px 强调色边框；边框在子控件之后绘制，避免被内部表面遮盖。两个属性都默认关闭。`HelpBox` 按实际可用宽度测量换行高度，原生与共享绘制同时使用对应的警告/错误背景。
+
 原生字体优先使用系统 Segoe UI 字重家族，再回退到微软雅黑、日文字体与 Noto；由 Unity 5.6 的 `CreateDynamicFontFromOSFont` 按字符选择已安装字体。字体按字重缓存，未分发 Microsoft 字体文件。Linux 模拟预览使用可用回退字体，不能当作 Windows Segoe UI 字形完全一致的截图。自定义主题可设置 8–32px；标题、行高与换行随字号一起适配。
 
 内置双配色的正文、次要文字、主按钮各状态文字、输入边框及焦点/选中标记对比由纯托管回归验证。默认强调色为 `#0076D7`，使白色主按钮文字达到 4.5:1；禁用控件使用单独的灰色状态。
@@ -57,7 +59,34 @@ MaximumUIRuntime.SetTheme(mountId, MaximumTheme.MetroLight);
 
 ThemeEditor 的 `ColorTokens` / `ScalarTokens` 可选数组限定可编辑项，null 沿用全量 token，空数组表示没有这一类项。颜色标签按整组最长文字计算固定列宽，RGBA 字段保持纵向对齐；字号与滑条/勾选框尺寸都会进入原生样式。原生 MDL2 后端保持固定方角和边框规则，因此 Gallery 不提供 `Radius` / `BorderWidth` 编辑。`TextDisabled` / `ButtonDisabledBg` 用于禁用按钮、选择控件和自绘内容；原生文本输入还会经过 Unity 自身的禁用绘制。
 
-滚动条也使用主题配色：`MaximumTheme.BeginScrollView` 在首次使用时创建私有 `GUISkin`，同时设置轨道、拖块、方向按钮和滚动背景。每次调用只在原生 `GUI.BeginScrollView` 内暂时切换 skin，并在 `finally` 恢复调用者皮肤；子控件与配对的 `GUI.EndScrollView` 保持正常上下文。12px 轨道加 4px 间距与布局预留的 16px 一致。主题释放时一起释放这个皮肤。此实现针对 [Unity 5.6 的原生 BeginScrollView 重载](https://docs.unity3d.com/560/Documentation/ScriptReference/GUI.BeginScrollView.html)，并核对了 [Unity 官方 2017.4 IMGUI 参考源码](https://github.com/Unity-Technologies/UnityCsReference/blob/2017.4/Runtime/IMGUI/Managed/GUI.cs) 中按 style 名称读取 thumb 和方向按钮的机制；实际游戏内拖块命中、滚轮和视觉仍需运行验证。
+滚动条使用 16px 稳定轨道、居中的 8px 拖块和常规尺寸下 24px 的最小拖块。正常、悬停、按下和禁用状态采用不同的主题颜色；短列表按实际需要显示轨道并使用完整内容宽度。`AlwaysShowVertical` / `AlwaysShowHorizontal` 仍支持明确要求的常驻轨道；没有可滚动内容时，这类轨道不代表可执行的操作。
+
+`MaximumTheme.BeginScrollView` 在首次使用时创建私有 `GUISkin`，同时设置轨道、拖块、方向按钮和滚动背景。每次调用只在原生 `GUI.BeginScrollView` 内暂时切换 skin，并在 `finally` 恢复调用者皮肤；主题释放时一起释放这个皮肤。拖块长度采用原生的“最小长度加剩余轨道比例”公式。极短轨道同时缩减端部留白和最小拖块，保留正的拖动计算分母；内容视口塌缩到零时跳过原生滑块处理，保持滚动 clip 和 control ID 顺序。
+
+此实现针对 [Unity 5.6 的原生 BeginScrollView 重载](https://docs.unity3d.com/560/Documentation/ScriptReference/GUI.BeginScrollView.html)，并交叉核对了 Unity 官方 2017.4 的 [GUI.cs](https://github.com/Unity-Technologies/UnityCsReference/blob/2017.4/Runtime/IMGUI/Managed/GUI.cs) 与 [SliderHandler.cs](https://github.com/Unity-Technologies/UnityCsReference/blob/2017.4/Runtime/IMGUI/Managed/SliderHandler.cs)。编译所用 Unity 5.6 引用程序集的方法体经过裁剪，不能用它证明实际游戏运行行为；原生拖块命中、捕获释放与字体显示仍需要游戏内验证。
+
+### 滚动框架与诊断接口
+
+0.5.0 的原生渲染器与模拟绘制共用公开的 `ScrollGeometry` / `ScrollFrameLayout`。列表外框、滚动宿主和内容剪裁是不同的矩形，外框在内容 clip 之外、行和滚动条之后绘制，因此滚动条不会吃掉右侧边框。
+
+| `ScrollFrameLayout` 字段 | 用途 |
+| --- | --- |
+| `Bounds` | 包含 1px 边框的完整控件区域。 |
+| `Viewport` | 边框内的原生滚动宿主。 |
+| `ContentViewport` | 扣除实际滚动槽后的可见内容区域。 |
+| `Content` | 从原点开始的内容尺寸，供原生滚动和末行定位使用。 |
+| `VerticalGutter` | 内容右侧、外框以内的垂直轨道区域。 |
+| `Vertical` / `ClampY` | 是否显示垂直轨道，以及与实际视口一致的位置夹取。 |
+
+`ListFrame`、`DebugFrame`、`ThemeEditorFrame` 和 `VerticalFrame` 提供生产使用的测量规则。诊断或预览代码优先调用 `WidgetPainter.TryGetScrollFrame(LayoutNode, out ScrollFrameLayout)`：它使用当前 painter 的度量及真实筛选后项目数，支持内建列表、虚拟列表、调试与主题面板。不要另猜行高、表头高度或滚动槽宽度。
+
+`WidgetPaintState.ScrollPositions` 以节点 `Path` 指定模拟绘制的位置，`HoveredScrollbarPath` / `ActiveScrollbarPath` 指定轨道交互状态。内建列表、调试和主题面板会据此绘制实际可见行；`VirtualList` / 普通 `ScrollView` 的宿主还负责安排可见子节点与滚动 clip。Gallery 预览通过这些生产接口生成顶部、中部、底部与轨道状态，不替代原生输入运行。
+
+需要自行安排子节点 clip 或变换的宿主，可使用 `WidgetPainter.PaintNode(node, state, beforeChildren, afterChildren)`。它只绘制当前节点，宿主依次输出前置命令、子节点、后置命令，并通过 `WidgetPaintState.ParentEnabled` 传递祖先的禁用状态。不要用整棵树的命令数量相减来猜测子节点范围；选中面板等控件有必须在子节点之后执行的描边。普通 `Paint` 继续提供完整递归绘制。
+
+普通 `ScrollView` 使用最终分配宽度决定换行和滚动槽。父布局缩小高度时会为滚动条重新测量，扩大宽高后也能撤销不再需要的槽；`VisibleItems` 对应完整行数，边框另计，不会因边框额外制造滚动条。筛选输入保持在列表之外，改变筛选时重置列表位置。
+
+嵌套滚动的窄宽度重测集中在最终排列阶段，避免每一层的初测都重复测量整个子树。5 组专门回归覆盖 1–8 层溢出、自然高度、双轴滚动、内容/度量失效和仅移动窗口；保留缓存不会用旧文本或旧字体测量替代当前内容。
 
 主题与绘制纹理不生成 mipmap。平面表面使用小型九宫格纹理；选择控件与自定义绘制的填充圆复用懒创建的抗锯齿圆纹理，以一次纹理绘制替代按扫描行绘制。`UnityPainter` 按来源样式和 `TextFormat` 建立至多 128 项的白色文字样式缓存，确保绘制颜色不被来源样式的黑色文字乘成黑色；切换主题清理缓存，绘制异常恢复 GUI 颜色与矩阵。图标几何不加载字体或每帧创建贴图。
 
@@ -71,11 +100,17 @@ ThemeEditor 的 `ColorTokens` / `ScalarTokens` 可选数组限定可编辑项，
 
 `Window.Resizable` 默认开启，右下角拖动调整大小。折叠后展开恢复原高度；分辨率小于指定最小尺寸时以屏幕边界优先，标题与控制按钮保持可达。对话框独立使用 `DialogContentPadding`，服务 Alert/Confirm 按实际文本度量计算尺寸，过长正文使用滚动区，操作按钮留在外面。
 
-多挂载在绘制前按可见顺序确定鼠标归属，键盘跟随最后点击或明确请求焦点的挂载。可调用 `MaximumUIRuntime.Focus(mountId)` 切换挂载键盘归属，再通过 BuildContext 的 Navigation 聚焦控件。RequestFocus 仅在新请求出现时生效；不要永久依赖 true 每帧重新抢焦点。Tab / Shift+Tab 使用当前可见、可用控件的顺序，常用按钮/选择控件支持 Enter / Space；列表/下拉/滑条/树有对应方向键行为。普通鼠标聚焦不会立即启动整窗的键盘导航。
+多挂载在绘制前按可见顺序确定鼠标归属，键盘跟随最后点击或明确请求焦点的挂载。可调用 `MaximumUIRuntime.Focus(mountId)` 聚焦并前置普通窗口，再通过 BuildContext 的 Navigation 聚焦控件。窗口前置同步绘制与命中顺序，保留明确的非窗口渲染层边界；已打开的模态仍拥有最高输入优先级。RequestFocus 仅在新请求出现时生效；不要永久依赖 true 每帧重新抢焦点。Tab / Shift+Tab 使用当前可见、可用控件的顺序，常用按钮/选择控件支持 Enter / Space；列表/下拉/滑条/树有对应方向键行为。普通鼠标聚焦不会立即启动整窗的键盘导航。
 
 通过 `IsMounted(id)` / `IsVisible(id)` 查询挂载，通过 `SetVisible(id, visible)` 显示或隐藏。隐藏保留窗口与用户状态，立即释放输入、清除浮层队列、关闭服务对话框，并取消该次显示期间尚未执行的控件回调；隐藏后再打开不会执行旧确认操作。由 View 自行声明的内联 Dialog 状态仍由 View 管理，四个接入编辑器会在关闭流程清理业务模态与目标。没有变化的可见性调用直接返回。显示会重新构建并请求焦点；彻底离开宿主场景时调用 `Unmount`。全局 `IsAnyTextFieldFocused` / `IsModalOpen` 可用于插件快捷键保护。
 
 嵌套滚动和分组保留屏幕原点与祖先剪裁交集，浮层定位、拖放和 Query 使用屏幕坐标。控件新捕获需同时命中自身矩形与当前可见区域；已经捕获的拖动可继续越出矩形，松开仍清理。隐藏、卸载、模态抢占和已被其它 OnGUI 消费的 MouseUp 都有清理路径。底层挂载仍可保留几何 Hover 查询，但不会把被屏蔽的输入登记成 Active / Clicked。
+
+嵌套滚轮由最内层还能沿事件方向移动的视口接收；到达该方向边界时保留事件，交给外层。水平和垂直 delta 各自作用于原生对应轴。`VirtualList` 的键盘焦点支持 Home / End、PageUp / PageDown 及上下移动；搜索列表的输入框有独立导航身份，文本编辑不会触发后方列表的翻页或选择。
+
+通用 `TextField` / `TextArea` / `PasswordField` / `SearchBox` 可仅通过 `OnSubmit` / `OnBlur` 提交。失焦事件保留最后的编辑草稿，再捕获提交值；同一事件先排 `OnEdit` / `OnChange`，后排提交回调。提交完成后同步归一化的模型值，较早的延迟回调不会覆盖随后输入的内容。点击真正的命令按钮时先在按下阶段释放文本焦点，按钮在松开阶段执行，因此“保存”可以读取刚提交的值；滚动条和搜索清除按钮保留编辑焦点。空闲文本同步及无变化的普通/数字字符过滤复用现有字符串，避免每次 GUI 事件创建重复缓冲区。
+
+渲染器只保留一个当前编辑字段的提交所有权。即使 `VirtualList` 已回收离屏行，后续命令按下或键盘激活仍先排队该字段的失焦提交；换字段也会先交接原草稿，避免覆盖或重复提交。提交保留原控件及浮层代次的保护，不借用“保存”按钮的身份。隐藏、卸载和挂载失败明确清除这项所有权，普通滚动条拖动与 MouseUp 捕获清理不会清除它。相关断言执行实际虚拟行缓存和托管回调队列，并不等同于 Unity 的完整文本输入实测。
 
 InputInt / InputFloat / InputDouble 可实际键入。编辑中保留负号、小数点和指数等中间态；完整有效数字才触发回调。Enter/失焦提交，Escape 回滚；外部状态真正改变时同步，已排队但尚未应用的回调不会被误判成外部覆盖。解析接受当前文化和 invariant 小数，禁止千位误读，拒绝非有限数值及类型溢出。编辑器使用 round-trip 数值文本；`Format` 只控制未聚焦的显示，含单位或很长的格式化文本不会进入解析。没有 OnChange 的数值字段只读。
 
@@ -96,9 +131,11 @@ dotnet build src/MaximumUI.Tests/MaximumUI.Tests.csproj -c Release
 MAXIMUMUI_BENCHMARK=1 dotnet run --project tests/MaximumUI.Runner/MaximumUI.Runner.csproj -c Release -- bin/Release/MaximumUI.Tests/MaximumUI.Tests.dll
 ```
 
-场景为 1000 个 Label、150 帧、每帧 2 个 GUI 事件。逐事件策略执行 300 次树构建和布局，默认逐帧策略执行 150 次，按需空闲策略执行 1 次。0.2.0 的 .NET 9.0.319 测量中，三者分配量分别为 129,062,440 / 64,538,576 / 430,432 字节。计时受预热、JIT 和运行环境影响；该基准不含 Unity 绘制、输入处理和游戏负载，不能换算为游戏帧率。
+历史基准场景为 1000 个 Label、150 帧、每帧 2 个 GUI 事件。逐事件策略执行 300 次树构建和布局，默认逐帧策略执行 150 次，按需空闲策略执行 1 次。**以下是 0.2.0 的历史数据，不是 0.5.0 的重新测量**：.NET 9.0.319 宿主中，三者分配量分别为 129,062,440 / 64,538,576 / 430,432 字节。计时受预热、JIT 和运行环境影响；该基准不含 Unity 绘制、输入处理和游戏负载，不能换算为游戏帧率。
 
-当前 UI 入口执行 179 组回归，包括 40 组 MDL2 几何图标、排版、禁用继承、焦点、图表、颜色列与弹层/事件策略，19 组实际饰品/皮肤效果 View 与会话行为、8 组共享滚动/挂载隐藏/查询池回归，以及 8 组内联 Dialog 布局回归。额外热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁、数值同步与弹层所属控件检查零分配。0.3.0 还验证 80 个保留控件在 1,000 次查询/导航登记循环中的零托管分配。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。ClothingCompression 和 ExpressionControl 的实际 View→业务回归由各自插件宿主执行。本轮结果见 [MDL2 记录](../../docs/MDL2-2026-10-23.md)，此前的业务接入结果见 [接入记录](../../docs/Integration-2026-10-23.md)。
+当前 UI 入口执行 **238 组回归**。其中 0.5.0 新增 22 组滚动框架/绘制一致性、13 组编辑生命周期/输入路由、5 组嵌套滚动测量、2 组分阶段绘制组合、7 组窗口前置、4 组离屏编辑所有权，以及 6 组 JuiceControl 原布局约定回归。新断言覆盖右边框在 clip 外绘制、所有内建长列表的末行可达、轨道 hover/active、极短滑块的非零拖动分母、宽高变化后滚动槽释放、嵌套滚轮边界、只在失焦提交的草稿、归一化回显、延迟提交保护及命令执行顺序。已有 MDL2 几何、禁用继承、焦点、挂载、弹层、真实编辑器与内联 Dialog 回归继续执行。
+
+热路径断言包括 10,000 选项在 300 次空闲事件中仅格式化一次、100,000 虚拟行只构建并测量当前 13 行、逐行滚动只新增进入的一行，以及预热后的路由、剪裁、数值/文本同步与弹层所属控件检查零分配。0.3.0 增加的 80 个保留控件在 1,000 次查询/导航登记循环中的零托管分配断言也保留。零分配只针对这些被测方法；没有宣称整个 OnGUI 零分配。ClothingCompression 和 ExpressionControl 的实际 View→业务回归由各自插件宿主执行。本轮验证和模拟渲染证据见 [0.5.0 UI 成熟度记录](../../docs/UI-Maturity-2026-10-24.md)；历史结果见 [0.4.0 MDL2 记录](../../docs/MDL2-2026-10-23.md) 与 [此前业务接入记录](../../docs/Integration-2026-10-23.md)。
 
 `python scripts/test.py --benchmark` 也会执行上述策略基准及全部回归。若需比较历史版本与修复版本的独立 DLL，使用 [MaximumUI.Benchmark](../../tests/MaximumUI.Benchmark/README.md) 的显式程序集路径和独立输出目录；该项目不加入解决方案、不产生插件发布产物。
 

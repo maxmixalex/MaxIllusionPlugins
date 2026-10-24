@@ -22,7 +22,7 @@ namespace AccessoryBatchManager {
     [BepInPlugin(GUID, "Accessory Batch Manager", Version)]
     public sealed partial class AccessoryBatchManagerPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.AccessoryBatchManager";
-        public const string Version = "0.7.0";
+        public const string Version = "0.7.1";
 
         private static readonly string[] CoordinateNames = { "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣" };
 

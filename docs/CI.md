@@ -14,7 +14,7 @@
 | 产物 | 内容 |
 | --- | --- |
 | `plugin-packages-…` | 五个功能插件单独的安装 ZIP、五插件合集、独立 Gallery ZIP、安装说明和程序集版本清单 |
-| `maximumui-previews-…` | 全部 Gallery 页面的亮色/深色、最小窗口、18px 字号、交互状态和连续滚动快照，四插件匿名预览，SVG/PNG、总览图、检查清单与 `index.html` 浏览器 |
+| `maximumui-previews-…` | 全部 Gallery 页面的亮色/深色、最小窗口、18px 字号、交互状态和连续横纵滚动快照，四插件原布局各窗口/最小尺寸/下拉框/错误状态预览，SVG/PNG、总览图、边框像素检查与 `index.html` 浏览器 |
 | `build-test-logs-…` | 还原、编译、真实断言测试、托管微基准、预览和打包日志；失败时也会上传已生成的日志 |
 
 独立 Gallery 不随五插件合集安装，需要测试控件时再安装其单独包；默认 `F10`、启动时隐藏，快捷键可在 Gallery 配置中调整。四个接入插件的独立包和合集均带上 `MaximumUI.dll`，无需另外安装 Gallery。产物保留 30 天；过期后可从新的运行下载。
@@ -26,11 +26,11 @@
 仓库的 `global.json` 使用 `9.0.100` 与 `latestFeature`，选择已安装的最新稳定 9.0 SDK，不跨到 runner 预装的更高主版本。工作流先记录实际 `dotnet --info`，结果随日志产物上传。SDK 选择规则见 Microsoft 的 [global.json 文档](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json)。
 
 1. 安装 Pango / Inkscape、中文回退字体和固定版本的 Microsoft Selawik 开源字体。它们只用于预览，不进入游戏安装包。
-2. 验证打包器的依赖包含/排除规则、Gallery 覆盖检查以及文字边界检查的反例。
+2. 验证打包器的依赖包含/排除规则、Gallery 与业务窗口完整覆盖、横纵滚动采样以及文字和右边框像素检查的反例。
 3. 还原并单节点 Rebuild 整个解决方案。
 4. 执行 `python3 scripts/test.py --no-build --benchmark`，调用所有真实断言入口。单独运行 `dotnet test` 不会执行 MaximumUI 的原类库测试，工作流没有采用该路径。
-5. 从刚生成的 Gallery DLL 与实际插件 View 导出 SVG，强制使用真实字体测量。插件数据由匿名工厂构造，不访问用户预设。
-6. 执行 `python3 scripts/render_gallery.py artifacts/previews --strict`，生成 PNG 和本地截图浏览器，拒绝布局错误、覆盖缺口、缺字、非预期文字溢出及重叠。
+5. 从刚生成的 Gallery DLL 与实际插件 View 导出 SVG，强制使用真实字体测量。插件数据由匿名工厂构造，不访问用户预设；缺少任何业务预览宿主会直接失败，不能静默跳过。
+6. 执行 `python3 scripts/render_gallery.py artifacts/previews --strict`，生成 PNG 和本地截图浏览器，拒绝布局错误、横纵滚动覆盖缺口、缺字、非预期文字溢出及重叠。滚动槽和内容区必须在边框以内；最终 PNG 的可见右边框还要通过像素检查，拒绝被后续绘制覆盖的边框。
 7. 调用 `scripts/package.py`，只从明确列出的生产项目目录选取主 DLL，并递归包含该项目的本仓 ProjectReference。
 8. 上传安装包、预览和日志，在运行摘要中提供下载链接。预览和日志在检查失败时也保留，便于定位画面问题；安装包仅在前面的质量门通过后生成。
 

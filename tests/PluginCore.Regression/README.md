@@ -18,6 +18,8 @@ Expression 的实际 MaximumUI 控件树参与测试：四页在 900×540 和 10
 
 删除程序测试调用实际的 `XML_DeleteProgram`，覆盖首项、中间项、末项及最后一个程序，随后验证编辑器单元访问、独立编辑副本、角色引用和实际保存的 XML。锁定测试调用整个生产 `FemaleData.CheckExpression`，验证嘴形锁不干涉开合、开合锁与整体锁恢复角色/混合器/Studio 状态，以及忽略口型和正在插值时的既有例外。
 
+2026-10-24 增加的运行时测试直接执行生产 `ExpressionProcessing`、`ExpressionCharacterActions` 和 `FemaleDataRuntimeState`：原生回调提前刷新状态后的程序触发、同状态换动作、计时与转换去重、选中角色计数/失效命令，以及停用/替换程序时即时更新口型规则。程序实际应用、游戏状态识别及眼部处理使用显式边界记录器，不把它们当作实机动画或 Harmony detour 的证明。
+
 路径切换回归实际执行 `PresetStore`：成功载入 A → B 损坏 → 保留旧内存并禁止写入 → B 修复 → 重新载入并只保存到 B。不会把“打开 B、实际写 A”的状态视为成功。
 
 `ExternalStubs.cs` 仅模拟 Unity 输入/时间/数学、角色容器、BepInEx 配置路径与插件目录等外部边界。XML 使用真实文件和 .NET XML 序列化器；反射重载测试用 Reflection.Emit 创建具有真实重载签名的测试插件。所有测试临时文件写入系统临时目录并清理。

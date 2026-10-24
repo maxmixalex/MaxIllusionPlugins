@@ -9,7 +9,6 @@
   <ItemGroup>
     <Compile Include="../../src/JuiceControl/JuiceEditorView.cs" Link="Production/JuiceEditorView.cs" />
     <Compile Include="../../src/AccessoryBatchManager/AccessoryEditorView.cs" Link="Production/AccessoryEditorView.cs" />
-    <Compile Include="../../src/MaximumUI/ScrollGeometry.cs" Link="Production/ScrollGeometry.cs" />
     <Compile Include="../../src/MaximumUI/WindowGeometry.cs" Link="Production/WindowGeometry.cs" />
     <Compile Include="../../src/MaximumUI/ChoiceCache.cs" Link="Production/ChoiceCache.cs" />
     <Reference Include="MaximumUI">

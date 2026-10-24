@@ -145,5 +145,90 @@ class RenderedGlyphTests(unittest.TestCase):
         self.assertEqual(gallery.verify_rendered_text(root, query, "frame"), [])
 
 
+class ScrollFrameTests(unittest.TestCase):
+    def fixture(self):
+        from PIL import Image, ImageDraw
+        image = Image.new("RGB", (130, 130), "white")
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((10, 10, 109, 109), fill="white", outline=(153, 153, 153))
+        draw.rectangle((93, 11, 108, 108), fill=(242, 242, 242))
+        draw.rectangle((97, 13, 104, 42), fill=(153, 153, 153))
+        area = dict(Path="0.list", Key="list", Framed=True, VerticalBarVisible=True,
+                    FrameBounds=[10, 10, 100, 100], VisibleFrameBounds=[10, 10, 100, 100],
+                    ContentBounds=[11, 11, 82, 98], VerticalTrack=[93, 11, 16, 98], VerticalThumb=[97, 13, 8, 30],
+                    FrameRgb=[.6, .6, .6], TrackRgb=[242 / 255] * 3)
+        return image, dict(file="list.svg", scrollAreas=[area], dialogs=0, popups=[])
+
+    def test_actual_raster_catches_later_track_paint_over_the_border(self):
+        from PIL import ImageDraw
+        image, preview = self.fixture()
+        self.assertEqual(gallery.verify_frame_pixels(image, preview), (1, []))
+        ImageDraw.Draw(image).rectangle((109, 11, 109, 108), fill=(242, 242, 242))
+        checked, issues = gallery.verify_frame_pixels(image, preview)
+        self.assertEqual(checked, 1)
+        self.assertEqual(issues[0]["Kind"], "rendered-scroll-frame")
+
+    def test_track_and_content_must_leave_the_declared_frame_clear(self):
+        _, preview = self.fixture()
+        self.assertEqual(gallery.validate_scroll_frames(preview), [])
+        preview["scrollAreas"][0]["VerticalTrack"][2] += 1
+        self.assertTrue(any("Scrollbar covers its frame" in error for error in gallery.validate_scroll_frames(preview)))
+        preview["scrollAreas"][0]["ContentBounds"][0] -= 1
+        self.assertTrue(any("Scroll content covers its frame" in error for error in gallery.validate_scroll_frames(preview)))
+
+    def test_clipped_edges_and_modal_occlusion_are_not_false_pixel_evidence(self):
+        image, preview = self.fixture()
+        preview["scrollAreas"][0]["VisibleFrameBounds"] = [10, 10, 80, 100]
+        self.assertEqual(gallery.verify_frame_pixels(image, preview), (0, []))
+        preview["scrollAreas"][0]["VisibleFrameBounds"] = [10, 10, 100, 100]
+        preview["dialogs"] = 1
+        self.assertEqual(gallery.verify_frame_pixels(image, preview), (0, []))
+
+    def test_horizontal_content_needs_continuous_visible_coverage(self):
+        manifest = GalleryCoverageTests().fixture()
+        source = manifest["previews"][0]
+        source["scrollAreas"] = [dict(Path="0.horizontal", Key="horizontal", Maximum=0, ViewHeight=40,
+            ContentHeight=40, Offset=0, Virtual=False, MaximumX=800, ViewWidth=200, FullWidth=1000,
+            VisibleWidth=200, VisibleContentLeft=0)]
+        for index, left in enumerate((800, 200, 400, 600)):
+            sample = copy.deepcopy(source)
+            sample.update(file=f"horizontal-{index}.svg", scrollOf=source["file"])
+            sample["scrollAreas"][0]["VisibleContentLeft"] = left
+            manifest["previews"].append(sample)
+            errors = gallery.validate_manifest(manifest)
+            self.assertEqual(bool(errors), index < 3)
+
+    def test_business_windows_are_in_the_required_catalog(self):
+        manifest = GalleryCoverageTests().fixture()
+        manifest["pluginCases"] = [dict(file="expression-program.svg", source="ExpressionEditorView", state="default")]
+        self.assertTrue(any("expression-program.svg" in error for error in gallery.validate_manifest(manifest)))
+        manifest["previews"].append(dict(manifest["pluginCases"][0], scrollAreas=[]))
+        self.assertEqual(gallery.validate_manifest(manifest), [])
+
+    def test_business_scroll_regions_cannot_skip_coverage(self):
+        manifest = GalleryCoverageTests().fixture()
+        manifest["previews"].append(dict(file="business.svg", page=None, state="default", scrollAreas=[
+            dict(Path="0.effects", Key="effects", Maximum=800, ViewHeight=200, ContentHeight=1000,
+                 Offset=0, Virtual=False, VisibleHeight=200, VisibleContentStart=0)]))
+        self.assertTrue(any("business.svg" in error for error in gallery.validate_manifest(manifest)))
+
+    def test_shared_scroll_screenshots_cannot_show_divergent_panes(self):
+        preview = dict(file="accessory-copy.svg", scrollAreas=[
+            dict(SharedScrollBinding="source", Offset=0, Maximum=1000),
+            dict(SharedScrollBinding="source", Offset=1000, Maximum=1000)])
+        self.assertTrue(gallery.validate_shared_scroll(preview))
+        preview["scrollAreas"][0]["Offset"] = 1000
+        self.assertEqual(gallery.validate_shared_scroll(preview), [])
+
+    def test_shared_scroll_shorter_pane_clamps_locally_in_both_axes(self):
+        preview = dict(file="shared.svg", scrollAreas=[
+            dict(SharedScrollBinding="a", Offset=20, Maximum=20, HorizontalOffset=50, MaximumX=50),
+            dict(SharedScrollBinding="a", Offset=400, Maximum=1000, HorizontalOffset=300, MaximumX=400),
+            dict(SharedScrollBinding="b", Offset=0, Maximum=1000)])
+        self.assertEqual(gallery.validate_shared_scroll(preview), [])
+        preview["scrollAreas"][0]["HorizontalOffset"] = 0
+        self.assertTrue(gallery.validate_shared_scroll(preview))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -42,153 +42,149 @@ namespace JuiceControl {
         public Action<int> SelectCharacter;
         public Action<int> SelectCharacterPreset;
         public Action<int> SelectGroupPreset;
+        public Action<int> ChooseCharacterPreset;
+        public Action<int> ChooseGroupPreset;
         public Action<bool> LockAll;
         public Action<string> ChangeName;
         public Action<JuiceEditorCommand> Execute;
     }
 
-    // Pure composition: the game adapter supplies state and existing business actions.
-    // Keeping this file free of game calls also lets regression tests exercise the
-    // exact shipped control tree, write guards and callbacks.
+    // Keep the pre-migration single-window order and actions. Only the effect
+    // rows scroll; the two preset toolbars remain directly available below them.
     internal sealed class JuiceEditorView : View {
         internal JuiceEditorModel Model = new JuiceEditorModel();
-        private int page;
 
         public override Widget Build(BuildContext context) {
             JuiceEditorModel m = Model;
-            Window window = new Window("JuiceControl  " + m.Version, 620f, 760f,
-                key: "juice-window", minWidth: 480f, minHeight: 560f,
+            Window window = new Window("JuiceControl " + m.Version, 390f, 700f,
+                key: "juice-window", minWidth: 390f, minHeight: 700f,
                 closable: true, onVisibleChange: delegate(bool value) {
                     if (!value) Execute(m, JuiceEditorCommand.Close);
                 });
-            window.Add(new VStack(10f) {
-                new HStack(8f) {
-                    new Label("角色效果") { Role = LabelRole.Heading }.ExpandWidth(),
-                    new StatusBadge("JUICE", StatusBadgeKind.Info).Width(76f)
-                }.Height(34f),
-                Choice("角色", m.Characters, m.CharacterIndex, m.SelectCharacter, "juice-character")
-                    .Enabled(m.Characters.Length > 0).Height(32f),
-                new HStack(6f) {
-                    PageButton("效果与锁定", 0), PageButton("角色 / 场景预设", 1)
+            window.Add(new VStack(4f) {
+                Selector("角色:", 42f, m.Characters, m.CharacterIndex, m.SelectCharacter, "juice-character", "无"),
+                new Separator(),
+                BuildEffects(m).ExpandWidth().ExpandHeight(),
+                new HStack(4f) {
+                    Command(m, "获取当前状态", JuiceEditorCommand.Refresh, m.HasCharacter),
+                    new Checkbox("固定全部汁液", m.AllLocked, m.LockAll, "juice-lock-all")
+                        .Enabled(m.HasCharacter).ExpandWidth()
+                }.Height(32f),
+                new HStack(4f) {
+                    Command(m, "清空汁液", JuiceEditorCommand.Clear, m.HasCharacter),
+                    Command(m, "全满汁液", JuiceEditorCommand.Fill, m.HasCharacter)
                 }.Height(32f),
                 new Separator(),
-                MUI.If(!m.CanSave, new HelpBox("XML 读取失败，保存和删除已暂停。详情见“角色 / 场景预设”。", HelpBoxType.Warning)
-                    .MinHeight(44f)),
-                (page == 0 ? BuildEffects(m) : BuildPresets(m)).ExpandWidth().ExpandHeight(),
+                BuildPresets(m),
                 new Separator(),
-                new Label(string.IsNullOrEmpty(m.Status) ? "就绪。" : m.Status) {
-                    Role = LabelRole.Muted, WordWrap = true
-                }.MinHeight(26f),
-                new Label(m.Integration ?? string.Empty) { Role = LabelRole.Muted }.Height(22f)
+                new Label(string.IsNullOrEmpty(m.Status) ? "就绪。" : m.Status, "juice-status") {
+                    WordWrap = true
+                }.MinHeight(20f)
             }.ExpandHeight());
             if (m.NameDialogVisible) window.Add(BuildNameDialog(m));
             return window;
         }
 
-        private Widget PageButton(string text, int index) {
-            return new Selectable(text, page == index, delegate(bool value) {
-                page = index;
-                MaximumUIRuntime.MarkDirty(this);
-            }, "juice-page-" + index).ExpandWidth();
-        }
-
-        private Widget BuildEffects(JuiceEditorModel m) {
-            if (!m.HasCharacter)
-                return new HelpBox("当前场景中没有找到角色。进入角色编辑器或场景后会自动刷新。", HelpBoxType.Info);
-            VirtualList rows = new VirtualList(m.Effects.Count, 40f, delegate(int i) {
+        private static Widget BuildEffects(JuiceEditorModel m) {
+            if (!m.HasCharacter) return new Label("当前场景中没有找到角色。", "juice-no-character");
+            return new VirtualList(m.Effects.Count, 32f, delegate(int i) {
                 JuiceEffectRow effect = m.Effects[i];
-                return new HStack(8f, "effect-" + effect.Id) {
-                    new Label(effect.Name) { WordWrap = true }.Width(154f),
-                    new SliderInt(string.Empty, effect.Value, 0, effect.Maximum, effect.Change, "value-" + effect.Id)
-                        .ExpandWidth().Tooltip(effect.DisplayValue),
-                    new Checkbox("锁定", effect.Locked, effect.Lock, "lock-" + effect.Id).Width(70f)
-                }.Height(36f);
-            }, "juice-effects") { Height = 0f };
-            return new VStack(10f) {
-                new HStack(10f) {
-                    new Label("效果等级") { Role = LabelRole.Muted }.ExpandWidth(),
-                    new Label("拖动或使用方向键调整") { Role = LabelRole.Muted }.Width(176f)
-                }.Height(24f),
-                rows.ExpandHeight().ExpandWidth(),
-                new Checkbox("固定全部效果", m.AllLocked, m.LockAll, "juice-lock-all").Height(30f),
-                new HStack(8f) {
-                    Command(m, "获取当前状态", JuiceEditorCommand.Refresh),
-                    Command(m, "清空效果", JuiceEditorCommand.Clear),
-                    Command(m, "全部设满", JuiceEditorCommand.Fill)
-                }.Height(32f)
-            }.ExpandHeight();
+                int maximum = Math.Max(0, effect.Maximum);
+                int value = Math.Max(0, Math.Min(effect.Value, maximum));
+                return new HStack(4f, "effect-" + effect.Id) {
+                    new Label(effect.Name).Width(120f),
+                    new Button("−", delegate { Change(effect, value, Math.Max(0, value - 1)); }, "decrease-" + effect.Id).Width(32f),
+                    new Button(effect.DisplayValue ?? value.ToString(), delegate {
+                        Change(effect, value, value >= maximum ? 0 : value + 1);
+                    }, "value-" + effect.Id).ExpandWidth(),
+                    new Button("+", delegate { Change(effect, value, Math.Min(maximum, value + (value < maximum ? 1 : 0))); }, "increase-" + effect.Id).Width(32f),
+                    new Checkbox(string.Empty, effect.Locked, effect.Lock, "lock-" + effect.Id).Width(24f)
+                }.Height(32f);
+            }, "juice-effects") { Height = 0f }.MinHeight(120f);
         }
 
-        private Widget BuildPresets(JuiceEditorModel m) {
+        private static void Change(JuiceEffectRow effect, int previous, int next) {
+            if (next != previous && effect.Change != null) effect.Change(next);
+        }
+
+        private static Widget BuildPresets(JuiceEditorModel m) {
             bool characterPreset = m.CharacterPresets.Length > 0;
             bool groupPreset = m.GroupPresets.Length > 0;
-            VStack content = new VStack(12f) {
-                new Label("角色预设") { Role = LabelRole.Heading }.Height(30f),
-                Choice(string.Empty, m.CharacterPresets, m.CharacterPresetIndex,
-                    m.SelectCharacterPreset, "juice-character-preset").Enabled(characterPreset).Height(32f),
-                new Grid(2, 8f, 8f) {
-                    Command(m, "应用到当前角色", JuiceEditorCommand.ApplyCharacter, m.HasCharacter && characterPreset, true),
-                    Command(m, "新建保存", JuiceEditorCommand.CreateCharacter, m.CanSave && m.HasCharacter),
-                    Command(m, "覆盖 / 重命名", JuiceEditorCommand.OverwriteCharacter, m.CanSave && m.HasCharacter && characterPreset),
-                    Command(m, "删除选中", JuiceEditorCommand.DeleteCharacter, m.CanSave && characterPreset)
-                },
-                new Separator(),
-                new Label("场景预设") { Role = LabelRole.Heading }.Height(30f),
-                new Label("按场景角色位置保存与应用整组效果。") { Role = LabelRole.Muted, WordWrap = true }.MinHeight(24f),
-                Choice(string.Empty, m.GroupPresets, m.GroupPresetIndex,
-                    m.SelectGroupPreset, "juice-group-preset").Enabled(groupPreset).Height(32f),
-                new Grid(2, 8f, 8f) {
-                    Command(m, "应用到场景", JuiceEditorCommand.ApplyGroup, m.Characters.Length > 0 && groupPreset, true),
-                    Command(m, "新建保存", JuiceEditorCommand.CreateGroup, m.CanSave && m.Characters.Length > 0),
-                    Command(m, "覆盖 / 重命名", JuiceEditorCommand.OverwriteGroup, m.CanSave && m.Characters.Length > 0 && groupPreset),
-                    Command(m, "删除选中", JuiceEditorCommand.DeleteGroup, m.CanSave && groupPreset)
-                },
-                new Separator(),
-                new HStack(8f) {
-                    Command(m, "打开 XML", JuiceEditorCommand.OpenXml),
-                    Command(m, "重载 XML", JuiceEditorCommand.ReloadXml)
-                }.Height(32f)
-            };
-            if (!m.CanSave) content.Add(new HelpBox(
-                "预设读取失败，保存和删除已暂停。仍可应用上次载入的预设。\n" + (m.Error ?? string.Empty), HelpBoxType.Error,
-                "juice-preset-error").MinHeight(100f));
-            return new ScrollView("juice-presets-scroll") { content.ExpandWidth() }.ExpandHeight();
+            VStack content = new VStack(4f, "juice-presets");
+            if (!m.CanSave) content.Add(new ScrollView("juice-preset-error-scroll") {
+                new HelpBox("当前 XML 载入失败：仍可应用已载入预设；修复并重载后才能保存。\n" + (m.Error ?? string.Empty),
+                    HelpBoxType.Error, "juice-preset-error").ExpandWidth()
+            }.Height(100f));
+            content.Add(Selector("汁液预设:", 70f, m.CharacterPresets, m.CharacterPresetIndex,
+                m.SelectCharacterPreset, "juice-character-preset", "(无角色预设)", m.ChooseCharacterPreset));
+            content.Add(new HStack(4f) {
+                Command(m, "应用选中", JuiceEditorCommand.ApplyCharacter, m.HasCharacter && characterPreset),
+                Command(m, "新建保存", JuiceEditorCommand.CreateCharacter, m.CanSave && m.HasCharacter),
+                Command(m, "覆盖保存", JuiceEditorCommand.OverwriteCharacter, m.CanSave && m.HasCharacter && characterPreset),
+                Command(m, "删除选中", JuiceEditorCommand.DeleteCharacter, m.CanSave && characterPreset)
+            }.Height(32f));
+            content.Add(Selector("场景预设:", 70f, m.GroupPresets, m.GroupPresetIndex,
+                m.SelectGroupPreset, "juice-group-preset", "(无群体预设)", m.ChooseGroupPreset));
+            content.Add(new HStack(4f) {
+                Command(m, "应用选中", JuiceEditorCommand.ApplyGroup, m.Characters.Length > 0 && groupPreset),
+                Command(m, "新建保存", JuiceEditorCommand.CreateGroup, m.CanSave && m.Characters.Length > 0),
+                Command(m, "覆盖保存", JuiceEditorCommand.OverwriteGroup, m.CanSave && m.Characters.Length > 0 && groupPreset),
+                Command(m, "删除选中", JuiceEditorCommand.DeleteGroup, m.CanSave && groupPreset)
+            }.Height(32f));
+            content.Add(new HStack(4f) {
+                Command(m, "打开XML", JuiceEditorCommand.OpenXml),
+                Command(m, "重载XML", JuiceEditorCommand.ReloadXml)
+            }.Height(32f));
+            return content;
         }
 
-        private Widget BuildNameDialog(JuiceEditorModel m) {
-            return new Dialog(m.NamePrompt, "juice-name-dialog") {
-                Width = 420f, Height = string.IsNullOrEmpty(m.NameError) ? 180f : 230f,
-                OnClose = delegate { Execute(m, JuiceEditorCommand.CancelName); },
-            }.Content(new VStack(12f) {
+        private static Widget BuildNameDialog(JuiceEditorModel m) {
+            return new Dialog("JuiceControl " + m.Version, "juice-name-dialog") {
+                Width = 390f, Height = string.IsNullOrEmpty(m.NameError) ? 220f : 260f,
+                OnClose = delegate { Execute(m, JuiceEditorCommand.CancelName); }
+            }.Content(new VStack(8f) {
+                new Label(m.NamePrompt ?? string.Empty) { WordWrap = true }.MinHeight(20f),
                 new TextField(m.Name, m.ChangeName, "juice-preset-name") {
                     OnSubmit = delegate(string text) {
                         if (m.ChangeName != null) m.ChangeName(text);
                         Execute(m, JuiceEditorCommand.ConfirmName);
                     }
-                }
-                    .DefaultFocus().Height(32f),
-                MUI.If(!string.IsNullOrEmpty(m.NameError), new HelpBox(m.NameError ?? string.Empty, HelpBoxType.Error)),
-                new HStack(8f) {
-                    Command(m, "保存", JuiceEditorCommand.ConfirmName, m.CanSave, true),
+                }.DefaultFocus().Height(32f),
+                MUI.If(!string.IsNullOrEmpty(m.NameError), new Label(m.NameError ?? string.Empty) { WordWrap = true }.MinHeight(20f)),
+                new HStack(4f) {
+                    Command(m, "确定", JuiceEditorCommand.ConfirmName, m.CanSave),
                     Command(m, "取消", JuiceEditorCommand.CancelName)
                 }.Height(32f)
             });
         }
 
-        private static Widget Choice(string label, string[] names, int selected, Action<int> changed, string key) {
+        private static Widget Selector(string label, float labelWidth, string[] names, int selected,
+            Action<int> changed, string key, string emptyText, Action<int> chosen = null) {
             int[] ids = new int[names.Length];
             for (int i = 0; i < ids.Length; i++) ids[i] = i;
-            return new SearchableComboBox<int>(label, selected, ids,
-                delegate(int i) { return i >= 0 && i < names.Length ? names[i] : "无"; }, changed, key) {
-                    LabelWidth = string.IsNullOrEmpty(label) ? 0f : 50f, FilterPlaceholder = "搜索…", MaxVisibleItems = 10
-                }.ExpandWidth();
+            bool enabled = names.Length > 0;
+            return new HStack(4f, key + "-row") {
+                new Label(label).Width(labelWidth),
+                new ArrowButton(ArrowDirection.Left, delegate { SelectRelative(names.Length, selected, -1, changed); }, key + "-previous").Enabled(enabled).Width(28f),
+                new ComboBox<int>(string.Empty, selected, ids,
+                    delegate(int i) { return i >= 0 && i < names.Length ? names[i] : emptyText; }, chosen ?? changed, key) {
+                    MaxVisibleItems = 10
+                }.Enabled(enabled).ExpandWidth(),
+                new ArrowButton(ArrowDirection.Right, delegate { SelectRelative(names.Length, selected, 1, changed); }, key + "-next").Enabled(enabled).Width(28f)
+            }.Height(32f);
         }
 
-        private static Widget Command(JuiceEditorModel m, string text, JuiceEditorCommand command,
-            bool enabled = true, bool primary = false) {
-            return new Button(text, delegate { Execute(m, command); }, "juice-command-" + command) {
-                Variant = primary ? ButtonVariant.Primary : ButtonVariant.Default
-            }.Enabled(enabled).ExpandWidth().Height(32f);
+        private static void SelectRelative(int count, int selected, int delta, Action<int> changed) {
+            if (count == 0 || changed == null) return;
+            int next = selected + delta;
+            if (next < 0) next = count - 1;
+            if (next >= count) next = 0;
+            changed(next);
+        }
+
+        private static Widget Command(JuiceEditorModel m, string text, JuiceEditorCommand command, bool enabled = true) {
+            return new Button(text, delegate { Execute(m, command); }, "juice-command-" + command)
+                .Enabled(enabled).ExpandWidth().Height(32f);
         }
 
         private static void Execute(JuiceEditorModel m, JuiceEditorCommand command) {

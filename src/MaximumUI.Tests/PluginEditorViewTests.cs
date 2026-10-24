@@ -14,7 +14,7 @@ namespace MaximumUI.Tests {
             JuicePresetFailureBlocksEveryWriteButKeepsReadActions();
             JuicePresetActionsAndSelectionsHaveDistinctTargets();
             JuiceNameDialogPreservesEditingAndCancel();
-            JuiceBuildsOnlyTheActivePage();
+            JuiceBuildsLegacySingleWindow();
             JuiceReloadInvalidatesOldPresetButtons();
             JuiceSameNameReplacementTracksCharacterIdentity();
             JuiceDisplayRefreshKeepsPendingValueEdit();
@@ -37,9 +37,9 @@ namespace MaximumUI.Tests {
             view.Model.Characters = new string[0];
             view.Model.CanSave = false;
             Widget root = view.Build(null);
-            Require(!Find<SearchableComboBox<int>>(root, "juice-character").Enabled, "empty scene cannot select a missing character");
+            Require(!Find<ComboBox<int>>(root, "juice-character").Enabled, "empty scene cannot select a missing character");
             Require(FindAny<VirtualList>(root) == null, "empty scene does not expose stale effects");
-            Require(Count<HelpBox>(root) == 2, "scene absence and XML failure are independently visible on effects page");
+            Require(Find<Label>(root, "juice-no-character").Text == "当前场景中没有找到角色。" && Count<HelpBox>(root) == 1, "scene absence and XML failure remain independently visible in the original single window");
         }
 
         private static void JuiceEffectRowsRouteValueAndLockSeparately() {
@@ -53,10 +53,10 @@ namespace MaximumUI.Tests {
             Widget root = view.Build(null);
             VirtualList list = Find<VirtualList>(root, "juice-effects");
             Widget row = list.BuildItem(0);
-            SliderInt valueControl = Find<SliderInt>(row, "value-external");
-            Require(valueControl.Value == 2 && valueControl.Max == 7, "optional effects retain their own maximum");
-            valueControl.OnChange(6);
-            Require(changed == 6 && !locked, "changing a value does not accidentally toggle lock");
+            Button valueControl = Find<Button>(row, "value-external");
+            Require(valueControl.Text == "2 / 7", "optional effects preserve their display formatter");
+            valueControl.OnClick();
+            Require(changed == 3 && !locked, "cycling a value does not accidentally toggle lock");
             Find<Checkbox>(row, "lock-external").OnChange(true);
             Find<Checkbox>(root, "juice-lock-all").OnChange(true);
             Require(locked && allLocked, "per-effect and all-effect lock callbacks remain available");
@@ -68,7 +68,7 @@ namespace MaximumUI.Tests {
             view.Model.GroupPresets = new[] { "scene" };
             view.Model.CanSave = false;
             view.Model.Error = "sample.xml: malformed document";
-            SelectJuicePage(view, 1);
+
             Widget root = view.Build(null);
             JuiceEditorCommand[] writes = {
                 JuiceEditorCommand.CreateCharacter, JuiceEditorCommand.OverwriteCharacter, JuiceEditorCommand.DeleteCharacter,
@@ -92,7 +92,7 @@ namespace MaximumUI.Tests {
             view.Model.Execute = delegate(JuiceEditorCommand command) { seen = command; };
             view.Model.SelectCharacterPreset = delegate(int value) { character = value; };
             view.Model.SelectGroupPreset = delegate(int value) { group = value; };
-            SelectJuicePage(view, 1);
+
             Widget root = view.Build(null);
             JuiceEditorCommand[] commands = {
                 JuiceEditorCommand.ApplyCharacter, JuiceEditorCommand.CreateCharacter, JuiceEditorCommand.OverwriteCharacter,
@@ -104,9 +104,9 @@ namespace MaximumUI.Tests {
                 Require(button.Enabled, "valid presets enable " + command);
                 button.OnClick(); Require(seen == command, "button targets correct preset operation: " + command);
             }
-            Find<SearchableComboBox<int>>(root, "juice-character-preset").OnChange(1);
+            Find<ComboBox<int>>(root, "juice-character-preset").OnChange(1);
             Require(character == 1 && group == -1, "character and group selections are independent");
-            Find<SearchableComboBox<int>>(root, "juice-group-preset").OnChange(0);
+            Find<ComboBox<int>>(root, "juice-group-preset").OnChange(0);
             Require(group == 0, "group picker keeps its own callback");
         }
 
@@ -128,12 +128,13 @@ namespace MaximumUI.Tests {
             Require(seen == JuiceEditorCommand.ConfirmName, "explicit Save dispatches naming confirmation");
         }
 
-        private static void JuiceBuildsOnlyTheActivePage() {
+        private static void JuiceBuildsLegacySingleWindow() {
             JuiceEditorView view = Juice();
             Widget root = view.Build(null);
-            Require(FindAny<VirtualList>(root) != null && FindAny<ScrollView>(root) == null, "effects page does not build preset tree");
-            SelectJuicePage(view, 1); root = view.Build(null);
-            Require(FindAny<VirtualList>(root) == null && FindAny<ScrollView>(root) != null, "presets page does not build effect rows");
+            Require(FindAny<VirtualList>(root) != null && FindAny<ScrollView>(root) == null, "the single main window keeps the effect list");
+            Require(Find<ComboBox<int>>(root, "juice-character-preset") != null && Find<ComboBox<int>>(root, "juice-group-preset") != null,
+                "both preset toolbars are available together with effects, without switching pages");
+            Require(FindAny<Selectable>(root) == null, "migration must not introduce business navigation pages");
         }
 
         private static void JuiceReloadInvalidatesOldPresetButtons() {
@@ -150,11 +151,11 @@ namespace MaximumUI.Tests {
             first.Model.Execute = execute;
             first.Model.SelectCharacterPreset = delegate { selections++; };
             session.Bind(first.Model, new[] { character }, new[] { library, character, characterPreset, groupPreset }, "first.xml", delegate { return true; }, delegate { return true; });
-            SelectJuicePage(first, 1);
+
             Widget oldTree = first.Build(null);
             Button oldCharacterDelete = Find<Button>(oldTree, "juice-command-DeleteCharacter");
             Button oldGroupDelete = Find<Button>(oldTree, "juice-command-DeleteGroup");
-            SearchableComboBox<int> oldPicker = Find<SearchableComboBox<int>>(oldTree, "juice-character-preset");
+            ComboBox<int> oldPicker = Find<ComboBox<int>>(oldTree, "juice-character-preset");
 
             // The real reload path invalidates before reading, even if loading
             // fails and PresetStore retains its previous Data instance.
@@ -166,7 +167,7 @@ namespace MaximumUI.Tests {
             oldCharacterDelete.OnClick(); oldGroupDelete.OnClick(); oldPicker.OnChange(0);
             Require(deletedCharacters == 0 && deletedGroups == 0 && selections == 0,
                 "queued buttons/pickers from the previous file cannot mutate the replacement library at the same indexes");
-            SelectJuicePage(second, 1);
+
             Widget currentTree = second.Build(null);
             Find<Button>(currentTree, "juice-command-DeleteCharacter").OnClick();
             Find<Button>(currentTree, "juice-command-DeleteGroup").OnClick();
@@ -187,7 +188,7 @@ namespace MaximumUI.Tests {
             JuiceEditorView oldView = Juice(); oldView.Model.Characters = new[] { "A", "Same display name" };
             oldView.Model.SelectCharacter = delegate(int index) { selected = index == 0 ? first : oldSecond; };
             session.Bind(oldView.Model, live, targets, "presets.xml", delegate { return true; }, current);
-            SearchableComboBox<int> oldPicker = Find<SearchableComboBox<int>>(oldView.Build(null), "juice-character");
+            ComboBox<int> oldPicker = Find<ComboBox<int>>(oldView.Build(null), "juice-character");
             live[1] = replacement;
             Require(!session.MatchesCharacterAt(1, replacement), "snapshot retains character object identity despite an equal name/count");
             oldPicker.OnChange(1);
@@ -197,7 +198,7 @@ namespace MaximumUI.Tests {
             session.Bind(next.Model, live, targets, "presets.xml", delegate { return true; }, current);
             oldPicker.OnChange(1);
             Require(selected == null, "rebinding the replacement does not reactivate the previous picker");
-            Find<SearchableComboBox<int>>(next.Build(null), "juice-character").OnChange(1);
+            Find<ComboBox<int>>(next.Build(null), "juice-character").OnChange(1);
             Require(ReferenceEquals(selected, replacement), "fresh identical-looking option selects the replacement character");
         }
 
@@ -213,13 +214,13 @@ namespace MaximumUI.Tests {
             });
             session.Bind(oldView.Model, identities, targets, "same.xml", delegate { return true; }, delegate { return true; });
             VirtualList oldRows = Find<VirtualList>(oldView.Build(null), "juice-effects");
-            SliderInt pending = Find<SliderInt>(oldRows.BuildItem(0), "value-effect");
+            Button pending = Find<Button>(oldRows.BuildItem(0), "increase-effect");
             JuiceEditorModel refreshed = Juice().Model;
             refreshed.Status = "Updated displayed level";
             refreshed.Effects.Add(new JuiceEffectRow { Id = "effect", Name = "Effect", Maximum = 3, Value = 2 });
             session.Bind(refreshed, new[] { character }, new[] { library, character }, new string("same.xml".ToCharArray()), delegate { return true; }, delegate { return true; });
-            pending.OnChange(3);
-            Require(applied == 3, "polling a different displayed value before callback flush preserves the last pending slider edit for the same targets");
+            pending.OnClick();
+            Require(applied == 2, "polling displayed state before callback flush preserves a pending increment for the same character");
         }
 
         private static void JuiceShutdownReleasesNamingTargetsAndOldCallbacks() {
@@ -256,11 +257,13 @@ namespace MaximumUI.Tests {
             JuiceEditorModel model = Juice().Model;
             model.SelectCharacter = delegate { writes++; }; model.SelectCharacterPreset = delegate { writes++; };
             model.SelectGroupPreset = delegate { writes++; }; model.ChangeName = delegate { writes++; }; model.LockAll = delegate { writes++; };
+            model.ChooseCharacterPreset = delegate { writes++; }; model.ChooseGroupPreset = delegate { writes++; };
             model.Execute = delegate(JuiceEditorCommand command) { if (command == JuiceEditorCommand.Close || command == JuiceEditorCommand.CancelName) dismissals++; else writes++; };
             model.Effects.Add(new JuiceEffectRow { Change = delegate { writes++; }, Lock = delegate { writes++; } });
             session.Bind(model, new object[0], new object[0], "same.xml", delegate { return active; }, delegate { return targetCurrent; });
             Action exercise = delegate {
                 model.SelectCharacter(0); model.SelectCharacterPreset(0); model.SelectGroupPreset(0); model.ChangeName("value");
+                model.ChooseCharacterPreset(0); model.ChooseGroupPreset(0);
                 model.LockAll(true); model.Effects[0].Change(1); model.Effects[0].Lock(true); model.Execute(JuiceEditorCommand.Fill);
             };
             exercise(); Require(writes == 0, "every retained callback observes component/window activity");
@@ -268,7 +271,7 @@ namespace MaximumUI.Tests {
             exercise(); Require(writes == 0, "every retained business callback checks current target identity");
             model.Execute(JuiceEditorCommand.Close); model.Execute(JuiceEditorCommand.CancelName);
             Require(dismissals == 2, "a current UI can still close/cancel after its business target disappears");
-            targetCurrent = true; exercise(); Require(writes == 8, "each fresh callback still reaches its own business action");
+            targetCurrent = true; exercise(); Require(writes == 10, "each fresh callback still reaches its own business action");
         }
 
         private static void AccessoryBatchActionsKeepTheirTargets() {
@@ -283,8 +286,23 @@ namespace MaximumUI.Tests {
             view.Model.Batch.Selection.Add(2); root = view.Build(null);
             Find<Button>(root, "accessory-command-Remove").OnClick(); Require(seen == AccessoryEditorCommand.Remove, "remove dispatches original remove flow");
             Find<Button>(root, "accessory-command-Compact").OnClick(); Require(seen == AccessoryEditorCommand.Compact, "compact remains separate from removal");
-            Find<Button>(root, "selection-Batch-NonEmpty").OnClick();
-            Require(selectedRole == AccessoryListRole.Batch && selectedCommand == AccessorySelectionCommand.NonEmpty, "non-empty batch selection routes role and operation");
+            Find<Button>(root, "selection-Batch-All").OnClick();
+            Require(selectedRole == AccessoryListRole.Batch && selectedCommand == AccessorySelectionCommand.All, "batch selection routes the original select-all operation");
+            Require(FindOrNull<Button>(root, "selection-Batch-NonEmpty") == null &&
+                Find<Button>(root, "selection-Batch-None").Text == "全不选" &&
+                Find<Button>(root, "accessory-command-Remove").Text == "移除选中饰品" &&
+                Find<Button>(root, "accessory-command-Compact").Text == "一键整理（保持顺序）" &&
+                Find<Selectable>(root, "accessory-page-1").Text == "复制/移动",
+                "batch toolbar and tabs must retain the original inventory and words");
+            LayoutNode layout = new LayoutEngine().Layout(root, new MuiRect(0, 0, 900, 760));
+            Require(FindLayout(layout, "accessory-command-Remove").Rect.Bottom < FindLayout(layout, "accessory-list-Batch").Rect.Y,
+                "batch actions must remain above their list");
+            layout = new LayoutEngine().Layout(root, new MuiRect(0, 0, 740, 600));
+            LayoutNode compact = FindLayout(layout, "accessory-command-Compact");
+            LayoutNode summary = FindLayout(layout, "accessory-summary");
+            Require(compact.Rect.Width == 176f && FindLayout(layout, "accessory-command-Remove").Rect.Width == 126f &&
+                compact.Rect.Right < summary.Rect.X && summary.Rect.Right <= 740f,
+                "minimum batch window must retain full compact-action text, original buttons and summary without equal-width shrinkage");
         }
 
         private static void AccessoryVirtualRowsBoundFormattingWork() {
@@ -319,8 +337,15 @@ namespace MaximumUI.Tests {
             Require(!Find<Button>(root, "accessory-command-Adjust1").Enabled && !Find<Button>(root, "accessory-command-Adjust2UpDown").Enabled,
                 "clothing mappings do not enable accessory transform copies");
             Require(!Find<ComboBox<int>>(root, "accessory-destination").Enabled, "follow-current setting locks the destination picker");
+            Require(!Find<ArrowButton>(root, "accessory-destination-previous").Enabled &&
+                !Find<ArrowButton>(root, "accessory-destination-next").Enabled,
+                "follow-current setting also locks the original destination arrows");
             Find<ComboBox<int>>(root, "accessory-source").OnChange(2);
             Require(view.Model.SourceIndex == 2 && view.Model.DestinationIndex == 0, "source selection targets its own coordinate");
+            Find<ArrowButton>(view.Build(null), "accessory-source-next").OnClick();
+            Require(view.Model.SourceIndex == 0, "original source next arrow must wrap after the coordinate card");
+            Find<ArrowButton>(view.Build(null), "accessory-source-previous").OnClick();
+            Require(view.Model.SourceIndex == 2, "original source previous arrow must wrap to the coordinate card");
             view.Model.FollowCoordinate = false;
             Find<ComboBox<int>>(view.Build(null), "accessory-destination").OnChange(1);
             Require(view.Model.DestinationIndex == 1 && view.Model.SourceIndex == 2, "unlocked target selection stays independent");
@@ -341,6 +366,8 @@ namespace MaximumUI.Tests {
             ((Selectable)destination.BuildItem(7)).OnSelect(selection);
             Require(seenRole == AccessoryListRole.Destination && seenIndex == 7, "destination rows cannot modify source selection");
             Require(ReferenceEquals(source.ScrollPosition, destination.ScrollPosition), "sync mode shares retained scroll state");
+            Require(((Selectable)source.BuildItem(3)).ShowCheckbox && ((Selectable)destination.BuildItem(7)).ShowCheckbox,
+                "original per-slot checkboxes must remain visible in both multi-select lists");
         }
 
         private static void AccessoryShiftRangesToggleAndRespectBounds() {
@@ -369,6 +396,12 @@ namespace MaximumUI.Tests {
                 Find<Checkbox>(root, "accessory-setting-" + setting).OnChange(true);
                 Require(seen == setting && value, "setting uses original persistent option: " + setting);
             }
+            Require(Find<Checkbox>(root, "accessory-setting-ImmediateSync").Text == "每次操作后总是立即同步" &&
+                Find<Checkbox>(root, "accessory-setting-SelectionHighlight").Text == "启用选择高亮（最近选择为橙色，其余为蓝色）" &&
+                Find<Checkbox>(root, "accessory-setting-ClearAfter").Text == "操作完成后清除选区" &&
+                Find<Checkbox>(root, "accessory-setting-FollowCoordinate").Text == "复制/移动目标始终跟随当前服装搭配" &&
+                Find<Button>(root, "accessory-command-RefreshModel").Text == "立即刷新数据并更新角色模型",
+                "settings must retain the original wording and action");
         }
 
         private static void AccessoryConfirmationDoesNotCommitOnClose() {
@@ -445,10 +478,6 @@ namespace MaximumUI.Tests {
                 Destination = new AccessoryListModel { Role = AccessoryListRole.Destination, Count = 20, Scroll = sync, Clothing = false, CanToggleKind = false }
             };
             return view;
-        }
-
-        private static void SelectJuicePage(JuiceEditorView view, int page) {
-            Find<Selectable>(view.Build(null), "juice-page-" + page).OnChange(true);
         }
 
         private static T Find<T>(Widget root, string key) where T : Widget {
