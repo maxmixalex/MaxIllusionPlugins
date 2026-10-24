@@ -50,6 +50,7 @@ namespace MultiTeamH {
         private TMP_Text[] clonedModeTmpLabels;
         private Text[] clonedModeTextLabels;
         private string normalHeaderText;
+        private bool disposed;
 
         internal bool IsSelected { get; private set; }
 
@@ -291,6 +292,7 @@ namespace MultiTeamH {
         }
 
         private void LateUpdate() {
+            if (disposed) return;
             // Re-add the render callback so it runs after localization callbacks
             // that restore the cloned toggle's original “一般” label.
             Canvas.willRenderCanvases -= RefreshNativeText;
@@ -456,9 +458,18 @@ namespace MultiTeamH {
             MultiTeamSelection.MarkLaunchDataReady();
         }
 
-        private void OnDestroy() {
-            SaveCurrentSlotSettings();
+        internal void Shutdown() {
+            if (disposed) return;
+            disposed = true;
+            // These buttons belong to the native scene, not to this component.
+            // Failed initialization/plugin unload can destroy us while they live.
             Canvas.willRenderCanvases -= RefreshNativeText;
+            if (femaleButton != null) femaleButton.onClick.RemoveListener(OnFemaleSelectClicked);
+            if (maleButton != null) maleButton.onClick.RemoveListener(OnMaleSelectClicked);
+            if (enterButton != null) enterButton.onClick.RemoveListener(OnEnterClicked);
+            if (multiToggle != null) multiToggle.onValueChanged.RemoveListener(OnModeChanged);
+            try { SaveCurrentSlotSettings(); }
+            catch (Exception ex) { if (log != null) log.LogWarning("Could not save MultiTeamH selection on exit: " + ex.Message); }
             if (normalHeader != null && normalHeaderText != null) normalHeader.text = normalHeaderText;
             if (multiToggle != null) Destroy(multiToggle.gameObject);
             if (slotToggles != null) {
@@ -467,6 +478,8 @@ namespace MultiTeamH {
             for (int i = 0; i < generatedModeAssets.Count; i++) if (generatedModeAssets[i] != null) Destroy(generatedModeAssets[i]);
             if (MultiTeamHPlugin.Instance != null) MultiTeamHPlugin.Instance.FreeHModeEnded(this);
         }
+
+        private void OnDestroy() { Shutdown(); }
 
         private void SaveCurrentSlotSettings() {
             if (!IsSelected || member == null || selectedSlot < 0 || selectedSlot >= 2) return;
@@ -485,7 +498,7 @@ namespace MultiTeamH {
         }
     }
 
-    internal static class MultiTeamSelection {
+    internal static partial class MultiTeamSelection {
         private sealed class RecentCardLoad {
             internal WeakReference Card;
             internal string Path;
@@ -497,21 +510,11 @@ namespace MultiTeamH {
         private static ConfigEntry<int> stageEntry;
         private static ConfigEntry<int> statusEntry;
         private static ConfigFile config;
-        private static SaveData.Heroine secondaryFemale;
-        private static SaveData.Player secondaryMale;
-        private static int secondaryStage;
-        private static int secondaryStatus;
         private static SaveData.Heroine rememberedFemale;
         private static SaveData.Player rememberedMale;
         private static int rememberedStage;
         private static int rememberedStatus;
         private static bool hasRememberedSettings;
-        internal static bool HasPending { get; private set; }
-        internal static bool LaunchDataReady { get; private set; }
-        internal static SaveData.Heroine SecondaryFemale { get { return secondaryFemale; } }
-        internal static SaveData.Player SecondaryMale { get { return secondaryMale; } }
-        internal static int SecondaryStage { get { return secondaryStage; } }
-        internal static int SecondaryStatus { get { return secondaryStatus; } }
         internal static SaveData.Heroine RememberedFemale { get { return rememberedFemale; } }
         internal static SaveData.Player RememberedMale { get { return rememberedMale; } }
         internal static int RememberedStage { get { return rememberedStage; } }
@@ -632,26 +635,5 @@ namespace MultiTeamH {
             if (config != null) config.Save();
         }
 
-        internal static void Set(SaveData.Heroine female, SaveData.Player male, int stage, int status) {
-            secondaryFemale = female;
-            secondaryMale = male;
-            secondaryStage = stage;
-            secondaryStatus = status;
-            HasPending = female != null && male != null;
-            LaunchDataReady = false;
-        }
-
-        internal static void MarkLaunchDataReady() { LaunchDataReady = HasPending; }
-
-        internal static void Complete() {
-            secondaryFemale = null;
-            secondaryMale = null;
-            secondaryStage = 0;
-            secondaryStatus = 0;
-            HasPending = false;
-            LaunchDataReady = false;
-        }
-
-        internal static void Clear() { Complete(); }
     }
 }

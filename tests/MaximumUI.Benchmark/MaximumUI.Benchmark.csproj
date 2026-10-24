@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+    <!-- The fixed library grants this assembly access to its real build scheduler. -->
+    <AssemblyName>MaximumUI.Tests</AssemblyName>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <BenchmarkVariant Condition="'$(BenchmarkVariant)' == ''">baseline</BenchmarkVariant>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\MaximumUI.Benchmark\$(BenchmarkVariant)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\$(BenchmarkVariant)\</IntermediateOutputPath>
+    <DefineConstants Condition="'$(UseFixedApi)' == 'true'">$(DefineConstants);FIXED</DefineConstants>
+    <UnityEngineAssembly Condition="'$(UnityEngineAssembly)' == ''">$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\MaximumUI.Tests\UnityEngine.dll</UnityEngineAssembly>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Reference Include="MaximumUI">
+      <HintPath>$(MaximumUiAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(UnityEngineAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequireBenchmarkAssemblies" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(MaximumUiAssembly)' == '' Or !Exists('$(MaximumUiAssembly)')" Text="Pass -p:MaximumUiAssembly=/absolute/path/to/the/MaximumUI.dll being measured." />
+    <Error Condition="!Exists('$(UnityEngineAssembly)')" Text="Build MaximumUI.Tests first, or pass -p:UnityEngineAssembly=/absolute/path/to/UnityEngine.dll (the compilation reference)." />
+  </Target>
+</Project>

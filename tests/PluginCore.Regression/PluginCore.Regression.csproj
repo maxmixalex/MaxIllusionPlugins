@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+    <NoWarn>$(NoWarn);CS0649;CS0618</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Common/AtomicXmlFile.cs" Link="Production/AtomicXmlFile.cs" />
+    <Compile Include="../../src/Common/XmlFileDiagnostics.cs" Link="Production/XmlFileDiagnostics.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionModels.cs" Link="Production/ExpressionModels.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionRules.cs" Link="Production/ExpressionRules.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionProgramEditing.cs" Link="Production/ExpressionProgramEditing.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionEditorOperations.cs" Link="Production/ExpressionEditorOperations.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionPresetEditing.cs" Link="Production/ExpressionPresetEditing.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionPresetReload.cs" Link="Production/ExpressionPresetReload.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionEditorView.cs" Link="Production/ExpressionEditorView.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionProgramWidgets.cs" Link="Production/ExpressionProgramWidgets.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionWindowLifecycle.cs" Link="Production/ExpressionWindowLifecycle.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionHSceneState.cs" Link="Production/ExpressionHSceneState.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionProcessing.cs" Link="Production/ExpressionProcessing.cs" />
+    <Compile Include="../../src/ExpressionControl/ExpressionCharacterActions.cs" Link="Production/ExpressionCharacterActions.cs" />
+    <Compile Include="../../src/ExpressionControl/FemaleDataExpressionState.cs" Link="Production/FemaleDataExpressionState.cs" />
+    <Compile Include="../../src/ExpressionControl/FemaleDataRuntimeState.cs" Link="Production/FemaleDataRuntimeState.cs" />
+    <Compile Include="../../src/ExpressionControl/XmlMgr.cs" Link="Production/XmlMgr.cs" />
+    <Compile Include="../../src/ExpressionControl/ShortCutKeyMgr.cs" Link="Production/ShortCutKeyMgr.cs" />
+    <Compile Include="../../src/ExpressionControl/Utl.cs" Link="Production/Utl.cs" />
+    <Compile Include="../../src/JuiceControl/PresetModels.cs" Link="Production/PresetModels.cs" />
+    <Compile Include="../../src/JuiceControl/PresetStore.cs" Link="Production/PresetStore.cs" />
+    <Compile Include="../../src/JuiceControl/SkinEffectsBridge.cs" Link="Production/SkinEffectsBridge.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Build ordering only: net9 tests link production model/view sources and
+         consume the net35 UI DLL plus its compile-time Unity type signatures. -->
+    <ProjectReference Include="../../src/MaximumUI.Tests/MaximumUI.Tests.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <Reference Include="MaximumUI">
+      <HintPath>../../bin/$(Configuration)/MaximumUI/MaximumUI.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>../../bin/$(Configuration)/MaximumUI.Tests/UnityEngine.dll</HintPath>
+      <Aliases>NativeUnity</Aliases>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -28,6 +28,9 @@ namespace ClothingCompression {
 
         private readonly List<DeformationEntry> entries = new List<DeformationEntry>();
         private readonly List<MeshState> meshes = new List<MeshState>();
+        private readonly HashSet<string> persistedEntryIds = new HashSet<string>();
+        private List<ItemDescriptor> frameItems;
+        private int itemFrame = -1;
         private Coroutine pendingApply;
         private string equipmentSignature = string.Empty;
         private string visibilitySignature = string.Empty;
@@ -40,6 +43,7 @@ namespace ClothingCompression {
         internal int SelectedIndex { get { return selectedIndex; } set { selectedIndex = Mathf.Clamp(value, 0, Math.Max(0, entries.Count - 1)); } }
         internal DeformationEntry Selected { get { return entries.Count == 0 ? null : entries[Mathf.Clamp(selectedIndex, 0, entries.Count - 1)]; } }
         internal bool Dirty { get; private set; }
+        internal int CatalogRevision { get; private set; }
         internal string Status { get; private set; } = string.Empty;
         internal string CharacterIdentityKey {
             get {
@@ -53,27 +57,35 @@ namespace ClothingCompression {
         internal string MakeCoordinateKey(int coordinate) { return CharacterIdentityKey + ":coord:" + coordinate; }
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState) {
+            CatalogRevision++;
+            itemFrame = -1;
             ClearMeshes();
             if (!maintainState) LoadLibraryEntries();
+            else ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             RequestApply(0.6f);
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode) { }
 
         protected override void OnCoordinateBeingLoaded(ChaFileCoordinate coordinate, bool maintainState) {
+            CatalogRevision++;
+            itemFrame = -1;
             ClearMeshes();
             if (!maintainState) LoadLibraryEntries();
+            else ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             RequestApply(0.3f);
         }
 
         protected override void Update() {
             base.Update();
             if (ChaControl == null || Time.frameCount % 15 != 0) return;
-            List<ItemDescriptor> items = ItemCatalog.Get(ChaControl);
+            List<ItemDescriptor> items = GetItems();
             string equipment = string.Join("|", items.Select(x => x.Key + "@" + x.Slot).OrderBy(x => x).ToArray());
             if (equipment != equipmentSignature) {
                 equipmentSignature = equipment;
+                CatalogRevision++;
                 if (!Dirty) { LoadLibraryEntries(); RequestApply(0.2f); return; }
+                ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
             }
             if (entries.Count > 0 && pendingApply == null) {
                 string renderers = GetRendererSignature();
@@ -83,19 +95,21 @@ namespace ClothingCompression {
                         ClothingCompressionPlugin.Log.LogInfo("Detected replaced character/clothing mesh; rebuilding compression shapes.");
                     RequestApply(0.2f); return;
                 }
-                if (WeightsNeedRefresh()) ApplyWeights();
             }
             string visibility = GetVisibilitySignature();
             if (visibility != visibilitySignature) {
-                visibilitySignature = visibility;
                 // Garment deformation is baked into our private mesh clone because KK's
                 // Unity 5.6 renderer can ignore/reset runtime clothing blend shapes in H
                 // scenes. Visibility therefore changes which deltas must be baked.
                 RequestApply(0f);
+                return;
             }
+            if (entries.Count > 0 && pendingApply == null && WeightsNeedRefresh()) ApplyWeights();
         }
 
         protected override void OnDestroy() {
+            if (pendingApply != null) StopCoroutine(pendingApply);
+            pendingApply = null;
             ClearMeshes();
             base.OnDestroy();
         }
@@ -124,16 +138,30 @@ namespace ClothingCompression {
 
         internal void Changed(bool rebuild) {
             Dirty = true;
-            if (rebuild) RequestApply(); else ApplyWeights();
+            if (rebuild) RequestApply();
+            else {
+                ApplyWeights();
+                // Enabled/visibility changes also affect baked garment vertices. Updating
+                // body blend weights alone must not mark those garments as up-to-date.
+                if (!string.Equals(GetVisibilitySignature(), visibilitySignature, StringComparison.Ordinal)) RequestApply(0f);
+            }
             ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
         }
 
         internal int Save() {
-            int count = ClothingCompressionPlugin.Library.SaveEntries(CharacterKey, entries);
-            Dirty = false;
-            Status = count == 0 ? "没有可保存的已绑定形变。" : "已保存 " + count + " 个形变到 " + ClothingCompressionPlugin.Library.Path;
-            ClothingCompressionPlugin.Log.LogMessage(Status);
-            return count;
+            try {
+                int count = ClothingCompressionPlugin.Library.SaveEntries(CharacterKey, entries, persistedEntryIds);
+                CapturePersistedEntryIds();
+                Dirty = false;
+                Status = count == 0 ? "没有可保存的已绑定形变。" : "已保存 " + count + " 个形变到 " + ClothingCompressionPlugin.Library.Path;
+                ClothingCompressionPlugin.Log.LogMessage(Status);
+                ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
+                return count;
+            } catch (Exception ex) {
+                Status = "保存失败，当前编辑已保留；请检查 XML 文件和日志，修复后重载。";
+                ClothingCompressionPlugin.Log.LogError(Status + " " + ex);
+                return 0;
+            }
         }
 
         internal bool ImportEntry(DeformationEntry source) {
@@ -146,7 +174,11 @@ namespace ClothingCompression {
         }
 
         internal void ReloadFromDisk() {
-            ClothingCompressionPlugin.Library.Reload(); LoadLibraryEntries(); RequestApply(0f);
+            if (!ClothingCompressionPlugin.Library.Reload()) {
+                Status = "读取 XML 失败，已保留当前形变；请修复文件后重新加载。";
+                return;
+            }
+            LoadLibraryEntries(); RequestApply(0f);
         }
 
         internal int ImportFromCoordinate(int coordinate) {
@@ -180,8 +212,9 @@ namespace ClothingCompression {
 
         private void LoadLibraryEntries() {
             if (ChaControl == null) return;
-            List<ItemDescriptor> items = ItemCatalog.Get(ChaControl);
+            List<ItemDescriptor> items = GetItems();
             entries.Clear(); entries.AddRange(ClothingCompressionPlugin.Library.LoadEntries(CharacterKey, items));
+            CapturePersistedEntryIds();
             // 0.2.8 briefly used out-of-range joint-relative values for LowerThigh.
             // The replacement whole-leg mode is normalized from ankle (0) to hip (1).
             foreach (DeformationEntry entry in entries.Where(x => x.Kind == DeformationKind.LowerThigh && (x.Position < 0f || x.Position > 1f))) entry.Position = 0.58f;
@@ -192,9 +225,26 @@ namespace ClothingCompression {
             ClothingCompressionPlugin.Instance.RefreshMakerControls(this);
         }
 
+        private void CapturePersistedEntryIds() {
+            persistedEntryIds.Clear();
+            foreach (DeformationEntry entry in entries)
+                if (entry != null && entry.BindingKind != BoundItemKind.None && !string.IsNullOrEmpty(entry.Id)) persistedEntryIds.Add(entry.Id);
+        }
+
+        private List<ItemDescriptor> GetItems() {
+            if (frameItems == null || itemFrame != Time.frameCount) {
+                frameItems = ItemCatalog.Get(ChaControl);
+                itemFrame = Time.frameCount;
+            }
+            return frameItems;
+        }
+
         private void RebuildShapes() {
             ClearMeshes();
-            if (ChaControl == null || entries.Count == 0) return;
+            if (ChaControl == null || entries.Count == 0) {
+                visibilitySignature = string.Empty;
+                return;
+            }
             // A character transferred between Maker and an H scene can retain a mesh
             // containing our old blend shapes even though this controller has no MeshState
             // for it. Use a generation-specific name so that rebuilding that inherited mesh
@@ -226,6 +276,7 @@ namespace ClothingCompression {
                 if (skipped > 0) ClothingCompressionPlugin.Log.LogWarning("Compression rebuild skipped " + skipped + " incompatible clothing mesh(es).");
             } finally { ClothingCompressionPlugin.MeshAccess.Undo(); }
             ApplyWeights();
+            visibilitySignature = GetVisibilitySignature();
             rendererSignature = GetRendererSignature();
             Status = "已生成 " + entries.Count + " 个身体形变；同步网格 " + Math.Max(0, meshes.Count - 1) + " 个。";
             if (ClothingCompressionPlugin.VerboseDiagnostics.Value)
@@ -234,6 +285,19 @@ namespace ClothingCompression {
         }
 
         private MeshState BuildMesh(SkinnedMeshRenderer renderer, IList<DeformationEntry> sourceEntries, bool garment, Dictionary<string, RegionFrame> bodyFrames) {
+            Transform[] bones = renderer.bones;
+            bool hasApplicableRegion = false;
+            foreach (DeformationEntry entry in sourceEntries) {
+                if (garment && (entry.BindingKind == BoundItemKind.None || !entry.Enabled || !IsBindingVisible(entry))) continue;
+                if (entry.Left && FindBone(bones, GetBones(entry.Kind, true)) >= 0 ||
+                    entry.Right && FindBone(bones, GetBones(entry.Kind, false)) >= 0) {
+                    hasApplicableRegion = true;
+                    break;
+                }
+            }
+            // Hair, facial meshes and unrelated accessories often have no target bones.
+            // Do not clone/read their entire mesh merely to discover this in AddRegion.
+            if (!hasApplicableRegion) return null;
             Mesh source = renderer.sharedMesh;
             Mesh generated = UnityEngine.Object.Instantiate(source);
             try {
@@ -245,15 +309,19 @@ namespace ClothingCompression {
                 Vector3[] bakedVertices = garment ? (Vector3[])vertices.Clone() : null;
                 bool hasGarmentRegion = false;
                 foreach (DeformationEntry entry in sourceEntries) {
+                    // The editor's unbound mode previews body deformation only. Baked
+                    // garment deltas also depend on visibility, so inactive entries can
+                    // be omitted until the next visibility-triggered rebuild.
+                    if (garment && (entry.BindingKind == BoundItemKind.None || !entry.Enabled || !IsBindingVisible(entry))) continue;
                     Vector3[] deltas = new Vector3[vertices.Length];
                     if (entry.Left) {
                         string key = entry.Id + ":L"; RegionFrame frame; bodyFrames.TryGetValue(key, out frame);
-                        RegionFrame calculated = AddRegion(deltas, vertices, weights, bindPoses, renderer.bones, GetBones(entry.Kind, true), entry, garment, frame);
+                        RegionFrame calculated = AddRegion(deltas, vertices, weights, bindPoses, bones, GetBones(entry.Kind, true), entry, garment, frame);
                         if (!garment && calculated != null) bodyFrames[key] = calculated;
                     }
                     if (entry.Right) {
                         string key = entry.Id + ":R"; RegionFrame frame; bodyFrames.TryGetValue(key, out frame);
-                        RegionFrame calculated = AddRegion(deltas, vertices, weights, bindPoses, renderer.bones, GetBones(entry.Kind, false), entry, garment, frame);
+                        RegionFrame calculated = AddRegion(deltas, vertices, weights, bindPoses, bones, GetBones(entry.Kind, false), entry, garment, frame);
                         if (!garment && calculated != null) bodyFrames[key] = calculated;
                     }
                     if (!deltas.Any(x => x.sqrMagnitude > 0.0000000001f)) continue;
@@ -309,12 +377,11 @@ namespace ClothingCompression {
                     state.Renderer.SetBlendShapeWeight(index, active ? 100f : 0f);
                 }
             }
-            visibilitySignature = GetVisibilitySignature();
         }
 
         private bool IsBindingVisible(DeformationEntry entry) {
             if (entry.BindingKind == BoundItemKind.None) return true;
-            ItemDescriptor item = ItemCatalog.Resolve(ChaControl, entry);
+            ItemDescriptor item = ItemCatalog.Resolve(GetItems(), entry);
             return item != null && item.Visible;
         }
 
@@ -596,7 +663,7 @@ namespace ClothingCompression {
             return Mathf.Abs(towardParent) < 0.0001f ? 1f : Mathf.Sign(towardParent);
         }
 
-        private static int FindBone(Transform[] bones, string[] names) { for (int n = 0; n < names.Length; n++) for (int i = 0; i < bones.Length; i++) if (bones[i] != null && string.Equals(bones[i].name, names[n], StringComparison.OrdinalIgnoreCase)) return i; return -1; }
+        private static int FindBone(Transform[] bones, string[] names) { if (bones == null) return -1; for (int n = 0; n < names.Length; n++) for (int i = 0; i < bones.Length; i++) if (bones[i] != null && string.Equals(bones[i].name, names[n], StringComparison.OrdinalIgnoreCase)) return i; return -1; }
         private static void AddMatchingBones(List<int> result, Transform[] bones, string[] names) {
             for (int n = 0; n < names.Length; n++) for (int i = 0; i < bones.Length; i++)
                 if (bones[i] != null && string.Equals(bones[i].name, names[n], StringComparison.OrdinalIgnoreCase) && !result.Contains(i)) result.Add(i);

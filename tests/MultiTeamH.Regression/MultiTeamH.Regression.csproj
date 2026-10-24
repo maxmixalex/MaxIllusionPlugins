@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/MultiTeamH/BackgroundClimax.cs" Link="Production/BackgroundClimax.cs" />
+    <Compile Include="../../src/MultiTeamH/MultiTeamSelection.cs" Link="Production/MultiTeamSelection.cs" />
+    <Compile Include="../../src/MultiTeamH/NativeUiHooks.cs" Link="Production/NativeUiHooks.cs" />
+    <Compile Include="../../src/MultiTeamH/BreastmilkCompat.cs" Link="Production/BreastmilkCompat.cs" />
+    <Compile Include="../../src/MultiTeamH/HSceneOptionsCompat.cs" Link="Production/HSceneOptionsCompat.cs" />
+    <Compile Include="../../src/MultiTeamH/CoroutineGuard.cs" Link="Production/CoroutineGuard.cs" />
+    <Compile Include="../../src/MultiTeamH/ExpressionControlCompat.cs" Link="Production/ExpressionControlCompat.cs" />
+    <Compile Include="../../src/MultiTeamH/ExpressionVoiceBinding.cs" Link="Production/ExpressionVoiceBinding.cs" />
+    <Compile Include="../../src/MultiTeamH/RuntimeModCompat.cs" Link="Production/RuntimeModCompat.cs" />
+  </ItemGroup>
+</Project>

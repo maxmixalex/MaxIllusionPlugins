@@ -226,6 +226,8 @@ namespace MaximumUI {
         public string Text;
         public object Value;
         public bool Selected;
+        /// <summary>Draw a checkbox while retaining selection, range and double-click semantics.</summary>
+        public bool ShowCheckbox;
         public Action<bool> OnChange;
         public Action<SelectionRequest> OnSelect;
         public Action OnDoubleClick;
@@ -645,11 +647,15 @@ namespace MaximumUI {
     }
 
     public sealed class VirtualList : Widget {
+        // Runtime mounts retain visible rows until their view is invalidated.
+        // Disable this for row factories that intentionally read live external data.
+        public bool CacheItems = true;
         public int ItemCount;
         public float RowHeight;
         public float Height;
         public Func<int, Widget> BuildItem;
         public bool AlwaysShowVertical;
+        public ScrollPosition ScrollPosition;
 
         public VirtualList(int itemCount, float rowHeight, Func<int, Widget> buildItem, object key = null)
             : base(key) {

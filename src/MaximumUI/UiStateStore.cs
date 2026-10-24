@@ -13,6 +13,12 @@ namespace MaximumUI {
             return created;
         }
 
+        internal bool TryGet<T>(string id, out T state) where T : class {
+            object value;
+            state = states.TryGetValue(id, out value) ? value as T : null;
+            return state != null;
+        }
+
         public void Remove(string id) {
             states.Remove(id);
         }

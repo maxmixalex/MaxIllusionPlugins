@@ -168,8 +168,8 @@ namespace MultiTeamH {
                 states[team].Apply();
                 if (pending != null && pending.keepWaiting) return;
                 bool processingCycle = pending != null;
-                target.PushControlContext(team);
                 contextBound = true;
+                target.PushControlContext(team);
                 managedIteratorDrive = true;
                 if (iterator.MoveNext()) {
                     pendingYield[team] = iterator.Current;
@@ -184,20 +184,23 @@ namespace MultiTeamH {
                     "breastmilk-cycle team=" + (team + 1) + " mode=" + target.GetFlagsObject(team).mode +
                     " state=" + target.GetFlagsObject(team).nowAnimStateName);
             } catch (Exception ex) {
-                LogError("Breastmilk H coroutine failed for team " + (team + 1), ex);
-                iterators[team] = null;
-                pendingYield[team] = null;
+                // Leaving one iterator null while session stays attached makes
+                // EnsureAttached fail forever and keeps the original coroutine
+                // suspended. Fall back to the original plugin after a failure.
+                Disable("Breastmilk H coroutine failed for team " + (team + 1), ex);
             } finally {
                 managedIteratorDrive = false;
-                if (contextBound) target.PopExternalControlContext(previous);
-                if (states[target.ActiveTeam] != null) states[target.ActiveTeam].Apply();
+                try { if (contextBound) target.PopExternalControlContext(previous); }
+                finally { if (states[target.ActiveTeam] != null) states[target.ActiveTeam].Apply(); }
             }
         }
 
         internal static void EnterParallelTeam(TeamSession target, int team) {
             if (!ReferenceEquals(session, target) || states[team] == null) return;
-            states[team].Apply();
-            parallelStateBound = true;
+            try {
+                states[team].Apply();
+                parallelStateBound = true;
+            } catch (Exception ex) { Disable("Breastmilk parallel context setup failed", ex); }
         }
 
         internal static void FocusChanged(TeamSession target, int previous, int current) {
@@ -209,28 +212,36 @@ namespace MultiTeamH {
 
         internal static void LeaveParallelTeam(TeamSession target, int team) {
             if (!parallelStateBound || !ReferenceEquals(session, target)) return;
-            states[team].Capture();
-            states[target.ActiveTeam].Apply();
-            parallelStateBound = false;
+            try {
+                try { states[team].Capture(); }
+                finally { states[target.ActiveTeam].Apply(); }
+            } catch (Exception ex) {
+                Disable("Breastmilk parallel context cleanup failed", ex);
+            } finally { parallelStateBound = false; }
         }
 
         internal static void SessionEnded(TeamSession target) {
             if (!ReferenceEquals(session, target)) return;
-            if (states[target.ActiveTeam] != null) states[target.ActiveTeam].Apply();
-            session = null;
-            plugin = null;
-            enabled = null;
-            for (int i = 0; i < states.Length; i++) {
-                states[i] = null;
-                iterators[i] = null;
-                pendingYield[i] = null;
+            try {
+                if (states[target.ActiveTeam] != null) states[target.ActiveTeam].Apply();
+            } finally {
+                // Even an incompatible field layout must release the original
+                // coroutine and references to the ended Unity scene.
+                session = null;
+                plugin = null;
+                enabled = null;
+                for (int i = 0; i < states.Length; i++) {
+                    states[i] = null;
+                    iterators[i] = null;
+                    pendingYield[i] = null;
+                }
+                backgroundUpdate = false;
+                managedIteratorDrive = false;
+                parallelStateBound = false;
+                lastDriveFrame = -1;
+                loggedError = false;
+                backgroundFailed = false;
             }
-            backgroundUpdate = false;
-            managedIteratorDrive = false;
-            parallelStateBound = false;
-            lastDriveFrame = -1;
-            loggedError = false;
-            backgroundFailed = false;
         }
 
         private static void LogError(string message, Exception error) {
@@ -243,8 +254,9 @@ namespace MultiTeamH {
         private static void Disable(string message, Exception error) {
             LogError(message, error);
             TeamSession target = session;
-            if (target != null) SessionEnded(target);
-            disabled = true;
+            try { if (target != null) SessionEnded(target); }
+            catch (Exception cleanupError) { DiagnosticProbe.Warning("Breastmilk fallback cleanup failed: " + cleanupError); }
+            finally { disabled = true; }
         }
 
         private sealed class MilkState {

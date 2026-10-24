@@ -14,6 +14,7 @@ namespace ExpressionControl
 		})]
 		public static bool SetFaceHook(int _idFace, ChaControl _chara, int _voiceKind, int _action, FaceListCtrl __instance, ref bool __result)
 		{
+			if ((ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled)) return true;
 			bool flag = _chara == null;
 			bool result;
 			if (flag)
@@ -44,7 +45,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeEyebrowPtnHook(int ptn, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.eyebrow, ptn);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.eyebrow, ptn);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeEyesPtn", new Type[]
@@ -54,7 +55,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeEyesPtnHook(int ptn, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.eyes, ptn);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.eyes, ptn);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeMouthPtn", new Type[]
@@ -64,7 +65,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeMouthPtnHook(int ptn, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.mouth, ptn);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockExpressionPatternChange(__instance, ExpressionControl.PartType.mouth, ptn);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeEyesOpenMax", new Type[]
@@ -73,7 +74,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeEyesOpenMaxHook(float __0, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockExpressionOpenChange(__instance, ExpressionControl.PartType.eyes, __0);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockExpressionOpenChange(__instance, ExpressionControl.PartType.eyes, __0);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeMouthOpenMax", new Type[]
@@ -82,7 +83,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeMouthOpenMaxHook(float __0, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockExpressionOpenChange(__instance, ExpressionControl.PartType.mouth, __0);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockExpressionOpenChange(__instance, ExpressionControl.PartType.mouth, __0);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "HideEyeHighlight", new Type[]
@@ -91,7 +92,7 @@ namespace ExpressionControl
 		})]
 		public static bool HideEyeHighlightHook(bool __0, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockHighlightChange(__instance, __0);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockHighlightChange(__instance, __0);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeEyesBlinkFlag", new Type[]
@@ -100,7 +101,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeEyesBlinkFlagHook(bool __0, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockBlinkChange(__instance, __0);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockBlinkChange(__instance, __0);
 		}
 		[HarmonyPrefix]
 		[HarmonyPatch(typeof(ChaControl), "ChangeHohoAkaRate", new Type[]
@@ -109,7 +110,7 @@ namespace ExpressionControl
 		})]
 		public static bool ChangeHohoAkaRateHook(float __0, ChaControl __instance)
 		{
-			return ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.ShouldBlockHohoAkaChange(__instance, __0);
+			return (ExpressionControlPlugin.inst == null || !ExpressionControlPlugin.inst.enabled) || !ExpressionControlPlugin.inst.ShouldBlockHohoAkaChange(__instance, __0);
 		}
 	}
 }

@@ -1,0 +1,126 @@
+name: Build, test and package
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Plugins, regression tests and download packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      PYTHONUNBUFFERED: '1'
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Prepare output directories
+        run: mkdir -p artifacts/logs artifacts/previews
+
+      - name: Record selected .NET SDK
+        run: dotnet --info 2>&1 | tee artifacts/logs/dotnet-info.log
+
+      - name: Install typography and rasterization tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y inkscape fonts-noto-cjk python3-pil
+
+      - name: Install pinned Segoe-compatible preview fonts
+        run: python3 scripts/prepare_preview_fonts.py 2>&1 | tee artifacts/logs/preview-fonts.log
+
+      - name: Check packaging, UI coverage and raster regression rules
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v 2>&1 | tee artifacts/logs/tooling-tests.log
+
+      - name: Restore public compilation references
+        run: dotnet restore MaxIllusionPlugins.sln -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/restore.log
+
+      - name: Rebuild all production and regression projects
+        run: dotnet build MaxIllusionPlugins.sln -c Release --no-restore -t:Rebuild -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/build.log
+
+      - name: Execute assertions and managed performance benchmark
+        run: python3 scripts/test.py --no-build --benchmark 2>&1 | tee artifacts/logs/regression-tests.log
+
+      - name: Build actual UI preview exporter
+        run: dotnet build tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release -m:1 -nodeReuse:false 2>&1 | tee artifacts/logs/preview-build.log
+
+      - name: Export every Gallery page, state and plugin preview
+        run: dotnet run --project tests/MaximumUI.Preview/MaximumUI.Preview.csproj -c Release --no-build -- bin/Release/MaximumUIGallery/KK_MaximumUIGallery.dll artifacts/previews --require-shaped 2>&1 | tee artifacts/logs/previews.log
+
+      - name: Render all UI and verify text, scroll coverage and frame pixels
+        run: python3 scripts/render_gallery.py artifacts/previews --strict 2>&1 | tee artifacts/logs/gallery-render.log
+
+      - name: Package installable plugins
+        run: python3 scripts/package.py --configuration Release --output artifacts/packages 2>&1 | tee artifacts/logs/packages.log
+
+      - name: Upload plugin installation ZIPs
+        id: packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-packages-${{ github.run_number }}
+          path: artifacts/packages/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload real UI drawing previews
+        id: previews
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: maximumui-previews-${{ github.run_number }}
+          path: artifacts/previews/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload build and test logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-test-logs-${{ github.run_number }}
+          path: artifacts/logs/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish download links in job summary
+        env:
+          PACKAGES_URL: ${{ steps.packages.outputs.artifact-url }}
+          PREVIEWS_URL: ${{ steps.previews.outputs.artifact-url }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import json
+          from pathlib import Path
+          summary = Path('artifacts/packages/README.md').read_text(encoding='utf-8')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as output:
+              output.write('# Downloads / 下载\n\n')
+              output.write('[Plugin packages / 插件安装包](' + os.environ['PACKAGES_URL'] + ')\n\n')
+              output.write('[MaximumUI previews / 界面预览](' + os.environ['PREVIEWS_URL'] + ')\n\n')
+              output.write(summary)
+              quality = json.loads(Path('artifacts/previews/quality-report.json').read_text(encoding='utf-8'))
+              output.write('\n## UI rendering verification / 界面渲染检查\n\n')
+              output.write('| Check | Result |\n| --- | --- |\n')
+              for label, key in [('PNG snapshots', 'pngCount'), ('Business cases', 'pluginCaseCount'), ('Visible scrollbar frame pixel checks', 'checkedScrollFrames')]:
+                  output.write('| ' + label + ' | ' + str(quality[key]) + ' |\n')
+              output.write('| Structural, coverage and frame failures | ' + str(len(quality['errors'])) + ' |\n')
+              output.write('| Text review items | ' + str(len(quality['textIssues'])) + ' |\n\n')
+              output.write('Production C# layout and managed drawing were simulated; Unity input and game behavior were not executed.\n')
+          PY

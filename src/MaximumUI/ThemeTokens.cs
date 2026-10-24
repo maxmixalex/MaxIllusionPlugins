@@ -21,7 +21,15 @@ namespace MaximumUI {
         InfoBg,
         SuccessBg,
         WarningBg,
-        ErrorBg
+        ErrorBg,
+        TitleBg,
+        TextMuted,
+        OnAccent,
+        AccentHover,
+        FocusRing,
+        ControlBorder,
+        ControlHoverBorder,
+        AccentPressed
     }
 
     public enum ThemeScalarToken {
@@ -62,6 +70,15 @@ namespace MaximumUI {
         public MuiColor WarningBg = new MuiColor(0.95f, 0.88f, 0.50f, 1f);
         public MuiColor ErrorBg = new MuiColor(0.94f, 0.55f, 0.55f, 1f);
 
+        public MuiColor TitleBg = new MuiColor(0.78f, 0.78f, 0.78f, 1f);
+        public MuiColor TextMuted = new MuiColor(0.30f, 0.30f, 0.30f, 1f);
+        public MuiColor OnAccent = new MuiColor(1f, 1f, 1f, 1f);
+        public MuiColor AccentHover = new MuiColor(0.24f, 0.24f, 0.24f, 1f);
+        public MuiColor FocusRing = new MuiColor(0.12f, 0.42f, 0.80f, 1f);
+        public MuiColor ControlBorder = new MuiColor(0.48f, 0.48f, 0.48f, 1f);
+        public MuiColor ControlHoverBorder = new MuiColor(0.1f, 0.1f, 0.1f, 1f);
+        public MuiColor AccentPressed = new MuiColor(0f, 0.35f, 0.62f, 1f);
+
         public float BorderWidth = 1f;
         public float Radius = 4f;
         public float FontSize = 12f;
@@ -101,6 +118,14 @@ namespace MaximumUI {
             SuccessBg = source.SuccessBg;
             WarningBg = source.WarningBg;
             ErrorBg = source.ErrorBg;
+            TitleBg = source.TitleBg;
+            TextMuted = source.TextMuted;
+            OnAccent = source.OnAccent;
+            AccentHover = source.AccentHover;
+            FocusRing = source.FocusRing;
+            ControlBorder = source.ControlBorder;
+            ControlHoverBorder = source.ControlHoverBorder;
+            AccentPressed = source.AccentPressed;
             BorderWidth = source.BorderWidth;
             Radius = source.Radius;
             FontSize = source.FontSize;
@@ -132,6 +157,14 @@ namespace MaximumUI {
             if (token == ThemeColorToken.InfoBg) return InfoBg;
             if (token == ThemeColorToken.SuccessBg) return SuccessBg;
             if (token == ThemeColorToken.WarningBg) return WarningBg;
+            if (token == ThemeColorToken.TitleBg) return TitleBg;
+            if (token == ThemeColorToken.TextMuted) return TextMuted;
+            if (token == ThemeColorToken.OnAccent) return OnAccent;
+            if (token == ThemeColorToken.AccentHover) return AccentHover;
+            if (token == ThemeColorToken.FocusRing) return FocusRing;
+            if (token == ThemeColorToken.ControlBorder) return ControlBorder;
+            if (token == ThemeColorToken.ControlHoverBorder) return ControlHoverBorder;
+            if (token == ThemeColorToken.AccentPressed) return AccentPressed;
             return ErrorBg;
         }
 
@@ -157,6 +190,14 @@ namespace MaximumUI {
             else if (token == ThemeColorToken.InfoBg) InfoBg = color;
             else if (token == ThemeColorToken.SuccessBg) SuccessBg = color;
             else if (token == ThemeColorToken.WarningBg) WarningBg = color;
+            else if (token == ThemeColorToken.TitleBg) TitleBg = color;
+            else if (token == ThemeColorToken.TextMuted) TextMuted = color;
+            else if (token == ThemeColorToken.OnAccent) OnAccent = color;
+            else if (token == ThemeColorToken.AccentHover) AccentHover = color;
+            else if (token == ThemeColorToken.FocusRing) FocusRing = color;
+            else if (token == ThemeColorToken.ControlBorder) ControlBorder = color;
+            else if (token == ThemeColorToken.ControlHoverBorder) ControlHoverBorder = color;
+            else if (token == ThemeColorToken.AccentPressed) AccentPressed = color;
             else ErrorBg = color;
         }
 
@@ -182,20 +223,48 @@ namespace MaximumUI {
     }
 
     public sealed class WidgetPaintState {
+        /// <summary>Effective ancestor state when painting a subtree (for example inside a clipped viewport).</summary>
+        public bool ParentEnabled = true;
         public string HoveredPath;
         public string ActivePath;
         public string FocusedPath;
+        public string OpenPopupPath;
+        public int OpenMenuIndex = -1;
+        /// <summary>Offsets for native-style list panels when using the managed painter.</summary>
+        public readonly System.Collections.Generic.Dictionary<string, MuiVec2> ScrollPositions =
+            new System.Collections.Generic.Dictionary<string, MuiVec2>(System.StringComparer.Ordinal);
+
+        public MuiVec2 GetScrollPosition(LayoutNode node) {
+            MuiVec2 position;
+            return node != null && node.Path != null && ScrollPositions.TryGetValue(node.Path, out position)
+                ? position : new MuiVec2(0f, 0f);
+        }
+
+        public string HoveredScrollbarPath;
+        public string ActiveScrollbarPath;
+
+        public bool IsScrollbarHovered(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(HoveredScrollbarPath) && string.Equals(node.Path, HoveredScrollbarPath, System.StringComparison.Ordinal);
+        }
+
+        public bool IsScrollbarActive(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(ActiveScrollbarPath) && string.Equals(node.Path, ActiveScrollbarPath, System.StringComparison.Ordinal);
+        }
 
         public bool IsHovered(LayoutNode node) {
-            return node != null && string.Equals(node.Path, HoveredPath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(HoveredPath) && string.Equals(node.Path, HoveredPath, System.StringComparison.Ordinal);
         }
 
         public bool IsActive(LayoutNode node) {
-            return node != null && string.Equals(node.Path, ActivePath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(ActivePath) && string.Equals(node.Path, ActivePath, System.StringComparison.Ordinal);
         }
 
         public bool IsFocused(LayoutNode node) {
-            return node != null && string.Equals(node.Path, FocusedPath, System.StringComparison.Ordinal);
+            return node != null && !string.IsNullOrEmpty(FocusedPath) && string.Equals(node.Path, FocusedPath, System.StringComparison.Ordinal);
+        }
+
+        public bool IsPopupOpen(LayoutNode node) {
+            return node != null && !string.IsNullOrEmpty(OpenPopupPath) && string.Equals(node.Path, OpenPopupPath, System.StringComparison.Ordinal);
         }
     }
 }

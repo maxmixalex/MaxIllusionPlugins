@@ -35,12 +35,366 @@ namespace MaximumUI.Tests {
                 GridAndTableLayoutAndPaint();
                 WidgetOverlayExtensionsStoreState();
                 DrawListRecordsCommands();
+                ViewBuildScheduleCoalescesEventsAndPreservesInvalidation();
+                LayoutCacheReusesMovesResizesAndInvalidates();
+                ScrollViewKeepsFullContentExtent();
+                SmallSplitPanesStayInsideViewport();
+                DialogVisibilityMatchesVisibleTabContent();
+                FoldedWindowsDoNotActivateHiddenDialogs();
+                NavigationSkipsDisabledAndUnfocusableWidgets();
+                FontSizingAndWrappedLabelsRespectAvailableSpace();
+                DrawingOnlyRunsDuringRepaint();
+                DrawListCanAppendItselfWithoutGrowingForever();
+                DialogCallbacksCannotCloseNewDialogsOrLoopForever();
+                OverlayOrderSelectsOnlyTheTopDialog();
+                ThemeDesignTests.RunAll();
+                Mdl2DesignTests.RunAll();
+                Mdl2PopupTests.RunAll();
+                ScrollChromeTests.RunAll();
+                EditingAndRoutingTests.RunAll();
+                PainterCompositionTests.RunAll();
+                ScrollMeasurementTests.RunAll();
+                WindowActivationTests.RunAll();
+                RetainedTextFocusTests.RunAll();
+                JuiceParityTests.RunAll();
+                UiInteractionTests.RunAll();
+                MountRoutingTests.RunAll();
+                UiFollowupReviewTests.Run();
+                CoordinateTests.Run();
+                DialogLayoutTests.RunAll();
+                NumericInputTests.Run();
+                PluginEditorViewTests.RunAll();
+                EmbeddedUiTests.Run();
+                InlineDialogLayoutTests.RunAll();
+                if (Environment.GetEnvironmentVariable("MAXIMUMUI_BENCHMARK") == "1") MeasureBuildAndLayoutPerformance();
+                int count = 41 + ScrollChromeTests.TestCount + EditingAndRoutingTests.TestCount + PainterCompositionTests.TestCount + ScrollMeasurementTests.TestCount + WindowActivationTests.TestCount + RetainedTextFocusTests.TestCount + JuiceParityTests.TestCount + Mdl2DesignTests.TestCount + Mdl2PopupTests.TestCount + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
+                    + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount
+                    + PluginEditorViewTests.TestCount + EmbeddedUiTests.TestCount + InlineDialogLayoutTests.TestCount;
+                Console.WriteLine("MaximumUI regression groups: " + count + " passed.");
                 Console.WriteLine("MaximumUI headless tests passed.");
                 return 0;
             } catch (Exception ex) {
                 Console.Error.WriteLine(ex);
                 return 1;
             }
+        }
+
+        private static void OverlayOrderSelectsOnlyTheTopDialog() {
+            OverlayLayer overlay = new OverlayLayer();
+            RenderContext context = new RenderContext();
+            Dialog first = new Dialog("first");
+            Dialog second = new Dialog("second");
+            Dialog service = new Dialog("service");
+            System.Collections.Generic.List<string> order = new System.Collections.Generic.List<string>();
+            overlay.Register(new OverlayRequest {
+                SortOrder = 1000, ModalDialog = first,
+                Render = delegate(RenderContext c) { order.Add("first"); Assert(object.ReferenceEquals(c.InputDialog, service), "lower dialog knows the top modal before drawing"); }
+            });
+            overlay.Register(new OverlayRequest {
+                SortOrder = 1100, ModalDialog = service,
+                Render = delegate(RenderContext c) { order.Add("service"); }
+            });
+            overlay.Register(new OverlayRequest {
+                SortOrder = 1000, ModalDialog = second,
+                Render = delegate(RenderContext c) { order.Add("second"); }
+            });
+            overlay.Render(context);
+            Assert(string.Join(",", order.ToArray()) == "first,second,service", "equal-priority dialogs preserve registration order");
+            Assert(object.ReferenceEquals(context.InputDialog, service), "service dialog owns input above declarative dialogs");
+            overlay.Register(new OverlayRequest { SortOrder = 1000, ModalDialog = first });
+            overlay.Register(new OverlayRequest { SortOrder = 1000, ModalDialog = second });
+            overlay.Render(context);
+            Assert(object.ReferenceEquals(context.InputDialog, second), "last equal-priority modal owns input");
+            overlay.Render(context);
+            Assert(context.InputDialog == null, "cleared overlay does not retain a closed modal owner");
+        }
+
+        private static void ViewBuildScheduleCoalescesEventsAndPreservesInvalidation() {
+            MountOptions options = new MountOptions();
+            ViewBuildSchedule schedule = new ViewBuildSchedule();
+            Assert(schedule.ShouldBuild(options, 0, false), "first build requested");
+            schedule.CompleteBuild(0, schedule.Revision);
+            Assert(!schedule.ShouldBuild(options, 0, true), "Layout/Repaint share a build");
+            Assert(schedule.ShouldBuild(options, 1, true), "plain views refresh on the next frame");
+            options.BuildEveryFrame = false;
+            Assert(!schedule.ShouldBuild(options, 1, true), "retained view is idle without invalidation");
+            schedule.MarkDirty();
+            int startedRevision = schedule.Revision;
+            Assert(schedule.ShouldBuild(options, 0, true), "same-frame state change rebuilds immediately");
+            schedule.MarkDirty();
+            schedule.CompleteBuild(0, startedRevision);
+            Assert(schedule.ShouldBuild(options, 0, true), "invalidation during Build is retained");
+            schedule.CompleteBuild(0, schedule.Revision);
+            Assert(!schedule.ShouldBuild(options, 5, true), "retained build remains cached");
+            options.BuildEveryOnGUI = true;
+            Assert(schedule.ShouldBuild(options, 0, true), "legacy per-event mode remains available");
+        }
+
+        private static void LayoutCacheReusesMovesResizesAndInvalidates() {
+            VStack stack = new VStack();
+            Label label = new Label("Before");
+            stack.Add(label);
+            LayoutCache cache = new LayoutCache();
+            MuiRect viewport = new MuiRect(10f, 20f, 300f, 180f);
+            LayoutNode first = cache.Layout(stack, viewport, "root");
+            float originalY = first.Children[0].Rect.Y;
+            LayoutNode second = cache.Layout(stack, viewport, "root");
+            Assert(object.ReferenceEquals(first, second), "unchanged tree reuses all layout nodes");
+            AssertEqual(1, (int)cache.LayoutPassCount, "one measurement across repeated events");
+            viewport.Y += 35f;
+            LayoutNode moved = cache.Layout(stack, viewport, "root");
+            Assert(object.ReferenceEquals(first, moved), "moving a window only rearranges it");
+            AssertEqual(originalY + 35f, moved.Children[0].Rect.Y, "cached child follows moved window");
+            viewport.Width -= 20f;
+            LayoutNode resized = cache.Layout(stack, viewport, "root");
+            Assert(!object.ReferenceEquals(first, resized), "width change remeasures layout");
+            label.Text = "A significantly longer label";
+            float previousWidth = resized.Children[0].DesiredSize.X;
+            cache.Invalidate();
+            LayoutNode changed = cache.Layout(stack, viewport, "root");
+            Assert(changed.Children[0].DesiredSize.X > previousWidth, "invalidated mutable data is remeasured");
+            Label replacement = new Label("replacement");
+            LayoutNode replaced = cache.Layout(replacement, viewport, "root");
+            Assert(object.ReferenceEquals(replacement, replaced.Widget), "new widget at same path replaces cache entry");
+            for (int i = 0; i < 1000; i++) cache.Layout(replacement, viewport, "dynamic." + i);
+            Assert(cache.Count <= 256, "dynamic paths cannot grow the layout cache without bound");
+        }
+
+        private static void ScrollViewKeepsFullContentExtent() {
+            VStack content = new VStack();
+            for (int i = 0; i < 100; i++) content.Add(new Label("Row " + i).Height(22f));
+            ScrollView scroll = new ScrollView { Height = 110f };
+            scroll.Add(content);
+            LayoutNode root = new LayoutEngine().Layout(scroll, new MuiRect(0f, 0f, 300f, 110f));
+            AssertEqual(2200f, root.Children[0].DesiredSize.Y, "content measures beyond the viewport");
+            AssertEqual(2200f, root.Children[0].Rect.Height, "content arrangement preserves scroll range");
+            AssertEqual(2200f, root.Find("0.0.99").Rect.Bottom, "last row is included in scroll content");
+            AssertEqual(284f, root.Children[0].Rect.Width, "vertical scrollbar does not create horizontal overflow");
+            MuiRect extent = ScrollGeometry.ContentExtent(root, root.Rect);
+            AssertEqual(284f, extent.Width, "actual renderer extent reserves the scrollbar gutter");
+            AssertEqual(2200f, extent.Height, "actual renderer extent includes all rows");
+            int first;
+            int end;
+            ScrollGeometry.VisibleRows(22000f, 220f, 22f, 100000, out first, out end);
+            AssertEqual(999, first, "virtual/dropdown range follows scroll offset");
+            AssertEqual(13, end - first, "large dropdown visits only visible rows plus overscan");
+            ScrollGeometry.VisibleRows(22000f, 220f, 22f, 0, out first, out end);
+            AssertEqual(0, end - first, "empty filtered result visits no rows");
+        }
+
+        private static void SmallSplitPanesStayInsideViewport() {
+            TwoPaneLayout split = new TwoPaneLayout(0.7f) { MinFirst = 90f, MinSecond = 70f };
+            split.Add(new Label("First"));
+            split.Add(new Label("Second"));
+            LayoutEngine engine = new LayoutEngine();
+            LayoutNode root = engine.Layout(split, new MuiRect(0f, 0f, 60f, 100f));
+            Assert(root.Children[0].Rect.Width >= 0f && root.Children[1].Rect.Width >= 0f, "small panes stay nonnegative");
+            Assert(root.Children[1].Rect.Right <= root.Rect.Right, "horizontal split fits small viewport");
+            split.Orientation = TwoPaneOrientation.Vertical;
+            root = engine.Layout(split, new MuiRect(0f, 0f, 100f, 60f));
+            Assert(root.Children[1].Rect.Bottom <= root.Rect.Bottom, "vertical split fits small viewport");
+        }
+
+        private static void DialogVisibilityMatchesVisibleTabContent() {
+            Tabs tabs = new Tabs(0);
+            tabs.Add(new LeadingTabButton("+", null));
+            tabs.Add(new Tab("hidden") { Visible = false }.Content(new Dialog("Hidden")));
+            tabs.Add(new Tab("normal").Content(new Label("No modal")));
+            tabs.Add(new Tab("dialog").Content(new Dialog("Visible")));
+            Assert(!WidgetVisibility.ContainsDialog(tabs), "leading buttons and hidden tabs do not shift selected tab");
+            tabs.SelectedIndex = 1;
+            Assert(WidgetVisibility.ContainsDialog(tabs), "selected visible tab activates its dialog");
+            tabs.SelectedIndex = 99;
+            Assert(WidgetVisibility.ContainsDialog(tabs), "out of range selection matches layout clamping");
+            CollapsingHeader header = new CollapsingHeader("Closed", false);
+            header.Add(new Dialog("Hidden"));
+            Assert(!WidgetVisibility.ContainsDialog(header), "collapsed header cannot invisibly block input");
+            ClosableCollapsingHeader closable = new ClosableCollapsingHeader("Hidden", true) { Visible = false };
+            closable.Add(new Dialog("Hidden"));
+            Assert(!WidgetVisibility.ContainsDialog(closable), "hidden closable header is ignored");
+            TreeNode tree = new TreeNode("Closed", false);
+            tree.Add(new Dialog("Hidden"));
+            Assert(!WidgetVisibility.ContainsDialog(tree), "closed tree cannot invisibly block input");
+            Window window = new Window("Hidden") { Visible = false };
+            window.Add(new Dialog("Hidden"));
+            Assert(!WidgetVisibility.ContainsDialog(window), "hidden window is ignored");
+        }
+
+        private static void FoldedWindowsDoNotActivateHiddenDialogs() {
+            UiStateStore states = new UiStateStore();
+            RenderContext context = new RenderContext { MountId = "first", StateStore = states, Path = "0" };
+            Window keyed = new Window("Window", key: "main");
+            keyed.Add(new Dialog("Hidden while folded"));
+            Assert(WidgetVisibility.ContainsRootDialog(keyed, context, "0"), "a new unfolded window exposes its dialog");
+            AssertEqual(0, states.Count, "modal detection does not create window state");
+            WindowState keyedState = states.GetOrCreate<WindowState>(context.StateId(keyed, "window"));
+            keyedState.Folded = true;
+            Assert(WidgetVisibility.ContainsDialog(keyed), "the retained widget tree still contains the hidden dialog");
+            Assert(!WidgetVisibility.ContainsRootDialog(keyed, context, "0"), "folded window content cannot lock global modal input");
+            RenderContext otherMount = new RenderContext { MountId = "second", StateStore = states };
+            Assert(WidgetVisibility.ContainsRootDialog(keyed, otherMount, "0"), "fold state is isolated by mount identity");
+            keyedState.Folded = false;
+            Assert(WidgetVisibility.ContainsRootDialog(keyed, context, "0"), "unfolding the same cached tree restores its dialog");
+
+            Window unkeyed = new Window("No key");
+            unkeyed.Add(new Dialog("Path-based dialog"));
+            WindowState pathState = states.GetOrCreate<WindowState>(context.StateId(unkeyed, "window"));
+            pathState.Folded = true;
+            Assert(!WidgetVisibility.ContainsRootDialog(unkeyed, context, "0"), "unkeyed root uses the renderer's 0 path");
+            Assert(WidgetVisibility.ContainsRootDialog(unkeyed, context, "outer.0"), "a different root path does not reuse folded state");
+            context.Path = "outer.0";
+            states.GetOrCreate<WindowState>(context.StateId(unkeyed, "window")).Folded = true;
+            Assert(!WidgetVisibility.ContainsRootDialog(unkeyed, context, "outer.0"), "direct renderer custom root path finds the correct window state");
+            DialogService dialogs = new DialogService();
+            dialogs.Show(new Dialog("Service modal"));
+            Assert(dialogs.HasOpenDialogs || WidgetVisibility.ContainsRootDialog(unkeyed, context, "outer.0"), "service dialogs remain modal independently of folded window contents");
+        }
+
+        private static void NavigationSkipsDisabledAndUnfocusableWidgets() {
+            UiNavigationStore navigation = new UiNavigationStore();
+            MuiRect rect = new MuiRect(0f, 0f, 40f, 22f);
+            navigation.BeginFrame();
+            navigation.Register(new Button("Disabled", key: "disabled") { HasDefaultFocus = true }, "0", rect, false);
+            navigation.Register(new Button("Decorative", key: "decorative") { Focusable = false }, "1", rect, true);
+            navigation.Register(new Button("First", key: "first"), "2", rect, true);
+            navigation.Register(new Button("Second", key: "second"), "3", rect, true);
+            navigation.EndFrame();
+            AssertEqual(2, navigation.Count, "only enabled focusable widgets join navigation");
+            AssertEqual("key:first", navigation.FocusedId, "disabled default focus is skipped");
+            Assert(!navigation.Focus("disabled"), "disabled widget cannot be explicitly focused");
+            navigation.FocusNext();
+            AssertEqual("key:second", navigation.FocusedId, "Tab reaches next enabled widget");
+            navigation.FocusNext();
+            AssertEqual("key:first", navigation.FocusedId, "Tab wraps past disabled widgets");
+        }
+
+        private static void FontSizingAndWrappedLabelsRespectAvailableSpace() {
+            AssertEqual(12, ThemeSizing.ScalePixels(12, 640f), "small screen keeps readable minimum");
+            AssertEqual(12, ThemeSizing.ScalePixels(12, 1280f), "baseline screen font size");
+            AssertEqual(18, ThemeSizing.ScalePixels(12, 3840f), "large screen scaling is bounded");
+            AssertEqual(12, ThemeSizing.ScalePixels(12, float.NaN), "invalid screen dimension is safe");
+            LayoutMetrics metrics = new LayoutMetrics {
+                MeasureText = delegate(string text) { return text.Length * 13f; },
+                MeasureWrappedTextHeight = delegate(string text, float width) { return (float)Math.Ceiling(text.Length * 13f / width) * 24f; }
+            };
+            Label label = new Label("ABCDEFGHIJKLMNO") { WordWrap = true };
+            LayoutNode root = new LayoutEngine(metrics).Measure(label, new LayoutConstraints(0f, 65f, 0f, 200f), "0");
+            AssertEqual(72f, root.DesiredSize.Y, "font metrics supply enough height for wrapped text");
+        }
+
+        private static void DrawingOnlyRunsDuringRepaint() {
+            foreach (UnityEngine.EventType type in Enum.GetValues(typeof(UnityEngine.EventType))) {
+                Assert(GuiEventPolicy.ShouldPaint(type) == (type == UnityEngine.EventType.Repaint), "drawing event policy: " + type);
+            }
+            bool release = GuiEventPolicy.ShouldReleasePointer(UnityEngine.EventType.MouseUp, 0);
+            // Event.Use changes type to Used, so remember release before dispatching it.
+            Assert(release && !GuiEventPolicy.ShouldReleasePointer(UnityEngine.EventType.Used, 0), "pointer release survives event consumption");
+            Assert(!GuiEventPolicy.ShouldReleasePointer(UnityEngine.EventType.MouseUp, 1), "right button cannot release a left drag");
+        }
+
+        private static void DrawListCanAppendItselfWithoutGrowingForever() {
+            DrawList drawList = new DrawList();
+            drawList.FillRect(new MuiRect(2f, 3f, 4f, 5f), MuiColor.FromRgb(1f, 0f, 0f));
+            drawList.Append(drawList, new MuiVec2(10f, 20f));
+            AssertEqual(2, drawList.Commands.Count, "self append duplicates original commands exactly once");
+            AssertEqual(2f, drawList.Commands[0].Rect.X, "self append leaves original unchanged");
+            AssertEqual(12f, drawList.Commands[1].Rect.X, "self append offsets copied command");
+        }
+
+        private static void DialogCallbacksCannotCloseNewDialogsOrLoopForever() {
+            DialogService service = new DialogService();
+            Dialog original = new Dialog("Original");
+            Dialog next = new Dialog("Next");
+            int confirmCount = 0;
+            service.Show(original);
+            service.Complete(original, delegate {
+                confirmCount++;
+                service.Show(next);
+            });
+            service.Complete(original, delegate { confirmCount++; });
+            AssertEqual(1, confirmCount, "confirmation runs once");
+            AssertEqual(1, service.Dialogs.Count, "confirmation callback may open another dialog");
+            Assert(object.ReferenceEquals(next, service.Dialogs[0]), "the newly opened dialog stays open");
+            int closed = 0;
+            next.OnClose = delegate { closed++; service.Show(new Dialog("Reopened")); };
+            service.CloseAll();
+            AssertEqual(1, closed, "close all invokes callbacks once");
+            AssertEqual(1, service.Dialogs.Count, "close all does not recursively close callback-created dialogs");
+            service.CloseAll();
+            Dialog older = new Dialog("Older") { OnClose = delegate { closed++; } };
+            Dialog failing = new Dialog("Failing") { OnClose = delegate { throw new InvalidOperationException("Expected callback failure"); } };
+            service.Show(older);
+            service.Show(failing);
+            bool failed = false;
+            try { service.CloseAll(); } catch (InvalidOperationException) { failed = true; }
+            Assert(failed, "callback failure is reported");
+            AssertEqual(2, closed, "callback failure does not skip remaining cleanup");
+            AssertEqual(0, service.Dialogs.Count, "dialogs are removed even when callbacks fail");
+        }
+
+        private sealed class BenchmarkResult {
+            public double Milliseconds;
+            public long AllocatedBytes;
+            public int Builds;
+            public long Layouts;
+        }
+
+        private static void MeasureBuildAndLayoutPerformance() {
+            System.Reflection.MethodInfo allocationMethod = typeof(GC).GetMethod("GetAllocatedBytesForCurrentThread", Type.EmptyTypes);
+            Func<long> allocated = allocationMethod == null ? null : (Func<long>)Delegate.CreateDelegate(typeof(Func<long>), allocationMethod);
+            RunLayoutBenchmark(3, 100, 0, allocated);
+            RunLayoutBenchmark(3, 100, 1, allocated);
+            RunLayoutBenchmark(3, 100, 2, allocated);
+            BenchmarkResult legacy = RunLayoutBenchmark(150, 1000, 0, allocated);
+            BenchmarkResult frame = RunLayoutBenchmark(150, 1000, 1, allocated);
+            BenchmarkResult retained = RunLayoutBenchmark(150, 1000, 2, allocated);
+            AssertEqual(300, legacy.Builds, "legacy benchmark builds twice per frame");
+            AssertEqual(150, frame.Builds, "default benchmark builds once per frame");
+            AssertEqual(1, retained.Builds, "retained benchmark builds only once");
+            AssertEqual(150, (int)frame.Layouts, "default layout is shared across events");
+            AssertEqual(1, (int)retained.Layouts, "retained layout is shared across idle frames");
+            PrintBenchmark("per-event-strategy", legacy);
+            PrintBenchmark("default-per-frame", frame);
+            PrintBenchmark("retained-idle", retained);
+            Console.WriteLine("Benchmark: same fixed engine, 1000 labels, 150 frames, 2 GUI events/frame; build/layout only, not a baseline DLL comparison or Unity frame rate.");
+        }
+
+        private static BenchmarkResult RunLayoutBenchmark(int frames, int rows, int mode, Func<long> allocated) {
+            LayoutEngine engine = new LayoutEngine();
+            LayoutCache cache = new LayoutCache(engine);
+            ViewBuildSchedule schedule = new ViewBuildSchedule();
+            MountOptions options = new MountOptions { BuildEveryFrame = mode != 2 };
+            Widget tree = null;
+            MuiRect viewport = new MuiRect(0f, 0f, 520f, 620f);
+            BenchmarkResult result = new BenchmarkResult();
+            GC.Collect();
+            long before = allocated == null ? 0 : allocated();
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            for (int frame = 0; frame < frames; frame++) {
+                for (int guiEvent = 0; guiEvent < 2; guiEvent++) {
+                    if (mode == 0 || schedule.ShouldBuild(options, frame, tree != null)) {
+                        VStack stack = new VStack(2f);
+                        for (int i = 0; i < rows; i++) stack.Add(new Label("Benchmark row " + i));
+                        tree = stack;
+                        result.Builds++;
+                        schedule.CompleteBuild(frame, schedule.Revision);
+                        cache.Invalidate();
+                    }
+                    LayoutNode layout = mode == 0 ? engine.Layout(tree, viewport) : cache.Layout(tree, viewport, "0");
+                    if (layout.Children.Count != rows) throw new InvalidOperationException("Benchmark dropped rows");
+                }
+            }
+            watch.Stop();
+            result.Milliseconds = watch.Elapsed.TotalMilliseconds;
+            result.AllocatedBytes = allocated == null ? -1 : allocated() - before;
+            result.Layouts = mode == 0 ? frames * 2 : cache.LayoutPassCount;
+            return result;
+        }
+
+        private static void PrintBenchmark(string name, BenchmarkResult result) {
+            Console.WriteLine("BENCH " + name + ": builds=" + result.Builds + ", layouts=" + result.Layouts +
+                ", elapsed_ms=" + result.Milliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) +
+                ", allocated_bytes=" + result.AllocatedBytes);
         }
 
         private static void LayoutEngineArrangesWindowStack() {
@@ -191,8 +545,13 @@ namespace MaximumUI.Tests {
 
             Assert(drawList.Commands.Count >= 10, "paint command count");
             AssertEqual(DrawCommandType.FillRect, drawList.Commands[0].Type, "window fill");
-            AssertEqual(DrawCommandType.StrokeRect, drawList.Commands[1].Type, "window stroke");
-            AssertEqual(DrawCommandType.Text, drawList.Commands[2].Type, "window title");
+            bool outline = false, title = false, content = false;
+            foreach (DrawCommand command in drawList.Commands) {
+                if (command.Type == DrawCommandType.StrokeRect && command.Rect.Width == 240f && command.Rect.Height == 120f) outline = true;
+                if (command.Type == DrawCommandType.Text && command.Text == "Paint") title = true;
+                if (command.Type == DrawCommandType.Text && command.Text == "Apply") content = true;
+            }
+            Assert(outline && title && content, "Window decoration and interactive content must both be painted.");
         }
 
         private static void BasicFeatureControlsLayoutAndPaint() {
@@ -444,9 +803,12 @@ namespace MaximumUI.Tests {
                 ActivePath = "0.2"
             });
             Assert(drawList.Commands.Count >= 18, "tree header paint command count");
-            Assert(ContainsText(drawList, "v Header"), "collapsing header text");
-            Assert(ContainsText(drawList, "* Leaf"), "tree leaf bullet text");
-            Assert(ContainsCommand(drawList, DrawCommandType.Line), "tree hierarchy line");
+            Assert(ContainsText(drawList, "Header") && !ContainsText(drawList, "v Header"), "Header text must be independent of its disclosure icon.");
+            Assert(ContainsText(drawList, "Leaf") && ContainsCommand(drawList, DrawCommandType.FillCircle), "Tree bullet must be real geometry beside the label.");
+            bool hierarchyLine = false;
+            foreach (DrawCommand command in drawList.Commands)
+                if (command.Type == DrawCommandType.Line && command.P1.X == tree.Rect.X + 9f && command.P2.X == command.P1.X) hierarchyLine = true;
+            Assert(hierarchyLine, "DrawLines must preserve the tree hierarchy connector.");
         }
 
         private static void MenuBarLayoutAndPaint() {
@@ -509,7 +871,8 @@ namespace MaximumUI.Tests {
             DrawList drawList = new WidgetPainter().Paint(root, new WidgetPaintState());
             Assert(ContainsText(drawList, "+"), "leading tab button text");
             Assert(ContainsText(drawList, "General*"), "unsaved tab marker text");
-            Assert(ContainsText(drawList, "Debug  x"), "closable tab marker text");
+            Assert(ContainsText(drawList, "Debug") && !ContainsText(drawList, "Debug  x"), "Closable tabs must retain the label without a fake character icon.");
+            Assert(ContainsCommand(drawList, DrawCommandType.Line), "Closable tabs must draw a geometric close icon.");
             Assert(ContainsText(drawList, "Log"), "trailing tab button text");
         }
 
@@ -619,7 +982,8 @@ namespace MaximumUI.Tests {
             AssertEqual("0", result.ActivePath, "virtual list active path");
 
             DrawList drawList = new WidgetPainter().Paint(root, new WidgetPaintState());
-            Assert(drawList.Commands.Count >= 3, "virtual list paint command count");
+            Assert(ContainsCommand(drawList, DrawCommandType.FillRect) && ContainsCommand(drawList, DrawCommandType.StrokeRect), "Virtual list retains its viewport surface.");
+            Assert(!ContainsCommand(drawList, DrawCommandType.Text), "Virtual list chrome must not invent debug labels over the actual rows.");
         }
 
         private static void TwoPaneLayoutArrangesPanes() {

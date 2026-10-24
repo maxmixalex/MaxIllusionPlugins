@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Xml.Serialization;
 using BepInEx;
+using MaxIllusionPlugins.Common;
 
 namespace ClothingCompression {
     // Keep existing numeric values stable for XML compatibility.
@@ -82,34 +83,60 @@ namespace ClothingCompression {
     }
 
     internal sealed class CompressionLibraryStore {
-        private readonly string path = System.IO.Path.Combine(Paths.ConfigPath, "ClothingCompression.xml");
+        private readonly string path;
         private CompressionLibrary data;
+        private Exception readFailure;
+
+        internal CompressionLibraryStore() : this(System.IO.Path.Combine(Paths.ConfigPath, "MaxMixAlex.ClothingCompression.xml")) { }
+
+        internal CompressionLibraryStore(string path) {
+            if (string.IsNullOrEmpty(path)) throw new ArgumentException("A library path is required.", "path");
+            this.path = path;
+        }
 
         internal string Path { get { return path; } }
+        internal int Revision { get; private set; }
 
         internal CompressionLibrary Data {
             get { if (data == null) Reload(); return data; }
         }
 
-        internal void Reload() {
+        internal bool Reload() {
             try {
-                if (!File.Exists(path)) { data = new CompressionLibrary(); return; }
-                using (FileStream stream = File.OpenRead(path)) data = (CompressionLibrary)new XmlSerializer(typeof(CompressionLibrary)).Deserialize(stream);
-                if (data == null) data = new CompressionLibrary();
-                if (data.Profiles == null) data.Profiles = new List<SavedProfile>();
-                data.Version = 2;
+                CompressionLibrary loaded = File.Exists(path) ? AtomicXmlFile.Read<CompressionLibrary>(path) : new CompressionLibrary();
+                if (loaded == null) loaded = new CompressionLibrary();
+                if (loaded.Profiles == null) loaded.Profiles = new List<SavedProfile>();
+                loaded.Profiles.RemoveAll(profile => profile == null);
+                foreach (SavedProfile profile in loaded.Profiles)
+                    if (profile.Entries == null) profile.Entries = new List<DeformationEntry>();
+                loaded.Version = 2;
+                data = loaded;
+                readFailure = null;
+                Revision++;
+                return true;
             } catch (Exception ex) {
                 ClothingCompressionPlugin.Log.LogError("Could not read " + path + ": " + ex);
-                data = new CompressionLibrary();
+                // Keep the last valid model, and do not let a later save replace the
+                // unreadable file or overwrite its last good .bak with corrupt bytes.
+                readFailure = ex;
+                if (data == null) data = new CompressionLibrary();
+                return false;
             }
         }
 
-        internal int SaveEntries(string characterKey, IEnumerable<DeformationEntry> source) {
+        internal int SaveEntries(string characterKey, IEnumerable<DeformationEntry> source, IEnumerable<string> previousIds = null) {
+            CompressionLibrary library = Data;
+            if (readFailure != null)
+                throw new InvalidOperationException("Cannot save " + path + " after a failed read. Repair or restore the XML file and reload it before saving.", readFailure);
+            if (source == null) throw new ArgumentNullException("source");
             List<DeformationEntry> bound = source.Where(x => x != null && x.BindingKind != BoundItemKind.None && !string.IsNullOrEmpty(x.ItemKey)).ToList();
             HashSet<string> savedIds = new HashSet<string>(bound.Select(x => x.Id).Where(x => !string.IsNullOrEmpty(x)));
-            foreach (SavedProfile profile in data.Profiles) {
+            // A deleted or unbound entry is absent from `bound`; retain the caller's
+            // previously loaded IDs so saving can remove it from its former profile.
+            if (previousIds != null) savedIds.UnionWith(previousIds.Where(id => !string.IsNullOrEmpty(id)));
+            foreach (SavedProfile profile in library.Profiles) {
                 bool currentCharacterProfile = profile.Scope == SaveScope.CharacterAndItem && CharacterKeysMatch(profile.CharacterKey, characterKey);
-                if (profile.Scope == SaveScope.ItemOnly || currentCharacterProfile)
+                if (profile.Entries != null && (profile.Scope == SaveScope.ItemOnly || currentCharacterProfile))
                     profile.Entries.RemoveAll(x => x != null && savedIds.Contains(x.Id));
             }
             data.Profiles.RemoveAll(x => x.Entries == null || x.Entries.Count == 0);
@@ -125,27 +152,27 @@ namespace ClothingCompression {
                 });
             }
             Write();
+            Revision++;
             return bound.Count;
         }
 
         internal List<DeformationEntry> LoadEntries(string characterKey, IEnumerable<ItemDescriptor> equippedItems) {
             List<DeformationEntry> result = new List<DeformationEntry>();
-            foreach (ItemDescriptor item in equippedItems.Where(x => x != null && !string.IsNullOrEmpty(x.Key)).GroupBy(x => x.Key + "@" + x.Slot).Select(x => x.First())) {
-                bool remapGlobal, remapCharacter;
-                SavedProfile global = FindProfile(SaveScope.ItemOnly, characterKey, item, out remapGlobal);
-                SavedProfile character = FindProfile(SaveScope.CharacterAndItem, characterKey, item, out remapCharacter);
-                if (global != null && global.Entries != null) {
-                    foreach (DeformationEntry entry in global.Entries.Where(x => x != null)) {
+            if (equippedItems == null) return result;
+            ItemDescriptor[] items = equippedItems.Where(x => x != null && !string.IsNullOrEmpty(x.Key)).ToArray();
+            // A repeated item in two accessory slots still refers to one saved profile.
+            // Apply all character overrides after global profiles, independent of slot order.
+            foreach (SaveScope scope in new[] { SaveScope.ItemOnly, SaveScope.CharacterAndItem }) {
+                var seenProfiles = new HashSet<SavedProfile>();
+                foreach (ItemDescriptor item in items) {
+                    bool remapped;
+                    SavedProfile profile = FindProfile(scope, characterKey, item, out remapped);
+                    if (profile == null || profile.Entries == null || !seenProfiles.Add(profile)) continue;
+                    foreach (DeformationEntry entry in profile.Entries.Where(x => x != null)) {
                         DeformationEntry copy = entry.Clone();
-                        if (remapGlobal) ItemCatalog.Bind(copy, item);
-                        result.Add(copy);
-                    }
-                }
-                if (character != null && character.Entries != null) {
-                    foreach (DeformationEntry entry in character.Entries.Where(x => x != null)) {
-                        DeformationEntry copy = entry.Clone();
-                        if (remapCharacter) ItemCatalog.Bind(copy, item);
-                        int old = result.FindIndex(x => !string.IsNullOrEmpty(x.Id) && x.Id == entry.Id);
+                        if (string.IsNullOrEmpty(copy.Id)) entry.Id = copy.Id = Guid.NewGuid().ToString("N");
+                        if (remapped) ItemCatalog.Bind(copy, item);
+                        int old = result.FindIndex(x => x.Id == copy.Id);
                         if (old >= 0) result[old] = copy; else result.Add(copy);
                     }
                 }
@@ -154,7 +181,7 @@ namespace ClothingCompression {
         }
 
         private SavedProfile FindProfile(SaveScope scope, string characterKey, ItemDescriptor item, out bool remapped) {
-            IEnumerable<SavedProfile> candidates = data.Profiles.Where(x => x.Scope == scope &&
+            IEnumerable<SavedProfile> candidates = Data.Profiles.Where(x => x.Scope == scope &&
                 (scope == SaveScope.ItemOnly || CharacterKeysMatch(x.CharacterKey, characterKey)));
             SavedProfile exact = candidates.LastOrDefault(x => x.ItemKey == item.Key);
             if (exact != null) { remapped = false; return exact; }
@@ -169,7 +196,7 @@ namespace ClothingCompression {
 
         internal List<DeformationEntry> LoadCoordinateEntries(string characterKey) {
             List<DeformationEntry> result = new List<DeformationEntry>();
-            foreach (SavedProfile profile in data.Profiles.Where(x => x.Scope == SaveScope.CharacterAndItem && CharacterKeysMatch(x.CharacterKey, characterKey))) {
+            foreach (SavedProfile profile in Data.Profiles.Where(x => x.Scope == SaveScope.CharacterAndItem && CharacterKeysMatch(x.CharacterKey, characterKey))) {
                 if (profile.Entries == null) continue;
                 result.AddRange(profile.Entries.Where(x => x != null).Select(x => x.Clone()));
             }
@@ -192,12 +219,7 @@ namespace ClothingCompression {
         }
 
         private void Write() {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
-            string temp = path + ".tmp";
-            using (FileStream stream = File.Create(temp)) new XmlSerializer(typeof(CompressionLibrary)).Serialize(stream, data);
-            if (File.Exists(path)) File.Copy(path, path + ".bak", true);
-            File.Copy(temp, path, true);
-            File.Delete(temp);
+            AtomicXmlFile.Write(path, data, path + ".bak");
         }
     }
 }
