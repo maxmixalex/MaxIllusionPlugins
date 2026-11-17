@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using BepInEx;
+using HarmonyLib;
 using KKAPI;
 using KKAPI.Chara;
 using KKAPI.Maker;
@@ -19,6 +20,7 @@ namespace FemboyMode
         public const string PluginName = "Femboy Mode";
         public const string Version = "0.1.0";
 
+        private Harmony harmony;
         private MakerToggle flagToggle;
         private bool refreshing;
 
@@ -29,11 +31,14 @@ namespace FemboyMode
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
             MakerAPI.ChaFileLoaded += OnMakerCardLoaded;
-            Logger.LogInfo("Femboy Mode: per-character flag and card persistence enabled.");
+            harmony = new Harmony(Guid);
+            harmony.PatchAll(typeof(FemboyHSceneHooks));
+            Logger.LogInfo("Femboy Mode: character flag and Free H action restrictions enabled.");
         }
 
         private void OnDestroy()
         {
+            if (harmony != null) harmony.UnpatchSelf();
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface -= OnReloadCustomInterface;
