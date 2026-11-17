@@ -89,7 +89,11 @@ namespace FemboyMode
 
             ChaControl character = heroine.chaCtrl;
             if (character == null || character.objBodyBone == null ||
-                flags.particle == null || ParticleEntriesField == null)
+                ParticleEntriesField == null)
+                return;
+
+            HParticleCtrl source = FindHParticleCtrl(flags);
+            if (source == null)
                 return;
 
             int key = flags.GetInstanceID();
@@ -98,7 +102,7 @@ namespace FemboyMode
             if (LastEffectByFlag.TryGetValue(key, out last) && now - last < 1.5f)
                 return;
 
-            var entries = ParticleEntriesField.GetValue(flags.particle)
+            var entries = ParticleEntriesField.GetValue(source)
                 as Dictionary<int, HParticleCtrl.ParticleInfo>;
             HParticleCtrl.ParticleInfo maleEffect;
             if (entries == null || !entries.TryGetValue(0, out maleEffect) ||
@@ -147,6 +151,18 @@ namespace FemboyMode
                 LastEffectByFlag.Clear();
 
             UnityEngine.Object.Destroy(clone, 12f);
+        }
+
+        private static HParticleCtrl FindHParticleCtrl(HFlag flags)
+        {
+            if (OwnerFlagField == null) return null;
+
+            HParticleCtrl[] all = UnityEngine.Object.FindObjectsOfType<HParticleCtrl>();
+            for (int i = 0; i < all.Length; i++)
+                if (ReferenceEquals(OwnerFlagField.GetValue(all[i]), flags))
+                    return all[i];
+
+            return null;
         }
 
         private static Transform FindBone(Transform root, string boneName)
