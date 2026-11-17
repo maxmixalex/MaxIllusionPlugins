@@ -58,8 +58,7 @@ namespace FemboyMode
 
             ChaControl character = MakerAPI.GetCharacterControl();
             if (character != null &&
-                (FemboyModePlugin.IsFemboy(character) ||
-                 FemboyModePlugin.IsFemboy(character.chaFile)))
+                FemboyModePlugin.IsFemboy(character))
                 __result = true;
         }
     }
