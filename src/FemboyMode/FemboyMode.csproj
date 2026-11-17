@@ -13,6 +13,7 @@
     <PackageReference Include="BepInEx.Core" />
     <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
     <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.Sirenix.Serialization" />
     <PackageReference Include="IllusionModdingAPI.KKAPI" />
     <PackageReference Include="ExtensibleSaveFormat.Koikatu" />
   </ItemGroup>
