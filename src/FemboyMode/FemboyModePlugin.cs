@@ -250,8 +250,19 @@ namespace FemboyMode
         /// </summary>
         public static bool IsFemboy(ChaControl character)
         {
+            if (character == null || character.sex != 1)
+                return false;
+
             FemboyCharacterController controller = GetController(character);
-            return controller != null && controller.IsFemboy;
+            if (controller != null && controller.IsInitialized)
+            {
+                // The in-memory Maker toggle wins over stale saved card data,
+                // including when the user just unchecked it without saving.
+                return controller.IsFemboy;
+            }
+
+            // Early-scene checks may precede KKAPI's first controller reload.
+            return character.chaFile != null && IsFemboy(character.chaFile);
         }
 
         /// <summary>
