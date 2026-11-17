@@ -231,7 +231,7 @@ namespace FemboyMode
     /// Applies position/rotation changes from BepInEx ConfigurationManager
     /// while a Free H scene remains open, allowing live calibration.
     /// </summary>
-    internal sealed class FemboyAnchorUpdater : MonoBehaviour
+    public sealed class FemboyAnchorUpdater : MonoBehaviour
     {
         private Vector3 oldPosition;
         private Vector3 oldRotation;
