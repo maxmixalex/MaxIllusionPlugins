@@ -21,8 +21,22 @@ namespace FemboyMode
         private static readonly FieldInfo OwnerFlagField =
             typeof(HParticleCtrl).GetField("flags",
                 BindingFlags.Instance | BindingFlags.NonPublic);
-        private static readonly Dictionary<int, float> LastEffectByFlag =
-            new Dictionary<int, float>();
+        // A Free H scene can have two heroines. Never deduplicate separate
+        // characters just because they share the same HFlag instance.
+        private static readonly Dictionary<long, float> LastEffectByCharacter =
+            new Dictionary<long, float>();
+
+        private static long EffectKey(HFlag flags)
+        {
+            return ((long)flags.GetInstanceID() << 2) | (uint)(flags.GetLeadingHeroineId() & 3);
+        }
+
+        private static bool HasRecentMaleEffect(HFlag flags)
+        {
+            float playedAt;
+            return LastEffectByCharacter.TryGetValue(EffectKey(flags), out playedAt)
+                && Time.time >= playedAt && Time.time - playedAt < 8f;
+        }
         private static bool warnedUnavailable;
 
         // The vanilla Aibu particle #2 is the female squirt effect. When
@@ -51,9 +65,12 @@ namespace FemboyMode
 
             // In a two-heroine scene both HParticleCtrl instances share flags.
             // Suppress only the *active heroine's* particle, never her partner's.
-            if (!ReferenceEquals(__instance, FindHParticleCtrl(flags)))
+            if (!ReferenceEquals(__instance, FindHParticleCtrl(flags)) ||
+                !HasRecentMaleEffect(flags))
                 return true;
 
+            // If the replacement effect failed or its bone was unavailable,
+            // preserve the original effect rather than producing nothing.
             __result = false;
             return false;
         }
@@ -101,10 +118,11 @@ namespace FemboyMode
             if (source == null)
                 return;
 
-            int key = flags.GetInstanceID();
+            long key = EffectKey(flags);
             float now = Time.time;
             float last;
-            if (LastEffectByFlag.TryGetValue(key, out last) && now - last < 1.5f)
+            if (LastEffectByCharacter.TryGetValue(key, out last) &&
+                now >= last && now - last < 1.5f)
                 return;
 
             var entries = ParticleEntriesField.GetValue(source)
@@ -133,8 +151,8 @@ namespace FemboyMode
             GameObject clone = UnityEngine.Object.Instantiate(
                 maleEffect.particle.gameObject);
             clone.name = "FemboyMode_NativeMaleFinishFX";
+            clone.SetActive(false);
             clone.transform.SetParent(bone, false);
-            clone.SetActive(true);
             clone.transform.localPosition = new Vector3(
                 FemboyModePlugin.ClimaxFXOffsetX.Value,
                 FemboyModePlugin.ClimaxFXOffsetY.Value,
@@ -145,15 +163,23 @@ namespace FemboyMode
                 FemboyModePlugin.ClimaxFXRotationZ.Value);
 
             ParticleSystem[] particles = clone.GetComponentsInChildren<ParticleSystem>(true);
+            if (particles.Length == 0)
+            {
+                UnityEngine.Object.Destroy(clone);
+                return;
+            }
+
+            clone.SetActive(true);
             for (int i = 0; i < particles.Length; i++)
             {
+                particles[i].Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
                 particles[i].Simulate(0f);
                 particles[i].Play();
             }
 
-            LastEffectByFlag[key] = now;
-            if (LastEffectByFlag.Count > 20)
-                LastEffectByFlag.Clear();
+            LastEffectByCharacter[key] = now;
+            if (LastEffectByCharacter.Count > 32)
+                LastEffectByCharacter.Clear();
 
             UnityEngine.Object.Destroy(clone, 12f);
         }
