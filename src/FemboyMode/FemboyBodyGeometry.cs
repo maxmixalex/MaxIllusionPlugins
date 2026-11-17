@@ -11,6 +11,7 @@ namespace FemboyMode
     {
         private Transform scaledBone;
         private Vector3 originalBoneScale;
+        private Vector3 lastWrittenScale;
         private string scaledBoneName;
         private float appliedX = 1f, appliedY = 1f, appliedZ = 1f;
         private int lastLookupFrame = -1000;
@@ -65,6 +66,7 @@ namespace FemboyMode
                     if (item.name != boneName) continue;
                     scaledBone = item;
                     originalBoneScale = item.localScale;
+                    lastWrittenScale = item.localScale;
                     scaledBoneName = boneName;
                     break;
                 }
@@ -72,6 +74,11 @@ namespace FemboyMode
                 if (scaledBone == null)
                     return;
             }
+
+            // Another body-mod plugin may replace this bone's scale after
+            // we write it. Never overwrite that newer external value.
+            if (!SameScale(scaledBone.localScale, lastWrittenScale))
+                return;
 
             if (Mathf.Approximately(appliedX, geometryScaleX) &&
                 Mathf.Approximately(appliedY, geometryScaleY) &&
@@ -82,14 +89,23 @@ namespace FemboyMode
                 originalBoneScale.x * geometryScaleX,
                 originalBoneScale.y * geometryScaleY,
                 originalBoneScale.z * geometryScaleZ);
+            lastWrittenScale = scaledBone.localScale;
             appliedX = geometryScaleX;
             appliedY = geometryScaleY;
             appliedZ = geometryScaleZ;
         }
 
+        private static bool SameScale(Vector3 left, Vector3 right)
+        {
+            return (left - right).sqrMagnitude < 0.00000001f;
+        }
+
         private void RestoreMaleGeometry()
         {
-            if (scaledBone != null)
+            // Restore only values last written by this controller. If KKABMX
+            // or another mod changed the scale, leave their change intact.
+            if (scaledBone != null &&
+                SameScale(scaledBone.localScale, lastWrittenScale))
                 scaledBone.localScale = originalBoneScale;
             scaledBone = null;
             scaledBoneName = null;
