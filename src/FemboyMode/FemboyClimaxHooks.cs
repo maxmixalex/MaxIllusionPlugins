@@ -59,8 +59,7 @@ namespace FemboyMode
                 return true;
 
             var heroine = flags.GetLeadingHeroine();
-            if (heroine == null || !(FemboyModePlugin.IsFemboy(heroine.chaCtrl) ||
-                                     FemboyModePlugin.IsFemboy(heroine.charFile)))
+            if (heroine == null || !(FemboyModePlugin.IsFemboy(heroine.chaCtrl)))
                 return true;
 
             // In a two-heroine scene both HParticleCtrl instances share flags.
@@ -105,8 +104,7 @@ namespace FemboyMode
 
             var heroine = flags.GetLeadingHeroine();
             if (heroine == null ||
-                !(FemboyModePlugin.IsFemboy(heroine.chaCtrl) ||
-                  FemboyModePlugin.IsFemboy(heroine.charFile)))
+                !(FemboyModePlugin.IsFemboy(heroine.chaCtrl)))
                 return;
 
             ChaControl character = heroine.chaCtrl;
