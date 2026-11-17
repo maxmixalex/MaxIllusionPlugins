@@ -70,6 +70,15 @@ namespace FemboyMode
                 FemboyModePlugin.KokanRotationX.Value,
                 FemboyModePlugin.KokanRotationY.Value,
                 FemboyModePlugin.KokanRotationZ.Value);
+            // HandCtrl.InitHitReactionCollider runs later during HSceneProc/HTest
+            // initialization and will automatically pick up this tagged collider.
+            // Keep vanilla colliders: the new one supplements hit detection,
+            // rather than globally mutating the model's existing hit objects.
+            anchor.tag = "H/Aibu/Hit/kokan";
+            SphereCollider hit = anchor.AddComponent<SphereCollider>();
+            hit.isTrigger = true;
+            hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
+            hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value;
             anchor.AddComponent<FemboyAnchorUpdater>();
 
             int changed = 0;
@@ -151,6 +160,13 @@ namespace FemboyMode
                 transform.localPosition = position;
             if (!hasValues || rotation != oldRotation)
                 transform.localRotation = Quaternion.Euler(rotation);
+
+            SphereCollider hit = GetComponent<SphereCollider>();
+            if (hit != null)
+            {
+                hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value;
+                hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
+            }
 
             hasValues = true;
             oldPosition = position;
