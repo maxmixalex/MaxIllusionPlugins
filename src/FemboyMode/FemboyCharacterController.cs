@@ -1,21 +1,47 @@
 using ExtensibleSaveFormat;
 using KKAPI;
 using KKAPI.Chara;
+using UnityEngine;
 
 namespace FemboyMode
 {
     /// <summary>
     /// Persists a female-card-only character marker, without changing ChaControl.sex.
     /// </summary>
-    public sealed class FemboyCharacterController : CharaCustomFunctionController
+    public sealed partial class FemboyCharacterController : CharaCustomFunctionController
     {
         private const string FlagKey = "IsFemboy";
+        private const string GeometryXKey = "BodyBoneScaleX";
+        private const string GeometryYKey = "BodyBoneScaleY";
+        private const string GeometryZKey = "BodyBoneScaleZ";
         private bool isFemboy;
+        private float geometryScaleX = 1f, geometryScaleY = 1f, geometryScaleZ = 1f;
+
+        public float GeometryScaleX
+        {
+            get { return geometryScaleX; }
+            set { geometryScaleX = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+        }
+        public float GeometryScaleY
+        {
+            get { return geometryScaleY; }
+            set { geometryScaleY = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+        }
+        public float GeometryScaleZ
+        {
+            get { return geometryScaleZ; }
+            set { geometryScaleZ = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+        }
+
 
         public bool IsFemboy
         {
             get { return ChaControl != null && ChaControl.sex == 1 && isFemboy; }
-            set { isFemboy = ChaControl != null && ChaControl.sex == 1 && value; }
+            set
+            {
+                isFemboy = ChaControl != null && ChaControl.sex == 1 && value;
+                ApplyMaleGeometry();
+            }
         }
 
         protected override void OnReload(GameMode currentGameMode, bool maintainState)
@@ -24,7 +50,9 @@ namespace FemboyMode
             if (maintainState)
                 return;
 
+            RestoreMaleGeometry();
             isFemboy = false;
+            geometryScaleX = geometryScaleY = geometryScaleZ = 1f;
             if (ChaControl == null || ChaControl.sex != 1)
                 return;
 
@@ -36,6 +64,25 @@ namespace FemboyMode
             {
                 isFemboy = true;
             }
+            if (data != null && data.data != null)
+            {
+                geometryScaleX = ReadScale(data, GeometryXKey);
+                geometryScaleY = ReadScale(data, GeometryYKey);
+                geometryScaleZ = ReadScale(data, GeometryZKey);
+            }
+            ApplyMaleGeometry();
+        }
+
+        private static float ReadScale(PluginData data, string key)
+        {
+            object value;
+            if (!data.data.TryGetValue(key, out value))
+                return 1f;
+
+            // Avoid exceptions on cards saved by older versions or broken mods.
+            if (value is float) return Mathf.Clamp((float)value, 0.5f, 2f);
+            if (value is double) return Mathf.Clamp((float)(double)value, 0.5f, 2f);
+            return 1f;
         }
 
         protected override void OnCardBeingSaved(GameMode currentGameMode)
@@ -48,8 +95,14 @@ namespace FemboyMode
             }
 
             PluginData data = new PluginData();
-            data.version = 1;
+            data.version = 2;
             data.data.Add(FlagKey, true);
+            if (!Mathf.Approximately(geometryScaleX, 1f))
+                data.data.Add(GeometryXKey, geometryScaleX);
+            if (!Mathf.Approximately(geometryScaleY, 1f))
+                data.data.Add(GeometryYKey, geometryScaleY);
+            if (!Mathf.Approximately(geometryScaleZ, 1f))
+                data.data.Add(GeometryZKey, geometryScaleZ);
             SetExtendedData(data);
         }
     }
