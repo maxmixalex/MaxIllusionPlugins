@@ -49,6 +49,11 @@ namespace FemboyMode
                                      FemboyModePlugin.IsFemboy(heroine.charFile)))
                 return true;
 
+            // In a two-heroine scene both HParticleCtrl instances share flags.
+            // Suppress only the *active heroine's* particle, never her partner's.
+            if (!ReferenceEquals(__instance, FindHParticleCtrl(flags)))
+                return true;
+
             __result = false;
             return false;
         }
@@ -155,14 +160,35 @@ namespace FemboyMode
 
         private static HParticleCtrl FindHParticleCtrl(HFlag flags)
         {
+            if (flags == null) return null;
+
+            // The exact original Assembly-CSharp.dll exposes both scene
+            // particle fields. They are ordered by heroine index, unlike
+            // FindObjectsOfType<HParticleCtrl>() which has no stable order.
+            HSceneProc[] scenes = UnityEngine.Object.FindObjectsOfType<HSceneProc>();
+            for (int i = 0; i < scenes.Length; i++)
+            {
+                HSceneProc scene = scenes[i];
+                if (scene == null || !ReferenceEquals(scene.flags, flags))
+                    continue;
+                return flags.GetLeadingHeroineId() == 0 ?
+                    scene.particle : scene.particle1;
+            }
+
+            // Fallback for custom scenes: select the only matching instance.
+            // When more than one exists, guessing would affect another actor.
             if (OwnerFlagField == null) return null;
 
+            HParticleCtrl result = null;
             HParticleCtrl[] all = UnityEngine.Object.FindObjectsOfType<HParticleCtrl>();
             for (int i = 0; i < all.Length; i++)
-                if (ReferenceEquals(OwnerFlagField.GetValue(all[i]), flags))
-                    return all[i];
-
-            return null;
+            {
+                if (!ReferenceEquals(OwnerFlagField.GetValue(all[i]), flags))
+                    continue;
+                if (result != null) return null;
+                result = all[i];
+            }
+            return result;
         }
 
         private static Transform FindBone(Transform root, string boneName)
