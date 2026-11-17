@@ -28,6 +28,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
+        internal static ConfigEntry<bool> SuppressOriginalFemaleFX;
         internal static ConfigEntry<float> ClimaxFXOffsetX, ClimaxFXOffsetY, ClimaxFXOffsetZ;
         internal static ConfigEntry<float> ClimaxFXRotationX, ClimaxFXRotationY, ClimaxFXRotationZ;
         internal static ConfigEntry<bool> VerboseLogging;
@@ -65,6 +66,8 @@ namespace FemboyMode
                 "Log character marker changes and integration hook decisions.");
             EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
+            SuppressOriginalFemaleFX = Config.Bind("Free H", "Suppress female Aibu squirt FX", true,
+                "When the marked heroine has alternate finish FX enabled, suppress the original female particle (Aibu only).");
             ClimaxFXOffsetX = Config.Bind("Male finish FX", "Offset X", 0f, "Local FX offset X in Unity units.");
             ClimaxFXOffsetY = Config.Bind("Male finish FX", "Offset Y", 0f, "Local FX offset Y in Unity units.");
             ClimaxFXOffsetZ = Config.Bind("Male finish FX", "Offset Z", 0f, "Local FX offset Z in Unity units.");
