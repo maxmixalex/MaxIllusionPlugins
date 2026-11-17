@@ -15,7 +15,9 @@ namespace FemboyMode
         [HarmonyPatch(typeof(ListInfoBase), nameof(ListInfoBase.GetInfoInt))]
         private static void GetInfoIntPostfix(ChaListDefine.KeyType keyType, ref int __result)
         {
-            if (keyType != ChaListDefine.KeyType.Sex || !MakerAPI.InsideAndLoaded)
+            if (keyType != ChaListDefine.KeyType.Sex || !MakerAPI.InsideAndLoaded ||
+                FemboyModePlugin.EnableMakerAssetUnlock == null ||
+                !FemboyModePlugin.EnableMakerAssetUnlock.Value)
                 return;
 
             ChaControl character = MakerAPI.GetCharacterControl();
