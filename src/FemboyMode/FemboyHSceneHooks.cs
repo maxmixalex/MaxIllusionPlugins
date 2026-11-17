@@ -6,7 +6,7 @@ namespace FemboyMode
 {
     /// <summary>
     /// Restrict only the current marked heroine's vanilla Free H actions.
-    /// The game's own SetSonyuStart always rebuilds the complete button list.
+    /// The game's own SetSonyuStart initializes the buttons; later state changes can also reactivate action buttons.
     /// </summary>
     internal static class FemboyHSceneHooks
     {
@@ -24,6 +24,7 @@ namespace FemboyMode
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HSprite), nameof(HSprite.SetSonyuStart))]
+        [HarmonyPatch(typeof(HSprite), nameof(HSprite.SetSonyuActionButtonActive))]
         private static void RestrictFrontOptions(HSprite __instance)
         {
             if (__instance == null || __instance.flags == null ||
@@ -45,9 +46,10 @@ namespace FemboyMode
             if (!FemboyRules.HasBothFrontButtons(buttons.Count, baseIndex) )
                 return;
 
-            // SetSonyuStart calls SetActive(false) for every button before
-            // rebuilding its current page. Therefore no retained UI state or
-            // visibility-restoration cache is needed when switching actors.
+            // The original game can reactivate this page in subsequent pose
+            // changes. Re-enforce the character restriction after both the
+            // initial SetSonyuStart and SetSonyuActionButtonActive. Vanilla
+            // rebuilds visibility, so no stale UI cache is retained.
             if (buttons[baseIndex] != null)
                 buttons[baseIndex].gameObject.SetActive(false);
             if (buttons[baseIndex + 1] != null)
