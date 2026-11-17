@@ -17,7 +17,9 @@ namespace FemboyMode
                 return false;
 
             var heroine = sprite.GetLeadingHeroine();
-            return heroine != null && FemboyModePlugin.IsFemboy(heroine.chaCtrl);
+            return heroine != null &&
+                (FemboyModePlugin.IsFemboy(heroine.chaCtrl) ||
+                 FemboyModePlugin.IsFemboy(heroine.charFile));
         }
 
         [HarmonyPostfix]
