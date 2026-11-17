@@ -26,6 +26,7 @@ namespace FemboyMode
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
+        internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> VerboseLogging;
         internal static ConfigEntry<bool> EnableKokanAnchor;
         internal static ConfigEntry<string> KokanAnchorBone;
@@ -45,6 +46,7 @@ namespace FemboyMode
         private Harmony harmony;
         private MakerToggle flagToggle;
         private MakerToggle bodyFlagToggle;
+        private MakerSlider boneScaleX, boneScaleY, boneScaleZ;
         private bool refreshing;
 
         private void Awake()
@@ -54,6 +56,8 @@ namespace FemboyMode
                 "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
+            EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
+                "Apply per-card X/Y/Z scaling to the configured male geometry bone when available.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
 
@@ -112,6 +116,17 @@ namespace FemboyMode
                 MakerConstants.Body.All, "伪娘角色标志 (Femboy)", this));
             flagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
             bodyFlagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
+            // These controls are purpose-built for the optional male mesh.
+            // They do not pretend to be missing native female Maker sliders.
+            boneScaleX = e.AddControl(new MakerSlider(
+                MakerConstants.Body.All, "男性骨骼 X 缩放", 0.5f, 2f, 1f, this));
+            boneScaleY = e.AddControl(new MakerSlider(
+                MakerConstants.Body.All, "男性骨骼 Y 缩放", 0.5f, 2f, 1f, this));
+            boneScaleZ = e.AddControl(new MakerSlider(
+                MakerConstants.Body.All, "男性骨骼 Z 缩放", 0.5f, 2f, 1f, this));
+            boneScaleX.ValueChanged.Subscribe(v => OnMakerScaleChanged(0, v));
+            boneScaleY.ValueChanged.Subscribe(v => OnMakerScaleChanged(1, v));
+            boneScaleZ.ValueChanged.Subscribe(v => OnMakerScaleChanged(2, v));
         }
 
         private void OnMakerFlagChanged(bool enabled)
@@ -126,6 +141,20 @@ namespace FemboyMode
             RefreshMakerToggle();
             if (VerboseLogging.Value)
                 Logger.LogInfo("Maker character Femboy flag changed to " + enabled);
+        }
+
+        private void OnMakerScaleChanged(int axis, float value)
+        {
+            if (refreshing || !MakerAPI.InsideAndLoaded)
+                return;
+
+            FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
+            if (controller == null)
+                return;
+
+            if (axis == 0) controller.GeometryScaleX = value;
+            else if (axis == 1) controller.GeometryScaleY = value;
+            else controller.GeometryScaleZ = value;
         }
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
@@ -162,6 +191,12 @@ namespace FemboyMode
             {
                 if (flagToggle != null) flagToggle.SetValue(enabled);
                 if (bodyFlagToggle != null) bodyFlagToggle.SetValue(enabled);
+                if (boneScaleX != null)
+                    boneScaleX.SetValue(controller == null ? 1f : controller.GeometryScaleX);
+                if (boneScaleY != null)
+                    boneScaleY.SetValue(controller == null ? 1f : controller.GeometryScaleY);
+                if (boneScaleZ != null)
+                    boneScaleZ.SetValue(controller == null ? 1f : controller.GeometryScaleZ);
             }
             finally
             {
