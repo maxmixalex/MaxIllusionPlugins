@@ -45,6 +45,7 @@ namespace FemboyMode
                 && Time.time >= playedAt && Time.time - playedAt < 8f;
         }
         private static bool warnedUnavailable;
+        private static bool warnedMissingBone;
 
         // Vanilla HAibu.Proc uses randSio.Get() to decide both its
         // female-specific particle and its sound. Suppress that decision
@@ -199,7 +200,16 @@ namespace FemboyMode
             if (bone == null)
                 bone = FindBone(character.objBodyBone.transform, "cf_d_kokan");
             if (bone == null)
+            {
+                if (!warnedMissingBone)
+                {
+                    warnedMissingBone = true;
+                    FemboyModePlugin.LogOptionalIntegrationProblem(
+                        "No usable finish-FX target bone found on marked character. " +
+                        "Check Maker/Male geometry bone and Aibu alignment/Target bone settings.");
+                }
                 return;
+            }
 
             GameObject clone = UnityEngine.Object.Instantiate(
                 maleEffect.particle.gameObject);
@@ -233,6 +243,11 @@ namespace FemboyMode
             LastEffectByCharacter[key] = now;
             if (LastEffectByCharacter.Count > 32)
                 LastEffectByCharacter.Clear();
+
+            if (FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Played actor-local male-style FX on " + bone.name + ".");
 
             UnityEngine.Object.Destroy(clone, 12f);
         }
