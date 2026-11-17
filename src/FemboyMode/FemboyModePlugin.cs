@@ -27,6 +27,9 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
+        internal static ConfigEntry<bool> EnableMaleClimaxFX;
+        internal static ConfigEntry<float> ClimaxFXOffsetX, ClimaxFXOffsetY, ClimaxFXOffsetZ;
+        internal static ConfigEntry<float> ClimaxFXRotationX, ClimaxFXRotationY, ClimaxFXRotationZ;
         internal static ConfigEntry<bool> VerboseLogging;
         internal static ConfigEntry<bool> EnableKokanAnchor;
         internal static ConfigEntry<string> KokanAnchorBone;
@@ -60,6 +63,14 @@ namespace FemboyMode
                 "Apply per-card X/Y/Z scaling to the configured male geometry bone when available.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
+            EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
+                "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
+            ClimaxFXOffsetX = Config.Bind("Male finish FX", "Offset X", 0f, "Local FX offset X in Unity units.");
+            ClimaxFXOffsetY = Config.Bind("Male finish FX", "Offset Y", 0f, "Local FX offset Y in Unity units.");
+            ClimaxFXOffsetZ = Config.Bind("Male finish FX", "Offset Z", 0f, "Local FX offset Z in Unity units.");
+            ClimaxFXRotationX = Config.Bind("Male finish FX", "Rotation X", 0f, "Local FX rotation X in degrees.");
+            ClimaxFXRotationY = Config.Bind("Male finish FX", "Rotation Y", 0f, "Local FX rotation Y in degrees.");
+            ClimaxFXRotationZ = Config.Bind("Male finish FX", "Rotation Z", 0f, "Local FX rotation Z in degrees.");
 
             EnableKokanAnchor = Config.Bind("Aibu alignment", "Enable Kokan action anchor", true,
                 "For a marked female character, place Kokan hand items at a named male-geometry bone in Free H.");
@@ -90,6 +101,7 @@ namespace FemboyMode
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
+            harmony.PatchAll(typeof(FemboyClimaxHooks));
             UncensorSelectorCompat.TryPatch(harmony);
             Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
         }
