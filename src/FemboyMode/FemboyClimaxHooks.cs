@@ -28,7 +28,7 @@ namespace FemboyMode
 
         private static long EffectKey(HFlag flags)
         {
-            return ((long)flags.GetInstanceID() << 2) | (uint)(flags.GetLeadingHeroineId() & 3);
+            return FemboyRules.EffectKey(flags.GetInstanceID(), flags.GetLeadingHeroineId());
         }
 
         private static bool HasRecentMaleEffect(HFlag flags)
