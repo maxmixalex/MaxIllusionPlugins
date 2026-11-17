@@ -11,7 +11,9 @@ namespace FemboyMode
     {
         private static bool IsMarkedLeadingCharacter(HSprite sprite)
         {
-            if (sprite == null || sprite.flags == null || !sprite.flags.isFreeH)
+            if (sprite == null || sprite.flags == null || !sprite.flags.isFreeH ||
+                FemboyModePlugin.EnableFreeHRestrictions == null ||
+                !FemboyModePlugin.EnableFreeHRestrictions.Value)
                 return false;
 
             var heroine = sprite.GetLeadingHeroine();
