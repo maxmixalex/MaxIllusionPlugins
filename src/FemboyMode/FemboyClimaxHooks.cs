@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -21,6 +22,12 @@ namespace FemboyMode
         private static readonly FieldInfo OwnerFlagField =
             typeof(HParticleCtrl).GetField("flags",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo ActionListField =
+            typeof(HSceneProc).GetField("lstProc",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo AibuRandomField =
+            typeof(HAibu).GetField("randSio",
+                BindingFlags.Instance | BindingFlags.NonPublic);
         // A Free H scene can have two heroines. Never deduplicate separate
         // characters just because they share the same HFlag instance.
         private static readonly Dictionary<long, float> LastEffectByCharacter =
@@ -38,6 +45,54 @@ namespace FemboyMode
                 && Time.time >= playedAt && Time.time - playedAt < 8f;
         }
         private static bool warnedUnavailable;
+
+        // Vanilla HAibu.Proc uses randSio.Get() to decide both its
+        // female-specific particle and its sound. Suppress that decision
+        // only after our replacement effect has successfully started.
+        // A particle-only prefix leaves the original sound playing.
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        [HarmonyPatch(typeof(GlobalMethod.ShuffleRand), nameof(GlobalMethod.ShuffleRand.Get))]
+        private static bool FilterAibuFemaleEffectDecision(
+            GlobalMethod.ShuffleRand __instance, ref int __result)
+        {
+            if (__instance == null || ActionListField == null ||
+                AibuRandomField == null ||
+                FemboyModePlugin.SuppressOriginalFemaleFX == null ||
+                !FemboyModePlugin.SuppressOriginalFemaleFX.Value ||
+                FemboyModePlugin.EnableMaleClimaxFX == null ||
+                !FemboyModePlugin.EnableMaleClimaxFX.Value)
+                return true;
+
+            HSceneProc[] scenes = UnityEngine.Object.FindObjectsOfType<HSceneProc>();
+            for (int i = 0; i < scenes.Length; i++)
+            {
+                HSceneProc scene = scenes[i];
+                if (scene == null || scene.flags == null || !scene.flags.isFreeH ||
+                    scene.flags.mode != HFlag.EMode.aibu ||
+                    !HasRecentMaleEffect(scene.flags))
+                    continue;
+
+                var heroine = scene.flags.GetLeadingHeroine();
+                if (heroine == null ||
+                    !FemboyModePlugin.IsFemboy(heroine.chaCtrl))
+                    continue;
+
+                IList actions = ActionListField.GetValue(scene) as IList;
+                if (actions == null) continue;
+                foreach (object action in actions)
+                {
+                    if (!(action is HAibu)) continue;
+                    if (!ReferenceEquals(AibuRandomField.GetValue(action), __instance))
+                        continue;
+
+                    __result = 0;
+                    return false;
+                }
+            }
+
+            return true;
+        }
 
         // The vanilla Aibu particle #2 is the female squirt effect. When
         // selecting the alternate male effect on the first heroine, suppress
