@@ -33,6 +33,7 @@ namespace FemboyMode
             MakerAPI.ChaFileLoaded += OnMakerCardLoaded;
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
+            harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             Logger.LogInfo("Femboy Mode: character flag and Free H action restrictions enabled.");
         }
 
