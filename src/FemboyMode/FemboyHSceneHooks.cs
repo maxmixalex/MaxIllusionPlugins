@@ -11,7 +11,7 @@ namespace FemboyMode
     {
         private static bool IsMarkedLeadingCharacter(HSprite sprite)
         {
-            if (sprite == null)
+            if (sprite == null || sprite.flags == null || !sprite.flags.isFreeH)
                 return false;
 
             var heroine = sprite.GetLeadingHeroine();
@@ -30,12 +30,14 @@ namespace FemboyMode
             if (buttons == null || buttons.Count < 2)
                 return;
 
-            bool marked = IsMarkedLeadingCharacter(__instance);
+            if (!IsMarkedLeadingCharacter(__instance))
+                return;
 
             // Vanilla positions 0 and 1 are the two non-anal insert actions.
-            // Restore visibility for normal characters on the same HSprite.
-            buttons[0].gameObject.SetActive(!marked);
-            buttons[1].gameObject.SetActive(!marked);
+            // Do not unhide controls for other characters: another plugin may
+            // have legitimately hidden those buttons.
+            buttons[0].gameObject.SetActive(false);
+            buttons[1].gameObject.SetActive(false);
 
             // Do not artificially enable an unavailable anal animation:
             // some positions have no corresponding action.
