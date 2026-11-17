@@ -12,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - feat/femboy-character-flag
     paths:
       - 'src/FemboyMode/**'
       - '.github/workflows/femboy-mode.yml'
@@ -24,6 +23,12 @@ on:
 
 permissions:
   contents: read
+
+# A pull request already builds every update to the feature branch. Avoid a
+# second push build and cancel obsolete runs after rapid source changes.
+concurrency:
+  group: femboy-mode-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
