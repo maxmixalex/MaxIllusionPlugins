@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using HarmonyLib;
+using UnityEngine;
 using KKAPI.MainGame;
 using KKAPI.Utilities;
 
@@ -10,6 +12,32 @@ namespace FemboyMode
     /// </summary>
     internal static class FemboyHSceneHooks
     {
+        private struct HiddenButtonState
+        {
+            public GameObject First, Second;
+            public bool FirstWasActive, SecondWasActive;
+        }
+
+        private static readonly Dictionary<int, HiddenButtonState> HiddenButtons =
+            new Dictionary<int, HiddenButtonState>();
+
+        // Restore only controls we hid before the native menu rebuild. That
+        // prevents one marked heroine from hiding buttons for the next one.
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HSprite), nameof(HSprite.SetSonyuStart))]
+        private static void RestoreBeforeMenuRebuild(HSprite __instance)
+        {
+            if (__instance == null) return;
+
+            int id = __instance.GetInstanceID();
+            HiddenButtonState prior;
+            if (!HiddenButtons.TryGetValue(id, out prior))
+                return;
+            HiddenButtons.Remove(id);
+            if (prior.First != null) prior.First.SetActive(prior.FirstWasActive);
+            if (prior.Second != null) prior.Second.SetActive(prior.SecondWasActive);
+        }
+
         private static bool IsMarkedLeadingCharacter(HSprite sprite)
         {
             if (sprite == null || sprite.flags == null || !sprite.flags.isFreeH ||
@@ -38,11 +66,22 @@ namespace FemboyMode
             if (!IsMarkedLeadingCharacter(__instance))
                 return;
 
+            // Preserve each button's native visibility for a future switch
+            // to an unmarked heroine or another animation category.
+            GameObject first = buttons[0].gameObject;
+            GameObject second = buttons[1].gameObject;
+            HiddenButtons[__instance.GetInstanceID()] = new HiddenButtonState
+            {
+                First = first,
+                Second = second,
+                FirstWasActive = first.activeSelf,
+                SecondWasActive = second.activeSelf
+            };
+            if (HiddenButtons.Count > 16) HiddenButtons.Clear();
+
             // Vanilla positions 0 and 1 are the two non-anal insert actions.
-            // Do not unhide controls for other characters: another plugin may
-            // have legitimately hidden those buttons.
-            buttons[0].gameObject.SetActive(false);
-            buttons[1].gameObject.SetActive(false);
+            first.SetActive(false);
+            second.SetActive(false);
 
             // Do not artificially enable an unavailable anal animation:
             // some positions have no corresponding action.
