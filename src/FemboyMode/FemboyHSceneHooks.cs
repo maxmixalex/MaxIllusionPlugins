@@ -1,44 +1,16 @@
-using System.Collections.Generic;
 using HarmonyLib;
-using UnityEngine;
-using KKAPI.MainGame;
 using KKAPI.Utilities;
+using UnityEngine;
 
 namespace FemboyMode
 {
     /// <summary>
-    /// Applies per-character Free H UI restrictions without modifying the
-    /// game's built-in sex field or affecting unmarked characters.
+    /// Restrict only the current marked heroine's vanilla Free H actions.
+    /// The game's own SetSonyuStart always rebuilds the complete button list.
     /// </summary>
     internal static class FemboyHSceneHooks
     {
-        private struct HiddenButtonState
-        {
-            public GameObject First, Second;
-            public bool FirstWasActive, SecondWasActive;
-        }
-
-        private static readonly Dictionary<int, HiddenButtonState> HiddenButtons =
-            new Dictionary<int, HiddenButtonState>();
-
-        // Restore only controls we hid before the native menu rebuild. That
-        // prevents one marked heroine from hiding buttons for the next one.
-        [HarmonyPrefix]
-        [HarmonyPatch(typeof(HSprite), nameof(HSprite.SetSonyuStart))]
-        private static void RestoreBeforeMenuRebuild(HSprite __instance)
-        {
-            if (__instance == null) return;
-
-            int id = __instance.GetInstanceID();
-            HiddenButtonState prior;
-            if (!HiddenButtons.TryGetValue(id, out prior))
-                return;
-            HiddenButtons.Remove(id);
-            if (prior.First != null) prior.First.SetActive(prior.FirstWasActive);
-            if (prior.Second != null) prior.Second.SetActive(prior.SecondWasActive);
-        }
-
-        private static bool IsMarkedLeadingCharacter(HSprite sprite)
+        internal static bool IsMarkedLeadingCharacter(HSprite sprite)
         {
             if (sprite == null || sprite.flags == null || !sprite.flags.isFreeH ||
                 FemboyModePlugin.EnableFreeHRestrictions == null ||
@@ -55,36 +27,34 @@ namespace FemboyMode
         [HarmonyPatch(typeof(HSprite), nameof(HSprite.SetSonyuStart))]
         private static void RestrictFrontOptions(HSprite __instance)
         {
-            if (__instance == null || __instance.sonyu == null ||
-                __instance.sonyu.categoryActionButton == null)
+            if (__instance == null || __instance.flags == null ||
+                __instance.sonyu == null || __instance.sonyu.categoryActionButton == null ||
+                !IsMarkedLeadingCharacter(__instance))
                 return;
 
             var buttons = __instance.sonyu.categoryActionButton.lstButton;
-            if (buttons == null || buttons.Count < 2)
+            if (buttons == null)
                 return;
 
-            if (!IsMarkedLeadingCharacter(__instance))
+            // Match vanilla SetSonyuStart exactly: two seven-button pages,
+            // selected by the pose's isFemaleInitiative property.
+            HFlag flags = __instance.flags;
+            bool femaleInitiative = flags.selectAnimationListInfo != null
+                ? flags.selectAnimationListInfo.isFemaleInitiative
+                : flags.nowAnimationInfo != null && flags.nowAnimationInfo.isFemaleInitiative;
+            int baseIndex = femaleInitiative ? 7 : 0;
+            if (buttons.Count < baseIndex + 2)
                 return;
 
-            // Preserve each button's native visibility for a future switch
-            // to an unmarked heroine or another animation category.
-            GameObject first = buttons[0].gameObject;
-            GameObject second = buttons[1].gameObject;
-            HiddenButtons[__instance.GetInstanceID()] = new HiddenButtonState
-            {
-                First = first,
-                Second = second,
-                FirstWasActive = first.activeSelf,
-                SecondWasActive = second.activeSelf
-            };
-            if (HiddenButtons.Count > 16) HiddenButtons.Clear();
+            // SetSonyuStart calls SetActive(false) for every button before
+            // rebuilding its current page. Therefore no retained UI state or
+            // visibility-restoration cache is needed when switching actors.
+            if (buttons[baseIndex] != null)
+                buttons[baseIndex].gameObject.SetActive(false);
+            if (buttons[baseIndex + 1] != null)
+                buttons[baseIndex + 1].gameObject.SetActive(false);
 
-            // Vanilla positions 0 and 1 are the two non-anal insert actions.
-            first.SetActive(false);
-            second.SetActive(false);
-
-            // Do not artificially enable an unavailable anal animation:
-            // some positions have no corresponding action.
+            // Never force-enable the other actions; a pose may not support them.
         }
 
         [HarmonyPrefix]
@@ -92,7 +62,8 @@ namespace FemboyMode
         [HarmonyPatch(typeof(HSprite), nameof(HSprite.OnInsertNoVoiceClick))]
         private static bool PreventNonAnalAction(HSprite __instance)
         {
-            // Protect the action entry points as well as the visible buttons.
+            // UI visibility is insufficient: other plugins can call the native
+            // handler directly. Guard it for the marked leading heroine only.
             return !IsMarkedLeadingCharacter(__instance);
         }
     }
