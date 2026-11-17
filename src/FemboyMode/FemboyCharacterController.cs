@@ -15,6 +15,7 @@ namespace FemboyMode
         private const string GeometryYKey = "BodyBoneScaleY";
         private const string GeometryZKey = "BodyBoneScaleZ";
         private bool isFemboy;
+        public bool IsInitialized { get; private set; }
         private float geometryScaleX = 1f, geometryScaleY = 1f, geometryScaleZ = 1f;
 
         public float GeometryScaleX
@@ -40,6 +41,7 @@ namespace FemboyMode
             set
             {
                 isFemboy = ChaControl != null && ChaControl.sex == 1 && value;
+                IsInitialized = true;
                 ApplyMaleGeometry();
             }
         }
@@ -51,6 +53,7 @@ namespace FemboyMode
                 return;
 
             RestoreMaleGeometry();
+            IsInitialized = true;
             isFemboy = false;
             geometryScaleX = geometryScaleY = geometryScaleZ = 1f;
             if (ChaControl == null || ChaControl.sex != 1)
