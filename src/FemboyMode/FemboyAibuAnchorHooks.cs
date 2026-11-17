@@ -48,8 +48,16 @@ namespace FemboyMode
             Transform bone = FindDescendant(_female.objBodyBone.transform, boneName);
             if (bone == null)
             {
-                FemboyModePlugin.LogMissingAibuBone(boneName);
-                return;
+                // Female-body rigs may not have a native male appendage bone.
+                // Fall back to the regular Kokan transform so offsets still
+                // work and no item loses its parent.
+                bone = FindDescendant(_female.objBodyBone.transform, "cf_d_kokan");
+                if (bone == null)
+                {
+                    FemboyModePlugin.LogMissingAibuBone(boneName);
+                    return;
+                }
+                FemboyModePlugin.LogFallbackAibuBone(boneName);
             }
 
             int id = __instance.GetInstanceID();
