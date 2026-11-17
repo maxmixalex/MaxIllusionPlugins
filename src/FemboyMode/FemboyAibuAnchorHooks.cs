@@ -72,11 +72,24 @@ namespace FemboyMode
 
             int id = __instance.GetInstanceID();
             GameObject existing;
-            if (OwnedAnchors.TryGetValue(id, out existing))
+            if (OwnedAnchors.TryGetValue(id, out existing) && existing != null)
             {
-                if (existing != null) UnityEngine.Object.Destroy(existing);
-                OwnedAnchors.Remove(id);
+                // InitHitReactionCollider can run again on the same HandCtrl.
+                // Reuse the live anchor instead of destroying an active item
+                // that was parented below it by vanilla HandCtrl.SetItem().
+                if (existing.transform.IsChildOf(_female.objBodyBone.transform))
+                {
+                    BindKokanItemParents(layers[2], existing.transform);
+                    return;
+                }
+
+                // The character's body was replaced. Do not destroy an anchor
+                // with live item children; the old rig will clean it up.
+                if (existing.transform.childCount > 0)
+                    return;
+                UnityEngine.Object.Destroy(existing);
             }
+            OwnedAnchors.Remove(id);
 
             GameObject anchor = new GameObject("FemboyMode_KokanActionAnchor");
             anchor.transform.SetParent(bone, false);
@@ -96,23 +109,11 @@ namespace FemboyMode
             SphereCollider hit = anchor.AddComponent<SphereCollider>();
             hit.isTrigger = true;
             hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
-            hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value;
+            hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
+                FemboyModePlugin.EnableKokanAnchor.Value;
             anchor.AddComponent<FemboyAnchorUpdater>();
 
-            int changed = 0;
-            foreach (HandCtrl.LayerInfo layer in layers[2].Values)
-            {
-                if (layer == null || layer.transParents == null)
-                    continue;
-
-                for (int i = 0; i < layer.transParents.Length; i++)
-                {
-                    // Keep absent/unsupported placements unavailable.
-                    if (layer.transParents[i] == null) continue;
-                    layer.transParents[i] = anchor.transform;
-                    changed++;
-                }
-            }
+            int changed = BindKokanItemParents(layers[2], anchor.transform);
 
             if (changed == 0)
             {
@@ -123,6 +124,32 @@ namespace FemboyMode
             OwnedAnchors[id] = anchor;
             if (FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogAibuBound(boneName, changed);
+        }
+
+        private static int BindKokanItemParents(
+            Dictionary<int, HandCtrl.LayerInfo> layers, Transform anchor)
+        {
+            int changed = 0;
+            if (layers == null || anchor == null)
+                return 0;
+
+            foreach (HandCtrl.LayerInfo layer in layers.Values)
+            {
+                if (layer == null || layer.transParents == null)
+                    continue;
+
+                for (int i = 0; i < layer.transParents.Length; i++)
+                {
+                    // Preserve unsupported placements. Existing rebindings
+                    // to this same anchor are idempotent.
+                    if (layer.transParents[i] == null ||
+                        layer.transParents[i] == anchor)
+                        continue;
+                    layer.transParents[i] = anchor;
+                    changed++;
+                }
+            }
+            return changed;
         }
 
         // The old female model hit capsule can be closer to the camera than
@@ -230,7 +257,8 @@ namespace FemboyMode
             SphereCollider hit = GetComponent<SphereCollider>();
             if (hit != null)
             {
-                hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value;
+                hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
+                FemboyModePlugin.EnableKokanAnchor.Value;
                 hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
             }
 
