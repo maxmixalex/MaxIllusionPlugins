@@ -1,54 +1,61 @@
-# Femboy Mode (KK_FemboyMode) — v0.2.0
+# Femboy Mode for Koikatsu — v0.3.0
 
-Independent female-card marker and scoped integrations for **Koikatsu / Koikatsu Party**.
+Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
-This is **not a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap)**. BecomeTrap marks the male school player and modifies school animations and NPC interactions. Femboy Mode marks a **female** card without changing its built-in `sex` value or transferring male-player school hooks.
+## Implemented
 
-## Current features
+- **Two synchronized Maker switches:** 「伪娘角色标志 (Femboy)」in both Parameter > Character and Body > All of the female Maker.
+- **Card-local state:** stores `MaxMixAlex.FemboyMode/IsFemboy` and optional male-bone X/Y/Z scaling (extended data version 2; compatible with version 1). Switching cards and state-preserving reloads are handled independently.
+- **External API:** `FemboyModePlugin.IsFemboy(ChaControl)`, `IsFemboy(ChaFileControl)`, `GetController(ChaControl)`.
+- **Maker asset unlock:** while a marked card is active, item-list sex filters are permitted to expose male-listed resources. Optional `KK_UncensorSelector` compatibility limits its male-body preset list availability to the marked female Maker, instead of globally enabling GenderBender. Reopen Maker after the first toggle to rebuild precomputed lists.
+- **Body model controls:** X, Y, Z sliders under Body > All (0.5–2.0 scale, 1.0 neutral) act on the specifically named bone `cm_j_dan100` when it exists in the installed male geometry; individual values persist in the character card. These are **new model-specific controls**, not a transplant of all vanilla male Maker panels. Absent bones are safely ignored.
+- **Free H filtering:** the two native non-anal insertion action buttons are hidden for the marked leading heroine. Their click handlers are guarded, without forcing unavailable positions or changing the unmarked heroine's behavior.
+- **Kokan touch relocation:** action anchors are created *after* optional body objects load, immediately before the game's `HandCtrl.InitHitReactionCollider`; a configurable male-bone hit sphere is added. A `GetOnMouseAibuCollider` postfix favors this sphere over the old female-model Kokan collider and rejects the old region for marked characters. The original actor's touch-area restrictions remain intact. The fallback is `cf_d_kokan` if the configured target bone is absent.
+- **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The female Aibu squirt particle (ID 2) can optionally be suppressed. This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
 
-- **Female Maker:** a **伪娘角色标志 (Femboy)** checkbox in the Character parameter tab.
-- **Character-card persistence:** saves `IsFemboy=true` as extended card data under `MaxMixAlex.FemboyMode` (version 1). No extra data is written for unmarked cards.
-- **Card load/update:** syncs the checkbox after switching/reloading cards, preserving temporary changes on state-preserving reloads.
-- **Plugin APIs:** `FemboyModePlugin.IsFemboy(ChaControl)`, `IsFemboy(ChaFileControl)`, and `GetController(ChaControl)`.
-- **Male-listed assets in female Maker:** a scoped `ListInfoBase.GetInfoInt(Sex)` override when editing a marked female card. This changes list filtering; it does **not** create the missing male-body editor panels or swap the female mesh.
-- **Free H action restrictions:** when the active heroine is marked, hides the two standard front-insertion actions in `HSprite.SetSonyuStart` and blocks their click handlers. Only the vanilla two-character Free H flow is covered. A position that has no anal animation is not forced to offer one.
-- **Kokan touch target:** in `HandCtrl.Init`, changes the local `aibulayer_02` item-parent transforms to a configurable bone. Adds a tagged `H/Aibu/Hit/kokan` sphere collider before the game's later `InitHitReactionCollider` pass, leaving original colliders in place. The new contact sphere and anchor offsets can be adjusted during an open Free H scene. If the configured male bone is missing, the plugin uses `cf_d_kokan` as a fallback.
-- **Optional UncensorSelector compatibility:** if the plugin is installed, its `BodyAllowedInMaker(byte, byte)` check is patched to admit male body models when a marked female card is present. This does **not** globally toggle UncensorSelector's GenderBender setting and does not apply to unmarked characters. The UncensorSelector Body dropdown is built when Maker initializes; save the card and reopen Maker to refresh the list after first marking a character.
-- **Independent toggles:** Maker list filtering, Free H restrictions and Kokan anchoring can each be disabled through BepInEx configuration.
+## Configuration
 
-## Kokan anchor configuration
-
-BepInEx writes the plugin's configuration under `BepInEx/config/MaxMixAlex.FemboyMode.cfg`. The setting names are:
+The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most values can be changed through BepInEx ConfigurationManager:
 
 | Section | Setting | Default |
 | --- | --- | --- |
-| Aibu alignment | Enable Kokan action anchor | true |
-| Aibu alignment | Target bone | `cm_j_dan100` |
-| Aibu alignment | Enable target hit collider | true |
-| Aibu alignment | Target hit radius | `0.05` (Unity units) |
-| Aibu alignment | Offset X / Y / Z | `0` |
-| Aibu alignment | Rotation X / Y / Z | `0` degrees |
 | Maker | Unlock male-listed assets | true |
+| Maker | Enable male geometry bone scaling | true |
 | Free H | Restrict front insertion | true |
+| Free H | Use male-style finish FX | true |
+| Free H | Suppress female Aibu squirt FX | true |
+| Aibu alignment | Enable Kokan action anchor | true |
+| Aibu alignment | Enable target hit collider | true |
+| Aibu alignment | Target bone | `cm_j_dan100` |
+| Aibu alignment | Target hit radius | `0.05` |
+| Aibu alignment | Offset X/Y/Z, Rotation X/Y/Z | 0 |
+| Male finish FX | Offset X/Y/Z, Rotation X/Y/Z | 0 |
 | Debug | Verbose logs | false |
 
-The target bone must be an actual transform in the installed character's rig. It depends on the body/uncensor model; **do not assume every replacement body contains `cm_j_dan100`**. If it does not, a fallback offset can be calibrated relative to `cf_d_kokan`. The positional and rotational values update the proxy during a running scene if edited through ConfigurationManager, but changing the *bone name* requires re-entering the scene.
+The anchor local offsets and rotations and the new hit sphere radius are refreshed during an active scene. Changing target bone name requires re-entering Free H. Model geometry scaling is based on that bone's initial local scale; when the flag is disabled or the card is replaced, the controller restores the original scale. Model-specific compatibility with KKABMX, UncensorSelector and other runtime bone modifiers still requires game testing.
 
-This approach repositions **item parents and mouse hit detection**. It does not retarget all vanilla animator clips or solve every IK configuration. Report the body model, target bone and offset when a posture is visibly incorrect.
+**Important:** the female Maker already shares many base body-shape fields with the male Maker; enabling cross-sex items and adding bone scaling does not mean every male-only native menu control is available. UI sections that exist only in the male Maker need separate adapters.
 
-## Build and install
+## Build / install
 
-Use the repository's centrally managed NuGet packages; the project targets `net35`.
+Targets .NET Framework 3.5 / BepInEx 5. Requires KKAPI and ExtendedSave, and uses optional integrations when installed. Build via:
 
 ```sh
 dotnet restore src/FemboyMode/FemboyMode.csproj
 dotnet build src/FemboyMode/FemboyMode.csproj -c Release --no-restore
 ```
 
-Copy `bin/Release/FemboyMode/KK_FemboyMode.dll` to the game's `BepInEx/plugins/` directory. BepInEx 5, KKAPI and ExtendedSave are runtime prerequisites. The project also includes a dedicated GitHub Actions workflow that uploads the compiled DLL for successful runs.
+Copy `bin/Release/FemboyMode/KK_FemboyMode.dll` to `Koikatu/BepInEx/plugins/`. The dedicated GitHub Actions workflow produces a downloadable `KK_FemboyMode` artifact.
 
-## Remaining work and test matrix
+## Validation and known limitations
 
-**Not implemented:** a standalone native male-body morph/settings panel inside female Maker (the UncensorSelector bridge only affects the optional plugin's body list), a model-independent full IK retargeting system, and male-style climax/finish state handling. Those should not be claimed as finished.
+Passing CI proves **C# compilation only**, not the actual motion or visual results inside the game. Manual checks are still required:
 
-**Not yet game-tested:** compile passing is not proof of in-game compatibility. Verify a marked female card's saved flag and switch to an unmarked card, a male card, Maker list refresh, vanilla H action menus, positions with missing anal actions, click detection at the re-anchored Kokan target, and compatibility with UncensorSelector / KK_ClothingUnlocker / MultiTeamH. Do not bundle game assemblies or user card data in releases.
+1. Save a marked card and reload it; switch to an unmarked female card, then a male card; ensure no state leakage.
+2. Toggle the flag in both Maker pages; verify the controls synchronize and male list entries become visible on reopening Maker.
+3. Test bone scaling on installed male geometry, restore when flag is removed, and combination with KKABMX / UncensorSelector.
+4. Test touch alignment for the actual model and several poses, including source hit collider position and new hit sphere.
+5. Test both available and unavailable anal-only positions in 2-person Free H; verify direct action handlers and active-character isolation.
+6. Test climax effect when the male particle resource is present, original female particle suppression, and compatibility with other effects mods.
+
+**Remaining functional gap:** true replacement of the female climax **animation and voice** with a male-character animation/voice set has not been implemented. Replacing `HFlag.finish` is not a safe shortcut: it operates on the **actual male participant** and corrupts simultaneous finishes. A full animation rewrite needs appropriate actor clips and skeleton retargeting, plus runtime validation. This repository does not bundle game assets or replacement models.
