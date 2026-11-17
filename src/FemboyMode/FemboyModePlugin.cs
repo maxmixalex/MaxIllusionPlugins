@@ -44,6 +44,7 @@ namespace FemboyMode
 
         private Harmony harmony;
         private MakerToggle flagToggle;
+        private MakerToggle bodyFlagToggle;
         private bool refreshing;
 
         private void Awake()
@@ -106,22 +107,25 @@ namespace FemboyMode
                 return;
 
             flagToggle = e.AddControl(new MakerToggle(
-                MakerConstants.Parameter.Character,
-                "伪娘角色标志 (Femboy)",
-                this));
-            flagToggle.ValueChanged.Subscribe(delegate(bool enabled)
-            {
-                if (refreshing || !MakerAPI.InsideAndLoaded)
-                    return;
+                MakerConstants.Parameter.Character, "伪娘角色标志 (Femboy)", this));
+            bodyFlagToggle = e.AddControl(new MakerToggle(
+                MakerConstants.Body.All, "伪娘角色标志 (Femboy)", this));
+            flagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
+            bodyFlagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
+        }
 
-                FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
-                if (controller != null)
-                {
-                    controller.IsFemboy = enabled;
-                    if (VerboseLogging.Value)
-                        Logger.LogInfo("Maker character Femboy flag changed to " + enabled);
-                }
-            });
+        private void OnMakerFlagChanged(bool enabled)
+        {
+            if (refreshing || !MakerAPI.InsideAndLoaded)
+                return;
+
+            FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
+            if (controller == null) return;
+
+            controller.IsFemboy = enabled;
+            RefreshMakerToggle();
+            if (VerboseLogging.Value)
+                Logger.LogInfo("Maker character Femboy flag changed to " + enabled);
         }
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
@@ -148,14 +152,16 @@ namespace FemboyMode
 
         private void RefreshMakerToggle()
         {
-            if (flagToggle == null || !MakerAPI.InsideAndLoaded)
+            if (!MakerAPI.InsideAndLoaded)
                 return;
 
             FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
+            bool enabled = controller != null && controller.IsFemboy;
             refreshing = true;
             try
             {
-                flagToggle.SetValue(controller != null && controller.IsFemboy);
+                if (flagToggle != null) flagToggle.SetValue(enabled);
+                if (bodyFlagToggle != null) bodyFlagToggle.SetValue(enabled);
             }
             finally
             {
