@@ -70,6 +70,7 @@ namespace FemboyMode
                 FemboyModePlugin.KokanRotationX.Value,
                 FemboyModePlugin.KokanRotationY.Value,
                 FemboyModePlugin.KokanRotationZ.Value);
+            anchor.AddComponent<FemboyAnchorUpdater>();
 
             int changed = 0;
             foreach (HandCtrl.LayerInfo layer in layers[2].Values)
@@ -121,6 +122,39 @@ namespace FemboyMode
                     return transforms[i];
             }
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Applies position/rotation changes from BepInEx ConfigurationManager
+    /// while a Free H scene remains open, allowing live calibration.
+    /// </summary>
+    internal sealed class FemboyAnchorUpdater : MonoBehaviour
+    {
+        private Vector3 oldPosition;
+        private Vector3 oldRotation;
+        private bool hasValues;
+
+        private void LateUpdate()
+        {
+            if (FemboyModePlugin.KokanOffsetX == null) return;
+
+            Vector3 position = new Vector3(
+                FemboyModePlugin.KokanOffsetX.Value,
+                FemboyModePlugin.KokanOffsetY.Value,
+                FemboyModePlugin.KokanOffsetZ.Value);
+            Vector3 rotation = new Vector3(
+                FemboyModePlugin.KokanRotationX.Value,
+                FemboyModePlugin.KokanRotationY.Value,
+                FemboyModePlugin.KokanRotationZ.Value);
+            if (!hasValues || position != oldPosition)
+                transform.localPosition = position;
+            if (!hasValues || rotation != oldRotation)
+                transform.localRotation = Quaternion.Euler(rotation);
+
+            hasValues = true;
+            oldPosition = position;
+            oldRotation = rotation;
         }
     }
 }
