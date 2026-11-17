@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace FemboyMode
 {
@@ -122,6 +123,54 @@ namespace FemboyMode
             OwnedAnchors[id] = anchor;
             if (FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogAibuBound(boneName, changed);
+        }
+
+        // The old female model hit capsule can be closer to the camera than
+        // the new Kokan collider. Explicitly prioritize the configured target
+        // rather than relying on arbitrary RaycastAll hit order.
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HandCtrl), "GetOnMouseAibuCollider")]
+        private static void CorrectKokanRaycast(
+            HandCtrl __instance, ref HandCtrl.AibuColliderKind __result)
+        {
+            if (__instance == null || __instance.flags == null ||
+                !__instance.flags.isFreeH || !__instance.flags.isAibuSelect ||
+                FemboyModePlugin.EnableKokanAnchor == null ||
+                !FemboyModePlugin.EnableKokanAnchor.Value ||
+                FemboyModePlugin.EnableKokanHitCollider == null ||
+                !FemboyModePlugin.EnableKokanHitCollider.Value)
+                return;
+
+            GameObject anchor;
+            if (!OwnedAnchors.TryGetValue(__instance.GetInstanceID(), out anchor) ||
+                anchor == null)
+                return;
+
+            SphereCollider collider = anchor.GetComponent<SphereCollider>();
+            if (collider == null || !collider.enabled || __instance.nowMES == null ||
+                __instance.nowMES.isTouchAreas == null ||
+                __instance.nowMES.isTouchAreas.Length < 4)
+                return;
+
+            // Keep the original per-animation touch area restrictions intact.
+            if (!__instance.nowMES.isTouchAreas[3])
+                return;
+
+            if (EventSystem.current != null &&
+                EventSystem.current.IsPointerOverGameObject())
+                return;
+
+            if (__instance.flags.ctrlCamera == null ||
+                __instance.flags.ctrlCamera.thisCmaera == null)
+                return;
+
+            Ray ray = __instance.flags.ctrlCamera.thisCmaera.ScreenPointToRay(
+                Input.mousePosition);
+            RaycastHit hit;
+            if (collider.Raycast(ray, out hit, 100f))
+                __result = HandCtrl.AibuColliderKind.kokan;
+            else if (__result == HandCtrl.AibuColliderKind.kokan)
+                __result = HandCtrl.AibuColliderKind.none;
         }
 
         [HarmonyPostfix]
