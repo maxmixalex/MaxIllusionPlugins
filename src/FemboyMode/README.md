@@ -1,32 +1,53 @@
-# Femboy Mode / 伪娘角色标志
+# Femboy Mode (KK_FemboyMode) — v0.2.0
 
-Koikatsu / Koikatsu Party plugin. Adds a **female-card-only** Femboy marker to the Character tab of Maker. This is independent from [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap): that plugin targets male cards and the school player, whereas this plugin targets female cards and leaves the native sex value untouched.
+Independent female-card marker and scoped integrations for **Koikatsu / Koikatsu Party**.
 
-## Implemented
+This is **not a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap)**. BecomeTrap marks the male school player and modifies school animations and NPC interactions. Femboy Mode marks a **female** card without changing its built-in `sex` value or transferring male-player school hooks.
 
-- Maker checkbox **伪娘角色标志 (Femboy)**, visible only in the female Maker.
-- Character-card extended data under `MaxMixAlex.FemboyMode`, key `IsFemboy`, data version 1.
-- Independent per-card state, including card-load/UI refresh and no flag leakage when switching cards.
-- Normal female and male cards remain unchanged; unmarked cards do not receive extra data.
-- Public integration API: `FemboyModePlugin.IsFemboy(ChaControl)` and `GetController(ChaControl)`.
-- Preserve unsaved Maker edits on state-preserving reloads.
-- In a marked female Maker, permit male-only asset entries that use the game's `ListInfoBase` sex filter. Some tabs may require reopening to refresh their cached lists.
-- In 2-character Free H, hide the two non-anal insert buttons for the currently marked heroine and block their direct click handlers; unmarked characters and story H retain original handling.
+## Current features
 
-## Not yet implemented
+- **Female Maker:** a **伪娘角色标志 (Femboy)** checkbox in the Character parameter tab.
+- **Character-card persistence:** saves `IsFemboy=true` as extended card data under `MaxMixAlex.FemboyMode` (version 1). No extra data is written for unmarked cards.
+- **Card load/update:** syncs the checkbox after switching/reloading cards, preserving temporary changes on state-preserving reloads.
+- **Plugin APIs:** `FemboyModePlugin.IsFemboy(ChaControl)`, `IsFemboy(ChaFileControl)`, and `GetController(ChaControl)`.
+- **Male-listed assets in female Maker:** a scoped `ListInfoBase.GetInfoInt(Sex)` override when editing a marked female card. This changes list filtering; it does **not** create the missing male-body editor panels or swap the female mesh.
+- **Free H action restrictions:** when the active heroine is marked, hides the two standard front-insertion actions in `HSprite.SetSonyuStart` and blocks their click handlers. Only the vanilla two-character Free H flow is covered. A position that has no anal animation is not forced to offer one.
+- **Kokan touch target:** in `HandCtrl.Init`, changes the local `aibulayer_02` item-parent transforms to a configurable bone. Adds a tagged `H/Aibu/Hit/kokan` sphere collider before the game's later `InitHitReactionCollider` pass, leaving original colliders in place. The new contact sphere and anchor offsets can be adjusted during an open Free H scene. If the configured male bone is missing, the plugin uses `cf_d_kokan` as a fallback.
+- **Independent toggles:** Maker list filtering, Free H restrictions and Kokan anchoring can each be disabled through BepInEx configuration.
 
-This first increment is an actual **flag/card-persistence plugin**, not a claim that the full requested gameplay conversion is finished. The dedicated male-body slider UI, model-dependent contact alignment/IK, and male-style finish behavior remain to be implemented and tested. Cross-sex list filtering is not equivalent to adding an entire male-body Maker panel. The Free H restriction hook only covers the two native front-insertion actions; no unsupported 3P or mod-added action is claimed.
+## Kokan anchor configuration
 
-For cross-sex clothing item visibility, the existing **KK_ClothingUnlocker** provides a separate option. Femboy Mode does not flip `ChaControl.sex`, globally unlock all clothing, or rewrite another plugin's settings. Two different mods may expose the same asset list entries; compatibility with those combinations still needs in-game checking.
+BepInEx writes the plugin's configuration under `BepInEx/config/MaxMixAlex.FemboyMode.cfg`. The setting names are:
+
+| Section | Setting | Default |
+| --- | --- | --- |
+| Aibu alignment | Enable Kokan action anchor | true |
+| Aibu alignment | Target bone | `cm_j_dan100` |
+| Aibu alignment | Enable target hit collider | true |
+| Aibu alignment | Target hit radius | `0.05` (Unity units) |
+| Aibu alignment | Offset X / Y / Z | `0` |
+| Aibu alignment | Rotation X / Y / Z | `0` degrees |
+| Maker | Unlock male-listed assets | true |
+| Free H | Restrict front insertion | true |
+| Debug | Verbose logs | false |
+
+The target bone must be an actual transform in the installed character's rig. It depends on the body/uncensor model; **do not assume every replacement body contains `cm_j_dan100`**. If it does not, a fallback offset can be calibrated relative to `cf_d_kokan`. The positional and rotational values update the proxy during a running scene if edited through ConfigurationManager, but changing the *bone name* requires re-entering the scene.
+
+This approach repositions **item parents and mouse hit detection**. It does not retarget all vanilla animator clips or solve every IK configuration. Report the body model, target bone and offset when a posture is visibly incorrect.
 
 ## Build and install
 
-From the repository root:
+Use the repository's centrally managed NuGet packages; the project targets `net35`.
 
-`dotnet restore src/FemboyMode/FemboyMode.csproj`
+```sh
+dotnet restore src/FemboyMode/FemboyMode.csproj
+dotnet build src/FemboyMode/FemboyMode.csproj -c Release --no-restore
+```
 
-`dotnet build src/FemboyMode/FemboyMode.csproj -c Release`
+Copy `bin/Release/FemboyMode/KK_FemboyMode.dll` to the game's `BepInEx/plugins/` directory. BepInEx 5, KKAPI and ExtendedSave are runtime prerequisites. The project also includes a dedicated GitHub Actions workflow that uploads the compiled DLL for successful runs.
 
-Copy `bin/Release/FemboyMode/KK_FemboyMode.dll` into `BepInEx/plugins/` in a Koikatsu installation with BepInEx 5, KKAPI and ExtendedSave. This repository does not distribute game binaries.
+## Remaining work and test matrix
 
-**Testing status:** Code was reviewed against the repository's current KKAPI project conventions, but no compiler or running game was available for an end-to-end verification. Verify marked female card save/reload, switching to an unmarked card, unaffected male cards, male-filtered items in Maker, and 2-character Free H menu/click behavior. Check a position without an anal animation to ensure the game does not hang.
+**Not implemented:** a native male-body morph/settings panel inside female Maker, a model-independent full IK retargeting system, and male-style climax/finish state handling. Those should not be claimed as finished.
+
+**Not yet game-tested:** compile passing is not proof of in-game compatibility. Verify a marked female card's saved flag and switch to an unmarked card, a male card, Maker list refresh, vanilla H action menus, positions with missing anal actions, click detection at the re-anchored Kokan target, and compatibility with UncensorSelector / KK_ClothingUnlocker / MultiTeamH. Do not bundle game assemblies or user card data in releases.
