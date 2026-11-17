@@ -20,17 +20,17 @@ namespace FemboyMode
         public float GeometryScaleX
         {
             get { return geometryScaleX; }
-            set { geometryScaleX = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+            set { geometryScaleX = ClampFiniteScale(value); ApplyMaleGeometry(); }
         }
         public float GeometryScaleY
         {
             get { return geometryScaleY; }
-            set { geometryScaleY = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+            set { geometryScaleY = ClampFiniteScale(value); ApplyMaleGeometry(); }
         }
         public float GeometryScaleZ
         {
             get { return geometryScaleZ; }
-            set { geometryScaleZ = Mathf.Clamp(value, 0.5f, 2f); ApplyMaleGeometry(); }
+            set { geometryScaleZ = ClampFiniteScale(value); ApplyMaleGeometry(); }
         }
 
 
@@ -73,15 +73,22 @@ namespace FemboyMode
             ApplyMaleGeometry();
         }
 
+        private static float ClampFiniteScale(float value)
+        {
+            return float.IsNaN(value) || float.IsInfinity(value)
+                ? 1f : Mathf.Clamp(value, 0.5f, 2f);
+        }
+
         private static float ReadScale(PluginData data, string key)
         {
             object value;
             if (!data.data.TryGetValue(key, out value))
                 return 1f;
 
-            // Avoid exceptions on cards saved by older versions or broken mods.
-            if (value is float) return Mathf.Clamp((float)value, 0.5f, 2f);
-            if (value is double) return Mathf.Clamp((float)(double)value, 0.5f, 2f);
+            // Old and third-party cards can contain malformed numeric values.
+            // Never send NaN or infinity into a bone Transform.
+            if (value is float) return ClampFiniteScale((float)value);
+            if (value is double) return ClampFiniteScale((float)(double)value);
             return 1f;
         }
 
