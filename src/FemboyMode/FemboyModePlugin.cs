@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using BepInEx;
 using BepInEx.Configuration;
+using ExtensibleSaveFormat;
 using HarmonyLib;
 using KKAPI;
 using KKAPI.Chara;
@@ -128,6 +129,22 @@ namespace FemboyMode
         {
             FemboyCharacterController controller = GetController(character);
             return controller != null && controller.IsFemboy;
+        }
+
+        /// <summary>
+        /// Inspect a saved character card even when no ChaControl is instantiated.
+        /// Useful for card selectors, external plugins and scene preflight checks.
+        /// </summary>
+        public static bool IsFemboy(ChaFileControl card)
+        {
+            if (card == null || card.parameter == null || card.parameter.sex != 1)
+                return false;
+
+            PluginData data = ExtendedSave.GetExtendedDataById(card, Guid);
+            object savedValue;
+            return data != null && data.data != null &&
+                   data.data.TryGetValue("IsFemboy", out savedValue) &&
+                   savedValue is bool && (bool)savedValue;
         }
 
         public static FemboyCharacterController GetController(ChaControl character)
