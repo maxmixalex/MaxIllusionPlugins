@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -27,6 +29,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
+        internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> SuppressOriginalFemaleFX;
         internal static ConfigEntry<float> ClimaxFXOffsetX, ClimaxFXOffsetY, ClimaxFXOffsetZ;
@@ -51,6 +54,9 @@ namespace FemboyMode
         private MakerToggle flagToggle;
         private MakerToggle bodyFlagToggle;
         private MakerSlider boneScaleX, boneScaleY, boneScaleZ;
+        private static readonly FieldInfo MakerControlObjects =
+            typeof(BaseGuiEntry).GetField("_controlObjects",
+                BindingFlags.Instance | BindingFlags.NonPublic);
         private bool refreshing;
 
         private void Awake()
@@ -62,6 +68,8 @@ namespace FemboyMode
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
                 "Apply per-card X/Y/Z scaling to the configured male geometry bone when available.");
+            MaleGeometryBone = Config.Bind("Maker", "Male geometry bone", "cm_j_dan100",
+                "Bone for optional X/Y/Z body shape sliders; independent of Aibu target bone.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
             EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
@@ -194,6 +202,21 @@ namespace FemboyMode
             RefreshMakerToggle();
         }
 
+        private static void SetMakerControlVisible(BaseGuiEntry control, bool visible)
+        {
+            if (control == null || MakerControlObjects == null)
+                return;
+            IList objects = MakerControlObjects.GetValue(control) as IList;
+            if (objects == null) return;
+
+            foreach (object entry in objects)
+            {
+                UnityEngine.GameObject widget = entry as UnityEngine.GameObject;
+                if (widget != null && widget.activeSelf != visible)
+                    widget.SetActive(visible);
+            }
+        }
+
         private void RefreshMakerToggle()
         {
             if (!MakerAPI.InsideAndLoaded)
@@ -212,6 +235,9 @@ namespace FemboyMode
                     boneScaleY.SetValue(controller == null ? 1f : controller.GeometryScaleY);
                 if (boneScaleZ != null)
                     boneScaleZ.SetValue(controller == null ? 1f : controller.GeometryScaleZ);
+                SetMakerControlVisible(boneScaleX, enabled && EnableMaleBoneScale.Value);
+                SetMakerControlVisible(boneScaleY, enabled && EnableMaleBoneScale.Value);
+                SetMakerControlVisible(boneScaleZ, enabled && EnableMaleBoneScale.Value);
             }
             finally
             {
