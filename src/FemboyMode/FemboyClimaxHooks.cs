@@ -18,9 +18,40 @@ namespace FemboyMode
         private static readonly FieldInfo ParticleEntriesField =
             typeof(HParticleCtrl).GetField("dicParticle",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo OwnerFlagField =
+            typeof(HParticleCtrl).GetField("flags",
+                BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, float> LastEffectByFlag =
             new Dictionary<int, float>();
         private static bool warnedUnavailable;
+
+        // The vanilla Aibu particle #2 is the female squirt effect. When
+        // selecting the alternate male effect on the first heroine, suppress
+        // only this visual; preserve the original orgasm counters and states.
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HParticleCtrl), nameof(HParticleCtrl.Play))]
+        private static bool FilterFemaleSquirt(HParticleCtrl __instance,
+            int _particle, ref bool __result)
+        {
+            if (_particle != 2 || __instance == null ||
+                FemboyModePlugin.SuppressOriginalFemaleFX == null ||
+                !FemboyModePlugin.SuppressOriginalFemaleFX.Value ||
+                OwnerFlagField == null)
+                return true;
+
+            HFlag flags = OwnerFlagField.GetValue(__instance) as HFlag;
+            if (flags == null || !flags.isFreeH ||
+                !FemboyModePlugin.EnableMaleClimaxFX.Value)
+                return true;
+
+            var heroine = flags.GetLeadingHeroine();
+            if (heroine == null || !(FemboyModePlugin.IsFemboy(heroine.chaCtrl) ||
+                                     FemboyModePlugin.IsFemboy(heroine.charFile)))
+                return true;
+
+            __result = false;
+            return false;
+        }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddAibuOrg))]
@@ -94,6 +125,7 @@ namespace FemboyMode
                 maleEffect.particle.gameObject);
             clone.name = "FemboyMode_NativeMaleFinishFX";
             clone.transform.SetParent(bone, false);
+            clone.SetActive(true);
             clone.transform.localPosition = new Vector3(
                 FemboyModePlugin.ClimaxFXOffsetX.Value,
                 FemboyModePlugin.ClimaxFXOffsetY.Value,
