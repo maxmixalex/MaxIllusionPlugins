@@ -13,6 +13,7 @@ This is **not a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTr
 - **Male-listed assets in female Maker:** a scoped `ListInfoBase.GetInfoInt(Sex)` override when editing a marked female card. This changes list filtering; it does **not** create the missing male-body editor panels or swap the female mesh.
 - **Free H action restrictions:** when the active heroine is marked, hides the two standard front-insertion actions in `HSprite.SetSonyuStart` and blocks their click handlers. Only the vanilla two-character Free H flow is covered. A position that has no anal animation is not forced to offer one.
 - **Kokan touch target:** in `HandCtrl.Init`, changes the local `aibulayer_02` item-parent transforms to a configurable bone. Adds a tagged `H/Aibu/Hit/kokan` sphere collider before the game's later `InitHitReactionCollider` pass, leaving original colliders in place. The new contact sphere and anchor offsets can be adjusted during an open Free H scene. If the configured male bone is missing, the plugin uses `cf_d_kokan` as a fallback.
+- **Optional UncensorSelector compatibility:** if the plugin is installed, its `BodyAllowedInMaker(byte, byte)` check is patched to admit male body models when a marked female card is present. This does **not** globally toggle UncensorSelector's GenderBender setting and does not apply to unmarked characters. The UncensorSelector Body dropdown is built when Maker initializes; save the card and reopen Maker to refresh the list after first marking a character.
 - **Independent toggles:** Maker list filtering, Free H restrictions and Kokan anchoring can each be disabled through BepInEx configuration.
 
 ## Kokan anchor configuration
@@ -48,6 +49,6 @@ Copy `bin/Release/FemboyMode/KK_FemboyMode.dll` to the game's `BepInEx/plugins/`
 
 ## Remaining work and test matrix
 
-**Not implemented:** a native male-body morph/settings panel inside female Maker, a model-independent full IK retargeting system, and male-style climax/finish state handling. Those should not be claimed as finished.
+**Not implemented:** a standalone native male-body morph/settings panel inside female Maker (the UncensorSelector bridge only affects the optional plugin's body list), a model-independent full IK retargeting system, and male-style climax/finish state handling. Those should not be claimed as finished.
 
 **Not yet game-tested:** compile passing is not proof of in-game compatibility. Verify a marked female card's saved flag and switch to an unmarked card, a male card, Maker list refresh, vanilla H action menus, positions with missing anal actions, click detection at the re-anchored Kokan target, and compatibility with UncensorSelector / KK_ClothingUnlocker / MultiTeamH. Do not bundle game assemblies or user card data in releases.
