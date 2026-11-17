@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using BepInEx;
+using BepInEx.Configuration;
 using HarmonyLib;
 using KKAPI;
 using KKAPI.Chara;
@@ -18,7 +19,11 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
+
+        internal static ConfigEntry<bool> EnableFreeHRestrictions;
+        internal static ConfigEntry<bool> EnableMakerAssetUnlock;
+        internal static ConfigEntry<bool> VerboseLogging;
 
         private Harmony harmony;
         private MakerToggle flagToggle;
@@ -26,6 +31,12 @@ namespace FemboyMode
 
         private void Awake()
         {
+            EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
+                "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
+            EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
+                "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
+            VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
+                "Log character marker changes and integration hook decisions.");
             CharacterApi.RegisterExtraBehaviour<FemboyCharacterController>(Guid);
             MakerAPI.RegisterCustomSubCategories += RegisterMakerControls;
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
@@ -34,7 +45,7 @@ namespace FemboyMode
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
-            Logger.LogInfo("Femboy Mode: character flag and Free H action restrictions enabled.");
+            Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
         }
 
         private void OnDestroy()
@@ -63,7 +74,11 @@ namespace FemboyMode
 
                 FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
                 if (controller != null)
+                {
                     controller.IsFemboy = enabled;
+                    if (VerboseLogging.Value)
+                        Logger.LogInfo("Maker character Femboy flag changed to " + enabled);
+                }
             });
         }
 
