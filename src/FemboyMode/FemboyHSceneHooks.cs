@@ -42,8 +42,8 @@ namespace FemboyMode
             bool femaleInitiative = flags.selectAnimationListInfo != null
                 ? flags.selectAnimationListInfo.isFemaleInitiative
                 : flags.nowAnimationInfo != null && flags.nowAnimationInfo.isFemaleInitiative;
-            int baseIndex = femaleInitiative ? 7 : 0;
-            if (buttons.Count < baseIndex + 2)
+            int baseIndex = FemboyRules.FrontInsertStartIndex(femaleInitiative);
+            if (!FemboyRules.HasBothFrontButtons(buttons.Count, baseIndex) )
                 return;
 
             // SetSonyuStart calls SetActive(false) for every button before
