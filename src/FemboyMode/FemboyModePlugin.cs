@@ -201,6 +201,13 @@ namespace FemboyMode
                 "' not found on marked character. Vanilla action anchor was preserved.");
         }
 
+        internal static void LogFallbackAibuBone(string missingBone)
+        {
+            if (Log != null && VerboseLogging != null && VerboseLogging.Value)
+                Log.LogInfo("Aibu target bone '" + missingBone +
+                    "' unavailable; using cf_d_kokan with configurable offsets.");
+        }
+
         internal static void LogAibuBound(string boneName, int count)
         {
             if (Log != null)
