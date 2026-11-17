@@ -42,10 +42,10 @@ namespace FemboyMode
             }
 
             GameObject body = ChaControl.objBodyBone;
-            if (body == null || FemboyModePlugin.KokanAnchorBone == null)
+            if (body == null || FemboyModePlugin.MaleGeometryBone == null)
                 return;
 
-            string boneName = FemboyModePlugin.KokanAnchorBone.Value;
+            string boneName = FemboyModePlugin.MaleGeometryBone.Value;
             if (string.IsNullOrEmpty(boneName))
                 return;
 
@@ -94,6 +94,7 @@ namespace FemboyMode
             scaledBone = null;
             scaledBoneName = null;
             appliedX = appliedY = appliedZ = 1f;
+            lastLookupFrame = -1000;
         }
     }
 }
