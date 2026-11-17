@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using BepInEx;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using ExtensibleSaveFormat;
 using HarmonyLib;
 using KKAPI;
@@ -25,6 +26,18 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> VerboseLogging;
+        internal static ConfigEntry<bool> EnableKokanAnchor;
+        internal static ConfigEntry<string> KokanAnchorBone;
+        internal static ConfigEntry<float> KokanOffsetX;
+        internal static ConfigEntry<float> KokanOffsetY;
+        internal static ConfigEntry<float> KokanOffsetZ;
+        internal static ConfigEntry<float> KokanRotationX;
+        internal static ConfigEntry<float> KokanRotationY;
+        internal static ConfigEntry<float> KokanRotationZ;
+        internal static ManualLogSource Log;
+
+        private static bool warnedMissingAibuField;
+        private static bool warnedMissingAibuBone;
 
         private Harmony harmony;
         private MakerToggle flagToggle;
@@ -32,12 +45,30 @@ namespace FemboyMode
 
         private void Awake()
         {
+            Log = Logger;
             EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
                 "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
+
+            EnableKokanAnchor = Config.Bind("Aibu alignment", "Enable Kokan action anchor", true,
+                "For a marked female character, place Kokan hand items at a named male-geometry bone in Free H.");
+            KokanAnchorBone = Config.Bind("Aibu alignment", "Target bone", "cm_j_dan100",
+                "Exact transform name to attach the Kokan action item to. Does nothing if this bone is absent.");
+            KokanOffsetX = Config.Bind("Aibu alignment", "Offset X", 0f,
+                "Local X offset relative to the target bone (Unity units).");
+            KokanOffsetY = Config.Bind("Aibu alignment", "Offset Y", 0f,
+                "Local Y offset relative to the target bone (Unity units).");
+            KokanOffsetZ = Config.Bind("Aibu alignment", "Offset Z", 0f,
+                "Local Z offset relative to the target bone (Unity units).");
+            KokanRotationX = Config.Bind("Aibu alignment", "Rotation X", 0f,
+                "Local X rotation of the action anchor (degrees).");
+            KokanRotationY = Config.Bind("Aibu alignment", "Rotation Y", 0f,
+                "Local Y rotation of the action anchor (degrees).");
+            KokanRotationZ = Config.Bind("Aibu alignment", "Rotation Z", 0f,
+                "Local Z rotation of the action anchor (degrees).");
             CharacterApi.RegisterExtraBehaviour<FemboyCharacterController>(Guid);
             MakerAPI.RegisterCustomSubCategories += RegisterMakerControls;
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
@@ -46,12 +77,14 @@ namespace FemboyMode
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
+            harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
             Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
         }
 
         private void OnDestroy()
         {
             if (harmony != null) harmony.UnpatchSelf();
+            Log = null;
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface -= OnReloadCustomInterface;
@@ -145,6 +178,27 @@ namespace FemboyMode
             return data != null && data.data != null &&
                    data.data.TryGetValue("IsFemboy", out savedValue) &&
                    savedValue is bool && (bool)savedValue;
+        }
+
+        internal static void WarnMissingAibuField()
+        {
+            if (warnedMissingAibuField || Log == null) return;
+            warnedMissingAibuField = true;
+            Log.LogWarning("HandCtrl.dicAreaLayerInfos was not found. Kokan anchor integration disabled.");
+        }
+
+        internal static void LogMissingAibuBone(string boneName)
+        {
+            if (warnedMissingAibuBone || Log == null) return;
+            warnedMissingAibuBone = true;
+            Log.LogWarning("Kokan target bone '" + boneName +
+                "' not found on marked character. Vanilla action anchor was preserved.");
+        }
+
+        internal static void LogAibuBound(string boneName, int count)
+        {
+            if (Log != null)
+                Log.LogInfo("Bound " + count + " Kokan item parents to " + boneName + ".");
         }
 
         public static FemboyCharacterController GetController(ChaControl character)
