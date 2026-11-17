@@ -1,0 +1,55 @@
+name: FemboyMode build
+
+on:
+  pull_request:
+    paths:
+      - 'src/FemboyMode/**'
+      - '.github/workflows/femboy-mode.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  push:
+    branches:
+      - main
+      - feat/femboy-character-flag
+    paths:
+      - 'src/FemboyMode/**'
+      - '.github/workflows/femboy-mode.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build KK_FemboyMode (.NET Framework 3.5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore src/FemboyMode/FemboyMode.csproj
+
+      - name: Build
+        run: dotnet build src/FemboyMode/FemboyMode.csproj -c Release --no-restore
+
+      - name: Package plugin
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KK_FemboyMode
+          path: bin/Release/FemboyMode/KK_FemboyMode.dll
+          if-no-files-found: error
+          retention-days: 14
