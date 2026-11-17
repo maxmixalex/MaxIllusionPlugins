@@ -15,6 +15,7 @@ namespace FemboyMode
 {
     [BepInPlugin(Guid, PluginName, Version)]
     [BepInDependency(KoikatuAPI.GUID)]
+    [BepInDependency("com.deathweasel.bepinex.uncensorselector", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]
     public sealed class FemboyModePlugin : BaseUnityPlugin
@@ -84,6 +85,7 @@ namespace FemboyMode
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
+            UncensorSelectorCompat.TryPatch(harmony);
             Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
         }
 
@@ -184,6 +186,11 @@ namespace FemboyMode
             return data != null && data.data != null &&
                    data.data.TryGetValue("IsFemboy", out savedValue) &&
                    savedValue is bool && (bool)savedValue;
+        }
+
+        internal static void LogOptionalIntegrationProblem(string message)
+        {
+            if (Log != null) Log.LogInfo(message);
         }
 
         internal static void WarnMissingAibuField()
