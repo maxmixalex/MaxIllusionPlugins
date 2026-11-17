@@ -15,18 +15,27 @@ namespace FemboyMode
     {
         private static readonly FieldInfo AreaLayersField = typeof(HandCtrl).GetField(
             "dicAreaLayerInfos", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo FemaleField = typeof(HandCtrl).GetField(
+            "female", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, GameObject> OwnedAnchors =
             new Dictionary<int, GameObject>();
 
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(HandCtrl), nameof(HandCtrl.Init))]
-        private static void HandInitPostfix(HandCtrl __instance, ChaControl _female, bool __result)
+        // This runs after all body/uncensor objects have been loaded, but
+        // before vanilla collects its hit colliders. HandCtrl.Init is too early:
+        // an optional male geometry bone may not exist at that point.
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HandCtrl), nameof(HandCtrl.InitHitReactionCollider))]
+        private static void BeforeHitColliderDiscovery(HandCtrl __instance)
         {
-            if (!__result || __instance == null || _female == null ||
-                _female.objBodyBone == null || __instance.flags == null ||
+            if (__instance == null || __instance.flags == null ||
                 !__instance.flags.isFreeH ||
                 FemboyModePlugin.EnableKokanAnchor == null ||
                 !FemboyModePlugin.EnableKokanAnchor.Value ||
+                FemaleField == null)
+                return;
+
+            ChaControl _female = FemaleField.GetValue(__instance) as ChaControl;
+            if (_female == null || _female.objBodyBone == null ||
                 !FemboyModePlugin.IsFemboy(_female))
                 return;
 
@@ -78,8 +87,8 @@ namespace FemboyMode
                 FemboyModePlugin.KokanRotationX.Value,
                 FemboyModePlugin.KokanRotationY.Value,
                 FemboyModePlugin.KokanRotationZ.Value);
-            // HandCtrl.InitHitReactionCollider runs later during HSceneProc/HTest
-            // initialization and will automatically pick up this tagged collider.
+            // Vanilla InitHitReactionCollider runs immediately after this prefix
+            // and automatically discovers this tagged collider.
             // Keep vanilla colliders: the new one supplements hit detection,
             // rather than globally mutating the model's existing hit objects.
             anchor.tag = "H/Aibu/Hit/kokan";
