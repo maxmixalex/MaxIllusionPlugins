@@ -107,7 +107,6 @@ namespace FemboyMode
             MakerAPI.RegisterCustomSubCategories += RegisterMakerControls;
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
-            MakerAPI.ChaFileLoaded += OnMakerCardLoaded;
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
@@ -124,7 +123,6 @@ namespace FemboyMode
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface -= OnReloadCustomInterface;
-            MakerAPI.ChaFileLoaded -= OnMakerCardLoaded;
         }
 
         private void RegisterMakerControls(object sender, RegisterSubCategoriesEvent e)
@@ -187,18 +185,6 @@ namespace FemboyMode
 
         private void OnReloadCustomInterface(object sender, EventArgs e)
         {
-            RefreshMakerToggle();
-        }
-
-        private void OnMakerCardLoaded(object sender, EventArgs e)
-        {
-            StartCoroutine(RefreshAfterCardLoaded());
-        }
-
-        private IEnumerator RefreshAfterCardLoaded()
-        {
-            // Card-load and Maker-UI events can run in different frames.
-            yield return null;
             RefreshMakerToggle();
         }
 
