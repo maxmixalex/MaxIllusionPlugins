@@ -147,31 +147,71 @@ namespace FemboyMode
         private static void RemovePhallusToy(
             HandCtrl hand, Dictionary<int, HandCtrl.LayerInfo> kokanLayers)
         {
-            var remove = new List<int>();
-            foreach (KeyValuePair<int, HandCtrl.LayerInfo> pair in kokanLayers)
+            var keys = new List<int>(kokanLayers.Keys);
+            keys.Sort();
+
+            // The base row with icon25 and objects 7/8 is the vibrator
+            // itself. In a modded H list, the phallus-shaped toy the user
+            // identified is the *following* row. Preserve the vibrator.
+            int vibratorKey = -1;
+            foreach (int key in keys)
             {
-                HandCtrl.LayerInfo entry = pair.Value;
-                if (entry == null || entry.idObjects == null ||
-                    entry.idObjects.Length < 2)
+                HandCtrl.LayerInfo layer = kokanLayers[key];
+                if (layer == null || layer.idObjects == null ||
+                    layer.idObjects.Length < 2)
                     continue;
 
-                if (FemboyRules.IsPhallusToyLayer(
-                    entry.idIocn, entry.idObjects[0], entry.idObjects[1]))
-                    remove.Add(pair.Key);
+                if (FemboyRules.IsVibratorLayer(
+                    layer.idIocn, layer.idObjects[0], layer.idObjects[1]))
+                {
+                    vibratorKey = key;
+                    break;
+                }
             }
 
-            if (remove.Count == 0) return;
-            foreach (int key in remove)
-                kokanLayers.Remove(key);
+            int skipKey = FemboyRules.NextLayerKeyAfterVibrator(
+                keys.ToArray(), vibratorKey);
+            if (skipKey < 0)
+                return; // No extra toy installed: leave all five base rows.
 
-            // The vanilla mouse wheel uses areaItem[2] to index these
-            // consecutive 0..N-1 rows. Removing the last row leaves the
-            // earlier hand/finger/tongue/massager items available.
             int[] selected = SelectedItemsField == null ? null :
                 SelectedItemsField.GetValue(hand) as int[];
-            if (selected != null && selected.Length > 2 &&
-                !kokanLayers.ContainsKey(selected[2]))
-                selected[2] = 0;
+            int oldSelection = selected != null && selected.Length > 2
+                ? selected[2] : 0;
+
+            // The vanilla wheel indexes 0..Count-1. Rebuild sequential
+            // keys so skipping a middle row cannot cause a missing-key
+            // exception if other plugins have added even more entries.
+            var retained = new List<HandCtrl.LayerInfo>();
+            foreach (int key in keys)
+                if (key != skipKey)
+                    retained.Add(kokanLayers[key]);
+
+            kokanLayers.Clear();
+            for (int i = 0; i < retained.Count; i++)
+            {
+                retained[i].id = i;
+                kokanLayers.Add(i, retained[i]);
+            }
+
+            if (selected != null && selected.Length > 2)
+            {
+                if (oldSelection == skipKey)
+                    selected[2] = 0;
+                else if (oldSelection > skipKey)
+                    selected[2] = oldSelection - 1;
+                else
+                    selected[2] = oldSelection;
+
+                if (!kokanLayers.ContainsKey(selected[2]))
+                    selected[2] = 0;
+            }
+
+            if (FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Removed only the post-vibrator Kokan item " + skipKey +
+                    "; vibrator row " + vibratorKey + " retained.");
         }
 
         private static int BindKokanItemParents(
