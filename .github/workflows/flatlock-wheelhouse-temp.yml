@@ -17,7 +17,7 @@ jobs:
       - name: Download UnityPy toolchain dependencies
         run: |
           mkdir -p wheelhouse
-          python -m pip download --only-binary=:all: -d wheelhouse 'UnityPy==1.20.26' 'tpk_ar==0.2.4'
+          python -m pip wheel --wheel-dir wheelhouse 'UnityPy==1.20.26' 'tpk_ar==0.2.4'
           echo "Wheels downloaded:"
           ls -lh wheelhouse
       - name: Upload offline wheels
