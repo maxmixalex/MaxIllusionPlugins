@@ -60,15 +60,17 @@ namespace FemboyMode
                     return;
                 lastLookupFrame = Time.frameCount;
 
-                Transform[] transforms = body.GetComponentsInChildren<Transform>(true);
-                foreach (Transform item in transforms)
+                Transform item = FemboyRigResolver.FindBone(body.transform, boneName);
+                if (item != null)
                 {
-                    if (item.name != boneName) continue;
                     scaledBone = item;
                     originalBoneScale = item.localScale;
                     lastWrittenScale = item.localScale;
                     scaledBoneName = boneName;
-                    break;
+                    if (FemboyModePlugin.VerboseLogging != null &&
+                        FemboyModePlugin.VerboseLogging.Value)
+                        FemboyModePlugin.LogOptionalIntegrationProblem(
+                            "Male geometry bone resolved: " + boneName + " -> " + item.name);
                 }
 
                 if (scaledBone == null)
