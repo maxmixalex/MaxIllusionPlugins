@@ -101,6 +101,76 @@ namespace FemboyMode
         }
     }
 
+    /// <summary>
+    /// A native MetaballShoot applies its Rigidbody force in
+    /// ShootAxis.transform.forward. Point the axis along the model's actual
+    /// shaft direction projected into the horizontal plane, then tilt it
+    /// upward by a configurable elevation angle. ForceMode.VelocityChange
+    /// produces initial velocity; gravity supplies the visible parabola.
+    /// </summary>
+    public sealed class FemboyFluidAxisFollower : MonoBehaviour
+    {
+        private ChaControl actor;
+        private Transform shaftRoot;
+        private Transform shaftTip;
+        private bool warned;
+
+        public void Configure(ChaControl target, Transform root, Transform tip)
+        {
+            actor = target;
+            shaftRoot = root;
+            shaftTip = tip;
+            AlignToModel();
+        }
+
+        private void LateUpdate()
+        {
+            AlignToModel();
+        }
+
+        public void AlignToModel()
+        {
+            if (shaftTip == null || actor == null ||
+                FemboyModePlugin.FluidElevation == null)
+                return;
+
+            Vector3 forward = shaftRoot != null
+                ? shaftTip.position - shaftRoot.position
+                : shaftTip.forward;
+            Vector3 horizontal = Vector3.ProjectOnPlane(forward, Vector3.up);
+            if (horizontal.sqrMagnitude < 0.000001f)
+                horizontal = Vector3.ProjectOnPlane(shaftTip.forward, Vector3.up);
+            if (horizontal.sqrMagnitude < 0.000001f)
+                horizontal = Vector3.ProjectOnPlane(actor.transform.forward, Vector3.up);
+            if (horizontal.sqrMagnitude < 0.000001f)
+            {
+                if (!warned)
+                {
+                    warned = true;
+                    FemboyModePlugin.LogOptionalIntegrationProblem(
+                        "No horizontal fluid direction was found; keeping native bone forward.");
+                }
+                return;
+            }
+
+            float elevation = Mathf.Clamp(FemboyModePlugin.FluidElevation.Value,
+                -10f, 60f) * Mathf.Deg2Rad;
+            Vector3 direction =
+                horizontal.normalized * Mathf.Cos(elevation) +
+                Vector3.up * Mathf.Sin(elevation);
+            if (direction.sqrMagnitude < 0.001f) return;
+
+            transform.rotation = Quaternion.LookRotation(direction.normalized,
+                Vector3.up);
+            // An optional per-body manual angle correction continues to
+            // work without affecting the automatic root-to-tip trajectory.
+            transform.rotation *= Quaternion.Euler(
+                FemboyModePlugin.ClimaxFXRotationX.Value,
+                FemboyModePlugin.ClimaxFXRotationY.Value,
+                FemboyModePlugin.ClimaxFXRotationZ.Value);
+        }
+    }
+
     public sealed class FemboyPhysicalFluidEmitter : MonoBehaviour
     {
         private HSceneProc owner;
