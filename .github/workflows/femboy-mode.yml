@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/FemboyMode/**'
       - 'tests/FemboyMode.Tests/**'
+      - 'scripts/Collect-KoikatsuBinaries.ps1'
       - '.github/workflows/femboy-mode.yml'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'src/FemboyMode/**'
       - 'tests/FemboyMode.Tests/**'
+      - 'scripts/Collect-KoikatsuBinaries.ps1'
       - '.github/workflows/femboy-mode.yml'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -57,6 +59,18 @@ jobs:
 
       - name: Run FemboyMode regression assertions
         run: dotnet run --project tests/FemboyMode.Tests/FemboyMode.Tests.csproj -c Release --no-restore
+
+      - name: Validate Windows collector PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('scripts/Collect-KoikatsuBinaries.ps1', [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Output 'Collector PowerShell syntax OK'
 
       - name: Package plugin
         if: success()
