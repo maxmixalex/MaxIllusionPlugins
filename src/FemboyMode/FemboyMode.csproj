@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>Femboy Mode</Product>
     <AssemblyTitle>Femboy Mode</AssemblyTitle>
-    <Version>0.4.0</Version>
-    <AssemblyVersion>0.4.0.0</AssemblyVersion>
+    <Version>0.4.1</Version>
+    <AssemblyVersion>0.4.1.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="BepInEx.Core" />
