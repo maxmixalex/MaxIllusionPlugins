@@ -32,11 +32,15 @@ without modifying the real male participant's HFlag.finish.
    `0.50`. Both bone world positions already include model scaling, and
    the configured hit radius stays constant in world units. The existing
    local X/Y/Z offsets still allow fine calibration for custom meshes.
-3. **Remove the last Kokan phallus toy.** The original
-   `aibulayer_02` entry 4 / icon 25 / `p_item_vibe` object IDs 7/8
-   is removed **only for marked Free H characters**. The preceding
-   electric-massager `denma` entry 3 (object IDs 5/6) stays available.
-   Normal characters' item lists remain unchanged.
+3. **Remove only the Kokan item AFTER the vibrator.** The
+   `aibulayer_02` base entry 4 / icon 25 / `p_item_vibe`
+   (object IDs 7/8) is the vibrator and is **always retained**.
+   For modded lists with an additional phallus-shaped item after it,
+   the first following row is removed only for marked Free H characters.
+   The earlier electric-massager `denma`, vibrator and other tools
+   remain available. In the unmodified five-entry base list nothing
+   is removed. The remaining wheel entries are reindexed to prevent
+   a missing-key exception; unmarked characters remain unchanged.
 4. **Free H character marker.** The currently selected marked heroine
    displays an upper-left **⚥ FEMBOY** marker; it is hidden for
    ordinary characters, in other game modes and when disabled via config.
@@ -109,7 +113,7 @@ The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most 
 | Free H | Suppress female Aibu squirt FX | true |
 | Aibu alignment | Enable Kokan action anchor | true |
 | Aibu alignment | Enable target hit collider | true |
-| Aibu alignment | Hide phallus toy after massager | true |
+| Aibu alignment | Hide phallus toy after vibrator | true |
 | Aibu alignment | Target bone | `cm_j_dan100` |
 | Aibu alignment | Shaft tip bone | `cm_J_dan109_00` |
 | Aibu alignment | Aim along shaft (0 root, 1 tip) | `0.50` |
