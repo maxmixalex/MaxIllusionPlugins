@@ -33,6 +33,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
+        internal static ConfigEntry<bool> EnablePhysicalFluid;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
         internal static ConfigEntry<bool> AllowExperimentalControllerSwap;
         internal static ConfigEntry<bool> EnableMaleBonePoseFollow;
@@ -90,6 +91,8 @@ namespace FemboyMode
                 "Explicitly log the current Maker/Free H character rig, finish clip names and installed body GUIDs. Does not log cards or personal names.");
             EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
+            EnablePhysicalFluid = Config.Bind("Free H", "Generate native physical male fluid", true,
+                "For a marked character's Aibu/Sonyu climax, trigger the game's real MetaballShoot physics and UpdateMeta mesh instead of only the LiquidSiru particle. Respects the game's SemenType=off setting; no effect if required assets are unavailable.");
             EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
                 "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
             AllowExperimentalControllerSwap = Config.Bind("Free H", "Allow experimental full-controller swap", false,
@@ -146,6 +149,7 @@ namespace FemboyMode
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
             harmony.PatchAll(typeof(FemboyClimaxHooks));
+            harmony.PatchAll(typeof(FemboyPhysicalFluidHooks));
             harmony.PatchAll(typeof(FemboyVoiceHooks));
             harmony.PatchAll(typeof(FemboyMaleAnimationHooks));
             UncensorSelectorCompat.TryPatch(harmony);
