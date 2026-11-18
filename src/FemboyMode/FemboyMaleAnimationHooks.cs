@@ -49,12 +49,29 @@ namespace FemboyMode
             if (female == null || female.animBody == null)
                 return;
 
-            bool retarget = flags != null && flags.isFreeH &&
-                FemboyModePlugin.EnableMaleFinishAnimation != null &&
-                FemboyModePlugin.EnableMaleFinishAnimation.Value &&
+            bool femaleFinish = flags != null && flags.isFreeH &&
                 FemboyModePlugin.IsFemboy(female) &&
                 FemboyRules.IsFemaleFinishAnimation(
                     (int)flags.mode, (int)flags.finish, _nextAnimation);
+
+            ChaControl male = MaleField.GetValue(__instance) as ChaControl;
+            if (femaleFinish && male != null &&
+                FemboyModePlugin.EnableMaleBonePoseFollow != null &&
+                FemboyModePlugin.EnableMaleBonePoseFollow.Value)
+            {
+                // Generic Unity rigs cannot safely share AnimatorControllers.
+                // Instead synchronize only their matching male add-on bones
+                // in LateUpdate while the female finish state is active.
+                FemboyMalePoseFollower follower =
+                    female.gameObject.GetComponent<FemboyMalePoseFollower>();
+                if (follower == null)
+                    follower = female.gameObject.AddComponent<FemboyMalePoseFollower>();
+                follower.Configure(flags, male, female);
+            }
+
+            bool retarget = femaleFinish &&
+                FemboyModePlugin.EnableMaleFinishAnimation != null &&
+                FemboyModePlugin.EnableMaleFinishAnimation.Value;
 
             if (!retarget)
             {
@@ -62,7 +79,6 @@ namespace FemboyMode
                 return;
             }
 
-            ChaControl male = MaleField.GetValue(__instance) as ChaControl;
             Animator maleAnimator = male == null ? null : male.animBody;
             Animator femaleAnimator = female.animBody;
             if (maleAnimator == null ||
