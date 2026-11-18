@@ -88,6 +88,8 @@ namespace FemboyMode
         private bool rebuilding;
         private bool alreadyReported;
         private bool active;
+        private int repairAttempts;
+        private int nextRepairFrame;
 
         internal void Bind(HSprite sceneSprite)
         {
@@ -131,8 +133,20 @@ namespace FemboyMode
                     maleOverride.Override)))
             {
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Houshi [Reversed] controller replaced during playback; releasing role layers.");
+                    "Houshi [Reversed] controller replaced during playback; checking native action.");
                 RestoreControllers();
+                HSceneProc.AnimationListInfo selected = scene != null &&
+                    scene.flags != null ? scene.flags.nowAnimationInfo : null;
+                Animator currentHeroine, currentPartner;
+                if (repairAttempts < 2 && Time.frameCount >= nextRepairFrame &&
+                    selected != null && selected.mode == HFlag.EMode.houshi &&
+                    FemboyRules.IsReversedHoushiName(selected.nameAnimation) &&
+                    GetMarkedActors(out currentHeroine, out currentPartner))
+                {
+                    repairAttempts++;
+                    nextRepairFrame = Time.frameCount + 30;
+                    InstallControllers(currentHeroine, currentPartner);
+                }
             }
         }
 
@@ -341,6 +355,8 @@ namespace FemboyMode
             if (proc == null || next == null) return;
             if (scene == null) scene = proc;
             if (scene != proc) return;
+            repairAttempts = 0;
+            nextRepairFrame = Time.frameCount + 2;
             if (next.mode != HFlag.EMode.houshi ||
                 (!reversed.Contains(next) &&
                  !FemboyRules.IsReversedHoushiName(next.nameAnimation)))
@@ -384,9 +400,21 @@ namespace FemboyMode
             var snapshot = new ClipSnapshot { Root = root };
             AnimationClip[] baseClips = root.animationClips;
             if (baseClips == null) return null;
+            var originalsByName = new Dictionary<string, List<AnimationClip>>(
+                StringComparer.Ordinal);
             for (int j = 0; j < baseClips.Length; j++)
-                if (baseClips[j] != null)
-                    snapshot.EffectiveByOriginal[baseClips[j]] = baseClips[j];
+            {
+                AnimationClip clip = baseClips[j];
+                if (clip == null) continue;
+                snapshot.EffectiveByOriginal[clip] = clip;
+                List<AnimationClip> group;
+                if (!originalsByName.TryGetValue(clip.name, out group))
+                {
+                    group = new List<AnimationClip>();
+                    originalsByName.Add(clip.name, group);
+                }
+                group.Add(clip);
+            }
             // Applying inner layers first makes the outermost mod's override
             // authoritative, while retaining all unrelated clip mappings.
             for (int layer = chain.Count - 1; layer >= 0; layer--)
@@ -397,11 +425,12 @@ namespace FemboyMode
                 {
                     if (entry == null || entry.originalClip == null ||
                         entry.overrideClip == null) continue;
-                    foreach (AnimationClip original in baseClips)
+                    List<AnimationClip> matching;
+                    if (!originalsByName.TryGetValue(entry.originalClip.name,
+                        out matching)) continue;
+                    for (int k = 0; k < matching.Count; k++)
                     {
-                        if (original == null || original.name != entry.originalClip.name)
-                            continue;
-                        snapshot.EffectiveByOriginal[original] = entry.overrideClip;
+                        snapshot.EffectiveByOriginal[matching[k]] = entry.overrideClip;
                         snapshot.ExistingOverrides++;
                     }
                 }
@@ -420,6 +449,7 @@ namespace FemboyMode
             if (own == null || other == null) return null;
             AnimatorOverrideController result =
                 new AnimatorOverrideController(own.Root);
+            var changes = new List<KeyValuePair<AnimationClip, AnimationClip>>();
             foreach (var pair in own.EffectiveByOriginal)
             {
                 AnimationClip baseClip = pair.Key;
@@ -434,8 +464,12 @@ namespace FemboyMode
                     roleClips++;
                 }
                 if (!ReferenceEquals(baseClip, effective))
-                    result[baseClip] = effective;
+                    changes.Add(new KeyValuePair<AnimationClip, AnimationClip>(
+                        baseClip, effective));
             }
+            // Unity 5.6 API: applying each indexer replacement individually
+            // reallocates all clip bindings; batch them once instead.
+            if (changes.Count > 0) result.ApplyOverrides(changes);
             return result;
         }
 
