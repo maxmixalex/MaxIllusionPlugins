@@ -22,6 +22,8 @@ namespace FemboyMode
             "areaItem", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, GameObject> OwnedAnchors =
             new Dictionary<int, GameObject>();
+        private static readonly HashSet<int> ToyFilterAppliedHands =
+            new HashSet<int>();
 
         // This runs after all body/uncensor objects have been loaded, but
         // before vanilla collects its hit colliders. HandCtrl.Init is too early:
@@ -52,7 +54,13 @@ namespace FemboyMode
 
             if (FemboyModePlugin.DisablePhallusToy != null &&
                 FemboyModePlugin.DisablePhallusToy.Value)
-                RemovePhallusToy(__instance, layers[2]);
+            {
+                int handId = __instance.GetInstanceID();
+                // InitHitReactionCollider may be called again after a pose
+                // change. Do not remove a different next item on each call.
+                if (ToyFilterAppliedHands.Add(handId))
+                    RemovePhallusToy(__instance, layers[2]);
+            }
 
             if (FemboyModePlugin.EnableKokanAnchor == null ||
                 !FemboyModePlugin.EnableKokanAnchor.Value)
@@ -295,6 +303,7 @@ namespace FemboyMode
             if (__instance == null) return;
 
             int id = __instance.GetInstanceID();
+            ToyFilterAppliedHands.Remove(id);
             GameObject anchor;
             if (!OwnedAnchors.TryGetValue(id, out anchor))
                 return;
