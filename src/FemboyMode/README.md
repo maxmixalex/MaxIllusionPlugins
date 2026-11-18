@@ -1,4 +1,4 @@
-# Femboy Mode for Koikatsu — v0.3.2
+# Femboy Mode for Koikatsu — v0.3.3
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
@@ -12,6 +12,25 @@ Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Fr
 - **Free H filtering:** the two native non-anal insertion action buttons are hidden for the marked leading heroine, on **both** seven-button UI pages (normal and female-initiative). Their click handlers are guarded, without forcing unavailable positions or changing the unmarked heroine's behavior.
 - **Kokan touch relocation:** action anchors are created *after* optional body objects load, immediately before the game's `HandCtrl.InitHitReactionCollider`; a configurable male-bone hit sphere is added. A `GetOnMouseAibuCollider` postfix favors this sphere over the old female-model Kokan collider and rejects the old region for marked characters. The original actor's touch-area restrictions remain intact. The fallback is `cf_d_kokan` if the configured target bone is absent.
 - **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The original Aibu squirt particle **and its associated sound** are suppressed only if the replacement effect was successfully started; otherwise vanilla effects remain. The original `HAibu.randSio` instance is captured once at construction and released when the scene closes, avoiding Unity scene scans during unrelated random calls. Effects are selected using the leading heroine's scene particle controller (never the first arbitrary HParticleCtrl in the scene). This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
+
+## RX18 rig compatibility (verified from local installation inventory)
+
+The inspected RX18 installation contains the actual Unity transform
+`cm_J_dan100_00`, whereas older default config used `cm_j_dan100`.
+Before v0.3.3 this strict name mismatch silently disabled the
+model-specific bone scale and forced Aibu / finish FX back to the
+female Kokan fallback.
+
+v0.3.3 uses a shared resolver: exact name, case-insensitive name, exact
+base plus `_00`, and then another numeric suffix. It deliberately
+does **not** accept nearby bone families (for example, 100 never matches
+101). **Existing config values can remain `cm_j_dan100`.**
+
+After installing the new DLL, press Ctrl+Shift+F10 in Maker or Free H:
+diagnostics now prints the configured name, resolved bone, parent,
+local position/scale, and the character's male-geometry visibility flag.
+This confirms **which bone is selected**, not whether the target
+animation/IK is visually aligned in every pose.
 
 ## Configuration
 
@@ -94,6 +113,20 @@ These local references are needed to determine the **actual installed**
 voice/animation assets for model-compatible male-style finish retargeting.
 The original `Assembly-CSharp.dll` metadata alone does not contain those
 Unity animation clips or voice recordings.
+
+From the supplied RX18 asset filename inventory, the first two useful,
+small list bundles are `abdata/h/list/00_00.unity3d` (~3.39 MiB)
+and `abdata/h/list/20_00.unity3d` (~3.37 MiB). To collect those
+**specific** bundles rather than multi-gigabyte animation data:
+
+```powershell
+.\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" `
+  -ExtraRelativeFiles @("abdata/h/list/00_00.unity3d", "abdata/h/list/20_00.unity3d")
+```
+
+Only privately share bundles from your own installation. Review the
+resulting ZIP before sharing, and never add these proprietary bundles
+to the public GitHub repository.
 
 ## Validation and known limitations
 
