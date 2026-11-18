@@ -35,6 +35,9 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> EnablePhysicalFluid;
         internal static ConfigEntry<float> PhysicalFluidAmount;
+        internal static ConfigEntry<float> FluidLaunchSpeed;
+        internal static ConfigEntry<float> FluidElevation;
+        internal static ConfigEntry<float> FluidSpread;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
         internal static ConfigEntry<bool> AllowExperimentalControllerSwap;
         internal static ConfigEntry<bool> EnableMaleBonePoseFollow;
@@ -100,6 +103,18 @@ namespace FemboyMode
                 new ConfigDescription(
                     "Multiplier for native physical fluid droplets in Aibu and insertion. 1.0 uses the original preset count; 2.0 doubles it (maximum 80 droplets). Affects real MetaballShoot objects, not just visual particles.",
                     new AcceptableValueRange<float>(0.25f, 5f)));
+            FluidLaunchSpeed = Config.Bind("Male fluid", "Launch speed", 2.5f,
+                new ConfigDescription(
+                    "Initial physical fluid velocity in Unity units per second. Uses ForceMode.VelocityChange so projectile mass cannot turn the stream into vertical free-fall.",
+                    new AcceptableValueRange<float>(0.2f, 8f)));
+            FluidElevation = Config.Bind("Male fluid", "Launch elevation degrees", 18f,
+                new ConfigDescription(
+                    "Angle above the horizontal for the fluid stream, measured along the character's actual root-to-tip direction. Gravity then produces a parabolic arc.",
+                    new AcceptableValueRange<float>(-10f, 60f)));
+            FluidSpread = Config.Bind("Male fluid", "Launch spread degrees", 6f,
+                new ConfigDescription(
+                    "Maximum random launch-axis deviation. Applied to native MetaballShoot rotations.",
+                    new AcceptableValueRange<float>(0f, 30f)));
             EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
                 "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
             AllowExperimentalControllerSwap = Config.Bind("Free H", "Allow experimental full-controller swap", false,
