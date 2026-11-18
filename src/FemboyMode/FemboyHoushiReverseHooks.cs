@@ -82,13 +82,6 @@ namespace FemboyMode
 
     public sealed class FemboyHoushiReverseController : MonoBehaviour
     {
-        private sealed class InstalledOverride
-        {
-            internal Animator Animator;
-            internal RuntimeAnimatorController Original;
-            internal AnimatorOverrideController Override;
-        }
-
         private static readonly MethodInfo CloneMethod = typeof(object).GetMethod(
             "MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
         // A donor can be copied by kPlug/AnimationLoader and by HSprite list
@@ -100,8 +93,7 @@ namespace FemboyMode
             new HashSet<HSceneProc.AnimationListInfo>();
         private HSprite sprite;
         private HSceneProc scene;
-        private InstalledOverride femaleOverride;
-        private InstalledOverride maleOverride;
+        private FemboyHoushiRoleRetargeter roleFollower;
         private int nextScanFrame;
         private int nextLabelFrame;
         private bool rebuilding;
@@ -109,12 +101,13 @@ namespace FemboyMode
         private int missingMappingWarned;
         private bool alreadyReported;
         private bool active;
-        private int repairAttempts;
-        private int nextRepairFrame;
 
         internal void Bind(HSprite sceneSprite)
         {
             sprite = sceneSprite;
+            roleFollower = gameObject.GetComponent<FemboyHoushiRoleRetargeter>();
+            if (roleFollower == null)
+                roleFollower = gameObject.AddComponent<FemboyHoushiRoleRetargeter>();
             nextScanFrame = Time.frameCount;
         }
 
@@ -143,31 +136,8 @@ namespace FemboyMode
                 FemboyModePlugin.EnableReverseHoushi == null ||
                 !FemboyModePlugin.EnableReverseHoushi.Value))
             {
-                RestoreControllers();
+                if (roleFollower != null) roleFollower.Stop();
                 active = false;
-            }
-            if (active && (femaleOverride == null || maleOverride == null ||
-                femaleOverride.Animator == null || maleOverride.Animator == null ||
-                !ReferenceEquals(femaleOverride.Animator.runtimeAnimatorController,
-                    femaleOverride.Override) ||
-                !ReferenceEquals(maleOverride.Animator.runtimeAnimatorController,
-                    maleOverride.Override)))
-            {
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Houshi [Reversed] controller replaced during playback; checking native action.");
-                RestoreControllers();
-                HSceneProc.AnimationListInfo selected = scene != null &&
-                    scene.flags != null ? scene.flags.nowAnimationInfo : null;
-                Animator currentHeroine, currentPartner;
-                if (repairAttempts < 2 && Time.frameCount >= nextRepairFrame &&
-                    selected != null && selected.mode == HFlag.EMode.houshi &&
-                    FemboyRules.IsReversedHoushiName(selected.nameAnimation) &&
-                    GetMarkedActors(out currentHeroine, out currentPartner))
-                {
-                    repairAttempts++;
-                    nextRepairFrame = Time.frameCount + 30;
-                    InstallControllers(currentHeroine, currentPartner);
-                }
             }
         }
 
@@ -372,6 +342,9 @@ namespace FemboyMode
                 scene.lstUseAnimInfo == null || sprite.lstUseAnimInfo == null ||
                 CloneMethod == null || rebuilding)
                 return;
+            // Capture the two rigs' neutral poses before entering a reversed
+            // action. This is independent of animation-controller imports.
+            if (roleFollower != null) roleFollower.Attach(scene);
             int index = (int)HFlag.EMode.houshi;
             if (index >= scene.lstUseAnimInfo.Length ||
                 index >= sprite.lstUseAnimInfo.Length)
@@ -535,7 +508,7 @@ namespace FemboyMode
 
         internal void BeforeAnimationChanged()
         {
-            RestoreControllers();
+            if (roleFollower != null) roleFollower.Stop();
             active = false;
         }
 
@@ -545,8 +518,6 @@ namespace FemboyMode
             if (proc == null || next == null) return;
             if (scene == null) scene = proc;
             if (scene != proc) return;
-            repairAttempts = 0;
-            nextRepairFrame = Time.frameCount + 2;
             if (next.mode != HFlag.EMode.houshi ||
                 (!reversed.Contains(next) &&
                  !FemboyRules.IsReversedHoushiName(next.nameAnimation)))
@@ -554,202 +525,15 @@ namespace FemboyMode
 
             Animator heroine, partner;
             if (!GetMarkedActors(out heroine, out partner)) return;
-            InstallControllers(heroine, partner);
+            if (roleFollower == null)
+                roleFollower = gameObject.AddComponent<FemboyHoushiRoleRetargeter>();
+            active = roleFollower.Begin(scene);
         }
 
-
-        // Koikatsu and kPlug legitimately create their own AnimatorOverrideController.
-        // Unity 5.6 does not support nested roots: preserve the old effective
-        // bindings and put our temporary overrides on the original controller.
-        private sealed class ClipSnapshot
-        {
-            internal RuntimeAnimatorController Root;
-            internal readonly Dictionary<AnimationClip, AnimationClip> EffectiveByOriginal =
-                new Dictionary<AnimationClip, AnimationClip>();
-            internal readonly Dictionary<string, AnimationClip> EffectiveByName =
-                new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
-            internal int ExistingOverrides;
-        }
-
-        private static ClipSnapshot CaptureClips(RuntimeAnimatorController current)
-        {
-            if (current == null) return null;
-            var chain = new List<AnimatorOverrideController>();
-            RuntimeAnimatorController root = current;
-            for (int depth = 0; depth < 8; depth++)
-            {
-                AnimatorOverrideController overlay =
-                    root as AnimatorOverrideController;
-                if (overlay == null) break;
-                chain.Add(overlay);
-                RuntimeAnimatorController next = overlay.runtimeAnimatorController;
-                if (next == null || ReferenceEquals(next, root)) return null;
-                root = next;
-            }
-            if (root == null || root is AnimatorOverrideController) return null;
-            var snapshot = new ClipSnapshot { Root = root };
-            AnimationClip[] baseClips = root.animationClips;
-            if (baseClips == null) return null;
-            var originalsByName = new Dictionary<string, List<AnimationClip>>(
-                StringComparer.Ordinal);
-            for (int j = 0; j < baseClips.Length; j++)
-            {
-                AnimationClip clip = baseClips[j];
-                if (clip == null) continue;
-                snapshot.EffectiveByOriginal[clip] = clip;
-                List<AnimationClip> group;
-                if (!originalsByName.TryGetValue(clip.name, out group))
-                {
-                    group = new List<AnimationClip>();
-                    originalsByName.Add(clip.name, group);
-                }
-                group.Add(clip);
-            }
-            // Applying inner layers first makes the outermost mod's override
-            // authoritative, while retaining all unrelated clip mappings.
-            for (int layer = chain.Count - 1; layer >= 0; layer--)
-            {
-                AnimationClipPair[] entries = chain[layer].clips;
-                if (entries == null) continue;
-                foreach (AnimationClipPair entry in entries)
-                {
-                    if (entry == null || entry.originalClip == null ||
-                        entry.overrideClip == null) continue;
-                    List<AnimationClip> matching;
-                    if (!originalsByName.TryGetValue(entry.originalClip.name,
-                        out matching)) continue;
-                    for (int k = 0; k < matching.Count; k++)
-                    {
-                        snapshot.EffectiveByOriginal[matching[k]] = entry.overrideClip;
-                        snapshot.ExistingOverrides++;
-                    }
-                }
-            }
-            foreach (var pair in snapshot.EffectiveByOriginal)
-                if (pair.Key != null && pair.Value != null &&
-                    !snapshot.EffectiveByName.ContainsKey(pair.Key.name))
-                    snapshot.EffectiveByName.Add(pair.Key.name, pair.Value);
-            return snapshot;
-        }
-
-        private static AnimatorOverrideController CreateLayer(
-            ClipSnapshot own, ClipSnapshot other, out int roleClips)
-        {
-            roleClips = 0;
-            if (own == null || other == null) return null;
-            AnimatorOverrideController result =
-                new AnimatorOverrideController(own.Root);
-            var changes = new List<KeyValuePair<AnimationClip, AnimationClip>>();
-            foreach (var pair in own.EffectiveByOriginal)
-            {
-                AnimationClip baseClip = pair.Key;
-                AnimationClip effective = pair.Value;
-                if (baseClip == null || effective == null) continue;
-                AnimationClip partnerClip;
-                if (FemboyRules.IsHoushiBodyMotionClip(baseClip.name) &&
-                    other.EffectiveByName.TryGetValue(baseClip.name, out partnerClip) &&
-                    partnerClip != null && !ReferenceEquals(partnerClip, effective))
-                {
-                    effective = partnerClip;
-                    roleClips++;
-                }
-                if (!ReferenceEquals(baseClip, effective))
-                    changes.Add(new KeyValuePair<AnimationClip, AnimationClip>(
-                        baseClip, effective));
-            }
-            // Unity 5.6 API: applying each indexer replacement individually
-            // reallocates all clip bindings; batch them once instead.
-            if (changes.Count > 0) result.ApplyOverrides(changes);
-            return result;
-        }
-
-        private void InstallControllers(Animator heroine, Animator partner)
-        {
-            if (heroine == null || partner == null ||
-                heroine.runtimeAnimatorController == null ||
-                partner.runtimeAnimatorController == null) return;
-            RuntimeAnimatorController previousHeroine =
-                heroine.runtimeAnimatorController;
-            RuntimeAnimatorController previousPartner =
-                partner.runtimeAnimatorController;
-            AnimatorOverrideController overlayHeroine = null;
-            AnimatorOverrideController overlayPartner = null;
-            try
-            {
-                ClipSnapshot own = CaptureClips(previousHeroine);
-                ClipSnapshot other = CaptureClips(previousPartner);
-                if (own == null || other == null)
-                {
-                    FemboyModePlugin.LogOptionalIntegrationProblem(
-                        "Houshi reversal cannot resolve the existing AnimatorOverrideController chain.");
-                    return;
-                }
-                int heroineClips, partnerClips;
-                overlayHeroine = CreateLayer(own, other, out heroineClips);
-                overlayPartner = CreateLayer(other, own, out partnerClips);
-                if (overlayHeroine == null || overlayPartner == null ||
-                    heroineClips < 3 || partnerClips < 3)
-                {
-                    FemboyModePlugin.LogOptionalIntegrationProblem(
-                        "Houshi reversal lacks actor-compatible paired clips: heroine=" +
-                        heroineClips + " partner=" + partnerClips + ".");
-                    if (overlayHeroine != null) UnityEngine.Object.Destroy(overlayHeroine);
-                    if (overlayPartner != null) UnityEngine.Object.Destroy(overlayPartner);
-                    return;
-                }
-                femaleOverride = new InstalledOverride
-                { Animator = heroine, Original = previousHeroine, Override = overlayHeroine };
-                maleOverride = new InstalledOverride
-                { Animator = partner, Original = previousPartner, Override = overlayPartner };
-                heroine.runtimeAnimatorController = overlayHeroine;
-                partner.runtimeAnimatorController = overlayPartner;
-                active = true;
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Houshi [Reversed] installed matched motion-clip overrides=" +
-                    Math.Min(heroineClips, partnerClips) +
-                    " (heroine=" + heroineClips + " partner=" + partnerClips +
-                    ", preserved prior overrides=" + own.ExistingOverrides +
-                    "/" + other.ExistingOverrides + ").");
-            }
-            catch (Exception ex)
-            {
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Houshi reversal clip-layer error: " +
-                    ex.GetType().Name + ": " + ex.Message);
-                RestoreControllers();
-                if (overlayHeroine != null &&
-                    (femaleOverride == null ||
-                     !ReferenceEquals(femaleOverride.Override, overlayHeroine)))
-                    UnityEngine.Object.Destroy(overlayHeroine);
-                if (overlayPartner != null &&
-                    (maleOverride == null ||
-                     !ReferenceEquals(maleOverride.Override, overlayPartner)))
-                    UnityEngine.Object.Destroy(overlayPartner);
-            }
-        }
-
-        private static void RestoreOne(InstalledOverride value)
-        {
-            if (value == null) return;
-            if (value.Animator != null &&
-                ReferenceEquals(value.Animator.runtimeAnimatorController, value.Override))
-                value.Animator.runtimeAnimatorController = value.Original;
-            if (value.Override != null)
-                UnityEngine.Object.Destroy(value.Override);
-        }
-
-        private void RestoreControllers()
-        {
-            RestoreOne(femaleOverride);
-            RestoreOne(maleOverride);
-            femaleOverride = null;
-            maleOverride = null;
-            active = false;
-        }
 
         private void OnDestroy()
         {
-            RestoreControllers();
+            if (roleFollower != null) roleFollower.Stop();
             clones.Clear();
             reversed.Clear();
         }
