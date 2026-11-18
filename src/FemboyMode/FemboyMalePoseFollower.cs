@@ -18,6 +18,7 @@ namespace FemboyMode
         private readonly Transform[] source = new Transform[SegmentCount];
         private readonly Transform[] target = new Transform[SegmentCount];
         private readonly Quaternion[] original = new Quaternion[SegmentCount];
+        private readonly Quaternion[] originalSource = new Quaternion[SegmentCount];
         private readonly Quaternion[] lastWritten = new Quaternion[SegmentCount];
         private readonly bool[] modified = new bool[SegmentCount];
         private int lastLookupFrame = -1000;
@@ -75,9 +76,17 @@ namespace FemboyMode
                     continue;
 
                 if (!modified[i])
+                {
                     original[i] = to.localRotation;
+                    originalSource[i] = from.localRotation;
+                }
 
-                Quaternion motion = from.localRotation;
+                // Transfer the *delta* from the male actor's initial bone
+                // rotation, not its absolute rotation. The replacement
+                // geometry can have its own bind/rest orientation.
+                Quaternion delta =
+                    Quaternion.Inverse(originalSource[i]) * from.localRotation;
+                Quaternion motion = original[i] * delta;
                 to.localRotation = motion;
                 lastWritten[i] = motion;
                 modified[i] = true;
