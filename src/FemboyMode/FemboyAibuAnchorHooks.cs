@@ -54,8 +54,8 @@ namespace FemboyMode
             if (layers == null || layers.Length <= 2 || layers[2] == null)
                 return;
 
-            // The base game's aibulayer_02 ends with the vibrator.
-            // Some mods append the following toy *after* this setup call.
+            // The base game's aibulayer_02 ends with the phallus toy.
+            // Mods can replace/rebuild the item layers *after* this setup call.
             // Only mark filtering complete when a row was actually removed.
             TryRemovePhallusToy(__instance, layers[2]);
 
@@ -155,10 +155,11 @@ namespace FemboyMode
             var keys = new List<int>(kokanLayers.Keys);
             keys.Sort();
 
-            // The base row with icon25 and objects 7/8 is the vibrator
-            // itself. In a modded H list, the phallus-shaped toy the user
-            // identified is the *following* row. Preserve the vibrator.
-            int vibratorKey = -1;
+            // IMPORTANT: native p_item_denma (IDs 5/6, row 3) is the
+            // vibrator the user wants to KEEP. Native p_item_vibe
+            // (IDs 7/8, row 4) is the phallus-shaped toy to disable.
+            // Do not search for an imaginary sixth row after it.
+            int skipKey = -1;
             foreach (int key in keys)
             {
                 HandCtrl.LayerInfo layer = kokanLayers[key];
@@ -166,27 +167,24 @@ namespace FemboyMode
                     layer.idObjects.Length < 2)
                     continue;
 
-                if (FemboyRules.IsVibratorLayer(
+                if (FemboyRules.IsPhallusToyLayer(
                     layer.idIocn, layer.idObjects[0], layer.idObjects[1]))
                 {
-                    vibratorKey = key;
+                    skipKey = key;
                     break;
                 }
             }
 
-            int skipKey = FemboyRules.NextLayerKeyAfterVibrator(
-                keys.ToArray(), vibratorKey);
-            if (skipKey < 0)
-                return false; // No extra toy installed: check again if a mod adds one.
+            if (skipKey < 0) return false;
 
             int[] selected = SelectedItemsField == null ? null :
                 SelectedItemsField.GetValue(hand) as int[];
             int oldSelection = selected != null && selected.Length > 2
                 ? selected[2] : 0;
 
-            // The vanilla wheel indexes 0..Count-1. Rebuild sequential
-            // keys so skipping a middle row cannot cause a missing-key
-            // exception if other plugins have added even more entries.
+            // HandCtrl.SetIconTexture expects contiguous 0..Count-1
+            // dictionary indices. Preserve every non-target row and
+            // normalize keys only within this marked H scene.
             var retained = new List<HandCtrl.LayerInfo>();
             foreach (int key in keys)
                 if (key != skipKey)
@@ -207,16 +205,13 @@ namespace FemboyMode
                     selected[2] = oldSelection - 1;
                 else
                     selected[2] = oldSelection;
-
                 if (!kokanLayers.ContainsKey(selected[2]))
                     selected[2] = 0;
             }
 
-            if (FemboyModePlugin.VerboseLogging != null &&
-                FemboyModePlugin.VerboseLogging.Value)
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Removed only the post-vibrator Kokan item " + skipKey +
-                    "; vibrator row " + vibratorKey + " retained.");
+            FemboyModePlugin.LogOptionalIntegrationProblem(
+                "Removed Kokan phallus toy (p_item_vibe ID7/8) row " + skipKey +
+                "; preserved denma vibrator ID5/6.");
             return true;
         }
 
@@ -245,7 +240,7 @@ namespace FemboyMode
             }
         }
 
-        // A late-loaded H-control mod can append its extra toy after
+        // A late-loaded H-control mod can recreate the unwanted toy after
         // InitHitReactionCollider. Run again just before the vanilla wheel
         // reads aibulayer_02, without repeatedly deleting new items.
         [HarmonyPrefix]
