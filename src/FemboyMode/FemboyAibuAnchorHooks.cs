@@ -271,38 +271,68 @@ namespace FemboyMode
     /// </summary>
     public sealed class FemboyAnchorUpdater : MonoBehaviour
     {
-        private Vector3 oldPosition;
-        private Vector3 oldRotation;
-        private bool hasValues;
+        private Transform shaftRoot;
+        private Transform shaftTip;
+
+        public void Configure(Transform root, Transform tip)
+        {
+            shaftRoot = root;
+            // Prefer a tip within the same attached male-bone chain.
+            // Never interpolate to an unrelated limb in a replacement rig.
+            shaftTip = tip != null && root != null &&
+                tip.IsChildOf(root) ? tip : null;
+            SyncPosition();
+        }
 
         private void LateUpdate()
         {
-            if (FemboyModePlugin.KokanOffsetX == null) return;
+            SyncPosition();
+        }
 
-            Vector3 position = new Vector3(
+        private void SyncPosition()
+        {
+            if (FemboyModePlugin.KokanOffsetX == null ||
+                FemboyModePlugin.KokanTipFraction == null)
+                return;
+
+            Vector3 offset = new Vector3(
                 FemboyModePlugin.KokanOffsetX.Value,
                 FemboyModePlugin.KokanOffsetY.Value,
                 FemboyModePlugin.KokanOffsetZ.Value);
-            Vector3 rotation = new Vector3(
+
+            // Both bone transforms include all ancestor scales and native
+            // animation. The inverse transform converts the actual scaled
+            // world-space shaft center into the parent's local coordinates.
+            if (shaftRoot != null && shaftTip != null)
+            {
+                float fraction = Mathf.Clamp01(FemboyModePlugin.KokanTipFraction.Value);
+                Vector3 worldCenter = Vector3.Lerp(
+                    shaftRoot.position, shaftTip.position, fraction);
+                offset += shaftRoot.InverseTransformPoint(worldCenter);
+            }
+
+            transform.localPosition = offset;
+            transform.localRotation = Quaternion.Euler(
                 FemboyModePlugin.KokanRotationX.Value,
                 FemboyModePlugin.KokanRotationY.Value,
                 FemboyModePlugin.KokanRotationZ.Value);
-            if (!hasValues || position != oldPosition)
-                transform.localPosition = position;
-            if (!hasValues || rotation != oldRotation)
-                transform.localRotation = Quaternion.Euler(rotation);
 
             SphereCollider hit = GetComponent<SphereCollider>();
-            if (hit != null)
-            {
-                hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
-                FemboyModePlugin.EnableKokanAnchor.Value;
-                hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
-            }
+            if (hit == null) return;
 
-            hasValues = true;
-            oldPosition = position;
-            oldRotation = rotation;
+            hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
+                          FemboyModePlugin.EnableKokanAnchor.Value;
+
+            // A SphereCollider's world-space radius is multiplied by the
+            // parent transform's largest lossy-scale component. Normalize
+            // it here so enlarging the model doesn't also enlarge the
+            // mouse hit area or make calibration unpredictable.
+            Vector3 scale = transform.lossyScale;
+            float maxScale = Mathf.Max(Mathf.Abs(scale.x),
+                Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+            float desiredWorldRadius = Mathf.Clamp(
+                FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
+            hit.radius = desiredWorldRadius / Mathf.Max(0.001f, maxScale);
         }
     }
 }
