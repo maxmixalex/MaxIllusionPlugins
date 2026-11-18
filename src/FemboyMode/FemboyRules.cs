@@ -171,35 +171,48 @@ namespace FemboyMode
                  name.StartsWith("[反转] ", StringComparison.Ordinal));
         }
 
-        // Koikatsu Houshi body clips have the S/M/L or SM/ML motion
-        // variants. Never exchange actor facial, reaction, or Sonyu clips.
-        // Canonical Koikatsu human-joint transfer key. Exclude every
-        // facial-expression, collider, physics, clothing and accessory bone.
-        // 0.4.5 swapped 278 indiscriminate bones, deforming faces and rigs.
+        /// <summary>
+        /// Koikatsu male and female BODY rigs both use cf_j_* bones.
+        /// The cm_J_dan* chain is an optional male genital overlay, NOT
+        /// the male body skeleton. Earlier code wrongly looked for male
+        /// cm_j_* body bones and therefore never activated Houshi retarget.
+        /// Keep only locomotion/FK ancestor joints; no facial, physics,
+        /// clothing, genitals, correction or accessory bones.
+        /// </summary>
         internal static string SharedHoushiJointKey(string name, bool isMale)
         {
-            string prefix = isMale ? "cm_j_" : "cf_j_";
             if (string.IsNullOrEmpty(name) ||
-                !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                !name.StartsWith("cf_j_", StringComparison.OrdinalIgnoreCase))
                 return null;
-            string key = name.Substring(prefix.Length).ToLowerInvariant();
-            if (key.StartsWith("hips", StringComparison.Ordinal) ||
-                key.StartsWith("kosi", StringComparison.Ordinal) ||
-                key.StartsWith("spine", StringComparison.Ordinal) ||
-                key.StartsWith("shoulder", StringComparison.Ordinal) ||
-                key.StartsWith("arm", StringComparison.Ordinal) ||
-                key.StartsWith("elbo", StringComparison.Ordinal) ||
-                key.StartsWith("forearm", StringComparison.Ordinal) ||
-                key.StartsWith("hand", StringComparison.Ordinal) ||
-                key.StartsWith("thigh", StringComparison.Ordinal) ||
-                key.StartsWith("leg", StringComparison.Ordinal) ||
-                key.StartsWith("knee", StringComparison.Ordinal) ||
-                key.StartsWith("foot", StringComparison.Ordinal) ||
-                key.StartsWith("toes", StringComparison.Ordinal) ||
-                key.StartsWith("neck", StringComparison.Ordinal) ||
-                key.StartsWith("head", StringComparison.Ordinal))
-                return key;
-            return null;
+            // isMale identifies the ACTOR for the caller, not a different
+            // body-rig namespace. Both actors have cf_j_* hierarchies.
+            string key = name.Substring("cf_j_".Length).ToLowerInvariant();
+            return IsCoreHoushiJoint(key) ? key : null;
+        }
+
+        internal static bool IsCoreHoushiJoint(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            return key.StartsWith("hips", StringComparison.Ordinal) ||
+                   key.StartsWith("waist", StringComparison.Ordinal) ||
+                   key.StartsWith("kosi", StringComparison.Ordinal) ||
+                   key.StartsWith("spine", StringComparison.Ordinal) ||
+                   key.StartsWith("shoulder", StringComparison.Ordinal) ||
+                   key.StartsWith("arm", StringComparison.Ordinal) ||
+                   key.StartsWith("elbo", StringComparison.Ordinal) ||
+                   key.StartsWith("forearm", StringComparison.Ordinal) ||
+                   key.StartsWith("hand", StringComparison.Ordinal) ||
+                   key.StartsWith("thigh", StringComparison.Ordinal) ||
+                   key.StartsWith("leg", StringComparison.Ordinal) ||
+                   key.StartsWith("knee", StringComparison.Ordinal) ||
+                   key.StartsWith("foot", StringComparison.Ordinal) ||
+                   key.StartsWith("toes", StringComparison.Ordinal) ||
+                   key == "neck" || key == "head";
+        }
+
+        internal static bool IsHoushiRootJoint(string key)
+        {
+            return key == "hips";
         }
 
         internal static bool IsHoushiBodyMotionClip(string name)

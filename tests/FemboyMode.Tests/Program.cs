@@ -382,8 +382,8 @@ internal static class Program
 
         Check(FemboyRules.SharedHoushiJointKey("cf_j_spine01", false) == "spine01",
             "female body joint is mapped by canonical stem");
-        Check(FemboyRules.SharedHoushiJointKey("cm_J_spine01", true) == "spine01",
-            "male body joint shares the same canonical stem");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_spine01", true) == "spine01",
+            "male body rig uses the same cf_j_spine01 joint as the heroine");
         Check(FemboyRules.SharedHoushiJointKey("cf_j_head", false) == "head",
             "head orientation can move while facial expression bones stay native");
         Check(FemboyRules.SharedHoushiJointKey("cf_j_eye01", false) == null,
@@ -393,7 +393,28 @@ internal static class Program
         Check(FemboyRules.SharedHoushiJointKey("cf_d_bust00", false) == null,
             "body shape bones and physics controls are untouched");
         Check(FemboyRules.SharedHoushiJointKey("cm_j_hand_L", false) == null,
-            "opposite gender's prefixed joints cannot be substituted");
+            "cm_j is not the female body namespace");
+        Check(FemboyRules.SharedHoushiJointKey("cm_j_hand_L", true) == null,
+            "cm_j is not the male body namespace either");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_hips", true) == "hips",
+            "male hips are available under the shared human skeleton");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_waist01", true) == "waist01",
+            "male lower torso is mapped under cf_j_waist");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_waist02", false) == "waist02",
+            "female lower torso is mapped under cf_j_waist");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_arm00_L", true) == "arm00_l",
+            "male arm action moves the shared body arm joint");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_thigh00_R", false) == "thigh00_r",
+            "female leg action moves the shared body thigh joint");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_shoulder_L", true) == "shoulder_l",
+            "male shoulder also belongs to the shared cf_j rig");
+        Check(FemboyRules.SharedHoushiJointKey("cf_J_Eye01_s_L", true) == null,
+            "facial expression bones stay excluded");
+        Check(FemboyRules.SharedHoushiJointKey("cf_d_shoulder_L", false) == null,
+            "clothing/shape helpers are not animated during role transfer");
+        Check(FemboyRules.IsHoushiRootJoint("hips") &&
+              !FemboyRules.IsHoushiRootJoint("waist01"),
+            "only pelvis/hips drives actor visual-anchor alignment");
 
         Check(FemboyRules.NativeHoushiActionKey(12, 1, "A") ==
               FemboyRules.NativeHoushiActionKey(12, 1, "A"),
@@ -423,7 +444,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 172 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 182 FemboyMode rules assertions passed.");
         return 0;
     }
 }
