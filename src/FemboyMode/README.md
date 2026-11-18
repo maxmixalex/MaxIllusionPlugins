@@ -467,3 +467,19 @@ Based on real Koikatsu RX18 LogOutput(6).log. This supersedes the ineffective 0.
 - CI: .NET Framework 3.5 build and **172** rules assertions pass. These assertions check HCtrl phase transitions, stable catalogue identifiers and the body-joint whitelist, not scene-rendered poses.
 - Real Koikatsu RX18 tests still needed: native and kPlug reverse list counts/localization, correct imported motion bundles after click, actor contact/IK/face, clean return to ordinary pose, and one physical-fluid burst for each HCtrl pre-combined -> combined climax.
 - Look for `Reversed Houshi body retarget active` and a nonzero `sourceImported`; if absent, the runtime did not deliver the requested behavior.
+
+
+## 0.4.9 — Restore actual shared body-bone role retargeting
+
+0.4.8's visible actor-role retargeter could never find sufficient joints in RX18: it incorrectly expected male human-body bones to start with `cm_j_`. **Both** male and female Koikatsu humanoid bodies have the same `cf_j_*` skeleton. `cm_J_dan*` belongs to the optional genital overlay rather than the human body. Earlier test assertions incorrectly encoded `cm_J_spine01` as a real male body joint.
+
+### Corrections
+- Match the same `cf_j_*` core FK joints on the marked heroine and male partner (including `cf_j_hips`, `cf_j_waist01/02`, `cf_j_spine01-03`, shoulders, arms, thighs/legs, neck and head). Keep every `cf_d_*`, facial, genital/`cm_J_dan*`, clothing, physical and IK helper bone excluded.
+- Read BOTH native animated poses in LateUpdate, transfer **rest-relative** body-joint rotations between characters, and restore their native inputs before the next animation tick. Raising the retarget execution order puts this visual-only step after ordinary animator and IK updates.
+- A raw `objBodyBone` root-position swap is not sufficient: in H scenes, the two roots can coincide while their `cf_j_hips` bones move independently. Record both **animated hip world positions**, exchange the original body-root orientations, and align the rendered actor hips to the opposite actor's previous world position. The male should occupy the original giver location and the heroine the receiver location.
+- Always log `Reversed Houshi body retarget active` with the actual number of matched `cf_j_*` pairs on entry. Log first rendered frame, a 30-frame largest FK rotation change check and the number of frames affected when leaving the action. The original female and male game/controller/voice identities remain unchanged; retargeting affects visible character roles rather than reassigning the whole HHoushi state machine.
+- Headless shared-skeleton regression assertions now cover actual `cf_j_*` male and female names, waist/hips/limbs and the exclusion of fake `cm_j_*` body joints. The HCtrl, physical fluid, and AnimationLoader/kPlug action menu changes from 0.4.8 have not been modified.
+
+### Validation status
+- Compiles against Unity 5.6 / Koikatsu net35; CI runs the current headless rules harness and produces an `KK_FemboyMode` artifact.
+- **Not yet confirmed in the actual user's RX18 game.** Check that a selected `[反转]` action reports `real cf_j_* body joint pairs` and the 30-frame log; then inspect actual giver/receiver movement, world positions, hand/mouth IK and actor faces. At this stage native HHoushi dialogue/progression still uses the original game actor identities.
