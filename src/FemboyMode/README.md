@@ -58,6 +58,41 @@ This checks the normal/female-initiative action-button offsets, numeric scale va
 
 To smoke-test the plugin: install the DLL, open female Maker, check **Parameter → Character** and **Body → All**, enable the marker, save the character card, then reopen Maker before checking UncensorSelector body options. The first game log is `BepInEx/LogOutput.log`. For model-specific contact reports, include the selected UncensorSelector body/part and configured bone names.
 
+## Collect local assemblies and diagnose missing animations
+
+The project includes [Collect-KoikatsuBinaries.ps1](../../scripts/Collect-KoikatsuBinaries.ps1).
+Run it on Windows from PowerShell 5.1+ and supply the installed game root:
+
+```powershell
+.\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" -IncludeExecutables
+```
+
+It creates `Koikatsu-debug-binaries.zip` in the current directory, containing
+the original game/Unity assemblies, BepInEx/Harmony DLLs and a *filtered* set
+of relevant plugin DLLs plus a version manifest. By default the collector does
+**not** include character cards, game asset bundles, save files, configs or logs.
+It performs no network requests. Review the archive before sharing it privately.
+
+In either female Maker or a vanilla Free H scene, press **Ctrl + Shift + F10**
+to log a character-independent diagnostic inventory: selected body/part GUIDs,
+candidate rig bone names, end/finish clip names and game voice-channel states.
+The inventory deliberately omits character names and card filenames.
+
+To also collect the new diagnostic log tail and this plugin's config, run:
+
+```powershell
+.\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" -IncludeExecutables -IncludeDiagnostics
+```
+
+Use `-ExtraRelativeFiles @('abdata/h/list/specific-file.unity3d')` only
+when a precise animation/voice asset path has been confirmed. The collector
+enforces per-file and total-size limits and never copies the whole `abdata`.
+
+These local references are needed to determine the **actual installed**
+voice/animation assets for model-compatible male-style finish retargeting.
+The original `Assembly-CSharp.dll` metadata alone does not contain those
+Unity animation clips or voice recordings.
+
 ## Validation and known limitations
 
 Passing CI proves **C# compilation only**, not the actual motion or visual results inside the game. Manual checks are still required:
