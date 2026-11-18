@@ -211,7 +211,13 @@ namespace FemboyMode
             // objSourceRoot. Sharing the male player's root would erase
             // the other participant's real fluid on cleanup or pose change.
             privateSourceRoot = new GameObject("FemboyMode_PhysicalFluidSource");
-            privateSourceRoot.transform.SetParent(host.transform, false);
+            // StaticMetaballSeed recursively enumerates MetaballNode objects
+            // BELOW its sourceRoot. Parent our isolated object there, or the
+            // physical blobs would not contribute to the game's mesh.
+            Transform seedRoot = host.metaseed != null &&
+                host.metaseed.sourceRoot != null
+                ? host.metaseed.sourceRoot.transform : host.transform;
+            privateSourceRoot.transform.SetParent(seedRoot, false);
             shooter.objSourceRoot = privateSourceRoot;
 
             host.lstShoot.Add(shooter);
