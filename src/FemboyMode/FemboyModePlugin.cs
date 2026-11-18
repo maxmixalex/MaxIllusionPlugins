@@ -55,6 +55,7 @@ namespace FemboyMode
         internal static ConfigEntry<float> KokanOffsetX;
         internal static ConfigEntry<float> KokanOffsetY;
         internal static ConfigEntry<float> KokanWorldHeightCorrection;
+        internal static ConfigEntry<float> KokanHandOffsetX, KokanHandOffsetY, KokanHandOffsetZ;
         internal static ConfigEntry<float> KokanOffsetZ;
         internal static ConfigEntry<float> KokanRotationX;
         internal static ConfigEntry<float> KokanRotationY;
@@ -139,6 +140,12 @@ namespace FemboyMode
                 "Local Y offset relative to the target bone (Unity units).");
             KokanWorldHeightCorrection = Config.Bind("Aibu alignment", "World Y correction", -0.012f,
                 "Extra vertical adjustment in world units, independent of shaft orientation. Default lowers the Free H Kokan touch marker by 0.012 units; adjust in ConfigurationManager for different models.");
+            KokanHandOffsetX = Config.Bind("Aibu alignment", "Hand correction world X", 0f,
+                "Additional WORLD-space shift applied only to native hand item animations, not their body bones or mouse collider.");
+            KokanHandOffsetY = Config.Bind("Aibu alignment", "Hand correction world Y", 0f,
+                "Additional WORLD-space vertical hand shift beyond the corrected Kokan touch target.");
+            KokanHandOffsetZ = Config.Bind("Aibu alignment", "Hand correction world Z", 0f,
+                "Additional WORLD-space depth shift applied only to native hand item animations.");
             KokanOffsetZ = Config.Bind("Aibu alignment", "Offset Z", 0f,
                 "Local Z offset relative to the target bone (Unity units).");
             KokanRotationX = Config.Bind("Aibu alignment", "Rotation X", 0f,
