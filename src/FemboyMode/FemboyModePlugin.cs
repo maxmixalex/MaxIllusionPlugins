@@ -30,6 +30,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
         internal static ConfigEntry<bool> ReverseHoushiSwapVisualRoots;
+        internal static ConfigEntry<bool> ReverseHoushiSwapMouthExpressions;
         internal static ConfigEntry<bool> ShowFreeHMarker;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
@@ -85,10 +86,13 @@ namespace FemboyMode
             EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
                 "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
             EnableReverseHoushi = Config.Bind("Free H", "Add reversed Houshi actions", true,
-                "Clone available native and imported service actions as [Reversed] and retarget a carefully limited set of common FK joints, leaving native controllers, facial expressions and other mods' animation imports intact. The visual root-position exchange can be toggled separately.");
+                "Clone native and imported service actions as [Reversed], exchange body roles and optionally exchange visual mouth expression channels while preserving the native animation controllers and imported assets.");
             ReverseHoushiSwapVisualRoots = Config.Bind("Free H",
                 "Reversed Houshi exchange visible actor positions", true,
                 "Visually exchange the two animated character body roots during a reversed service action, restoring native transforms before the next animation frame. Disable if third-party IK or camera mods rely on the original actor body positions.");
+            ReverseHoushiSwapMouthExpressions = Config.Bind("Free H",
+                "Reversed Houshi swap mouth expressions", true,
+                "In reversed service actions, move the original heroine's mouth pattern and opening to the male performer, and apply the original male's mouth to the marked heroine. Restores native expression state before the next game update; turn off if a third-party face mod conflicts.");
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,

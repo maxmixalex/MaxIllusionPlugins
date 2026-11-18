@@ -208,7 +208,10 @@ namespace FemboyMode
 
         private void SwapLiveMouths()
         {
-            if (female == null || male == null) return;
+            if (female == null || male == null ||
+                FemboyModePlugin.ReverseHoushiSwapMouthExpressions == null ||
+                !FemboyModePlugin.ReverseHoushiSwapMouthExpressions.Value)
+                return;
             nativeFemaleMouth = ReadMouth(female);
             nativeMaleMouth = ReadMouth(male);
             appliedFemaleMouth = nativeMaleMouth;
@@ -224,7 +227,10 @@ namespace FemboyMode
                     nativeFemaleMouth.Pattern + "/" + nativeFemaleMouth.Open +
                     " male native mouth=" + nativeMaleMouth.Pattern + "/" +
                     nativeMaleMouth.Open +
-                    "; mouth-pattern and opening now follow opposite role.");
+                    "; mouth-pattern and opening now follow opposite role. " +
+                    "Readback heroine=" + ReadMouth(female).Pattern + "/" +
+                    ReadMouth(female).Open + " male=" +
+                    ReadMouth(male).Pattern + "/" + ReadMouth(male).Open);
             }
         }
 
