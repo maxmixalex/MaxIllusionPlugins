@@ -248,13 +248,24 @@ internal static class Program
         Check(!FemboyRules.IsSonyuClimaxStartVoice(362),
             "nonclimax female-initiative code is not redirected");
 
+        Check(FemboyRules.ShouldEmitFromConsumedSonyuVoice(326, -1),
+            "RX18 voice 326 launches only after the native voice event is consumed");
+        Check(FemboyRules.ShouldEmitFromConsumedSonyuVoice(363, -1),
+            "female-initiative voice launches after consumption");
+        Check(!FemboyRules.ShouldEmitFromConsumedSonyuVoice(326, 326),
+            "deferred voice 326 does not emit repeatedly every Update frame");
+        Check(!FemboyRules.ShouldEmitFromConsumedSonyuVoice(318, -1),
+            "post-climax dialogue is not treated as a new fluid event");
+        Check(!FemboyRules.ShouldEmitFromConsumedSonyuVoice(-1, -1),
+            "no queued voice means no phantom emission");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 106 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 111 FemboyMode rules assertions passed.");
         return 0;
     }
 }
