@@ -18,11 +18,23 @@ namespace FemboyMode
             "meta", BindingFlags.Instance | BindingFlags.NonPublic);
         private static bool warnedMissingScene;
 
+        private static readonly FieldInfo ActionFlagsField =
+            typeof(HActionBase).GetField("flags",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+
+        // The Aibu counter increments when Orgasm_Start begins. The
+        // actual native climax effect follows only when its animation
+        // advances to Orgasm_Loop. Attach our physical fluid to that
+        // transition instead of shooting prematurely or twice.
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddAibuOrg))]
-        private static void OnAibuClimax(HFlag __instance)
+        [HarmonyPatch(typeof(HActionBase), nameof(HActionBase.SetPlay))]
+        private static void OnAibuOrgasmLoop(HActionBase __instance,
+            string _nextAnimation)
         {
-            Trigger(__instance);
+            if (!(__instance is HAibu) ||
+                _nextAnimation != "Orgasm_Loop" || ActionFlagsField == null)
+                return;
+            Trigger(ActionFlagsField.GetValue(__instance) as HFlag);
         }
 
         [HarmonyPostfix]
