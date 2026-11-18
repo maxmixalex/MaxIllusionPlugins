@@ -13,25 +13,14 @@ namespace FemboyMode
         internal const string DefaultMaleFinishBone = "cm_J_dan109_00";
 
         /// <summary>
-        /// RX18 base aibulayer_02 entry 4 (icon 25, objects 7/8) is
-        /// the VIBRATOR p_item_vibe. The optional phallus-shaped item
-        /// the user wants disabled is the NEXT item, not this anchor.
+        /// The base game's aibulayer_02 order is:
+        /// 0 hand, 1 finger, 2 tongue, 3 denma vibrator (IDs 5/6),
+        /// 4 p_item_vibe phallus-shaped toy (IDs 7/8).
+        /// This removes the LAST item, not the massager before it.
         /// </summary>
-        internal static bool IsVibratorLayer(int icon, int leftItemId, int rightItemId)
+        internal static bool IsPhallusToyLayer(int icon, int leftItemId, int rightItemId)
         {
             return icon == 25 && leftItemId == 7 && rightItemId == 8;
-        }
-
-        internal static int NextLayerKeyAfterVibrator(int[] keys, int vibratorKey)
-        {
-            if (keys == null || vibratorKey < 0)
-                return -1;
-
-            int next = int.MaxValue;
-            for (int i = 0; i < keys.Length; i++)
-                if (keys[i] > vibratorKey && keys[i] < next)
-                    next = keys[i];
-            return next == int.MaxValue ? -1 : next;
         }
 
         // Native MetaballShoot emits its first droplet immediately and
