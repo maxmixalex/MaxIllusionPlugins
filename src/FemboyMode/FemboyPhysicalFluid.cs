@@ -290,6 +290,8 @@ namespace FemboyMode
         private bool waitingForFirstDroplet;
         private bool reportedAibu;
         private bool reportedSonyu;
+        private readonly FemboySonyuCycleGate sonyuCycle =
+            new FemboySonyuCycleGate();
 
         internal string DiagnosticStatus
         {
@@ -304,7 +306,8 @@ namespace FemboyMode
                         privateSourceRoot.transform.childCount) +
                     " launchDirection=" +
                     (axis == null ? "(missing)" : axis.transform.forward.ToString()) +
-                    " firedAt=" + lastFired;
+                    " firedAt=" + lastFired +
+                    " sonyuCycle=(" + sonyuCycle.DiagnosticState + ")";
             }
         }
         private HFlag.EMode boundMode = HFlag.EMode.none;
@@ -320,6 +323,21 @@ namespace FemboyMode
             HFlag.EMode mode = scene.flags.mode;
             int poseId = scene.flags.nowAnimationInfo == null
                 ? -1 : scene.flags.nowAnimationInfo.id;
+            // All native callbacks for a single climax converge here. The
+            // per-actor gate stays closed through *_IN_A recovery and re-arms
+            // only after the real non-climax *_M_IN_Loop transition.
+            if (mode == HFlag.EMode.sonyu &&
+                !sonyuCycle.CanFire(poseId, scene.flags.nowAnimStateName))
+                return;
+
+            // A second legitimate climax uses a fresh native MetaballShoot.
+            // Its interval index and projectile allowance can be exhausted
+            // after the first shot even when ShootMetaBallStart is invoked.
+            bool freshSonyuCycle = mode == HFlag.EMode.sonyu &&
+                lastFired > -900f;
+            if (freshSonyuCycle && Time.time - lastFired < 0.9f)
+                return;
+
             // Original HSceneProc.ChangeAnimator swaps the native Metaball
             // preset and even its host when the scene changes from Aibu to
             // Sonyu or to another pose. Reusing the old Aibu shooter caused
@@ -327,6 +345,7 @@ namespace FemboyMode
             bool changedPose = !ReferenceEquals(owner, scene) ||
                 !ReferenceEquals(character, target) ||
                 shooter == null || axis == null || host == null ||
+                freshSonyuCycle ||
                 FemboyRules.NeedsNewFluidPreset((int)boundMode, boundPoseId,
                     (int)mode, poseId);
             if (changedPose)
@@ -362,6 +381,8 @@ namespace FemboyMode
             if (trajectory != null)
                 trajectory.AlignToModel();
             shooter.ShootMetaBallStart(false);
+            if (mode == HFlag.EMode.sonyu)
+                sonyuCycle.MarkFired(poseId, scene.flags.nowAnimStateName);
             waitingForFirstDroplet = true;
             if ((mode == HFlag.EMode.aibu && !reportedAibu) ||
                 (mode == HFlag.EMode.sonyu && !reportedSonyu))
@@ -659,6 +680,14 @@ namespace FemboyMode
 
         private void Update()
         {
+            // This is observed on every animation frame, not only when a
+            // voice is delivered. Otherwise the next insertion loop can be
+            // missed and the subsequent climax will stay suppressed.
+            if (owner != null && owner.flags != null &&
+                owner.flags.mode == HFlag.EMode.sonyu)
+                sonyuCycle.Observe(owner.flags.nowAnimationInfo == null
+                    ? -1 : owner.flags.nowAnimationInfo.id,
+                    owner.flags.nowAnimStateName);
             if (shooter == null) return;
 
             if (owner == null || owner.flags == null ||

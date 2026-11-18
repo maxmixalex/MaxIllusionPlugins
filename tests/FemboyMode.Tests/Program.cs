@@ -259,13 +259,43 @@ internal static class Program
         Check(!FemboyRules.ShouldEmitFromConsumedSonyuVoice(-1, -1),
             "no queued voice means no phantom emission");
 
+        Check(FemboyRules.IsSonyuFinishPhase("A_WF_IN_Start"),
+            "start of insertion climax is a finish phase");
+        Check(FemboyRules.IsSonyuFinishPhase("A_WS_IN_A"),
+            "post-climax recovery is still part of the same finish cycle");
+        Check(!FemboyRules.IsSonyuOrdinaryMotionLoop("A_WS_IN_A"),
+            "recovery A cannot unlock a duplicate discharge");
+        Check(FemboyRules.IsSonyuOrdinaryMotionLoop("S_M_IN_Loop"),
+            "native insertion loop is a new-cycle rearm point");
+        Check(FemboyRules.IsSonyuOrdinaryMotionLoop("S_A_M_IN_Loop"),
+            "female-initiative insertion loop is a rearm point");
+        Check(!FemboyRules.IsSonyuOrdinaryMotionLoop("S_WS_IN_Loop"),
+            "finish loop does not accidentally rearm");
+        var cycle = new FemboySonyuCycleGate();
+        Check(cycle.CanFire(12, "S_M_IN_Loop"),
+            "first climax in the selected pose is allowed");
+        cycle.MarkFired(12, "S_M_IN_Loop");
+        cycle.Observe(12, "A_WF_IN_Start");
+        Check(!cycle.CanFire(12, "A_WF_IN_Start"),
+            "HFlag/SetPlay/VoiceProc all refer to one first climax");
+        Check(!cycle.CanFire(12, "A_WS_IN_A"),
+            "second recovery voice code cannot fire another 20 droplets");
+        cycle.Observe(12, "S_M_IN_Loop");
+        Check(cycle.CanFire(12, "S_M_IN_Loop"),
+            "returning to ordinary insertion rearms the next climax");
+        cycle.MarkFired(12, "A_SF_IN_Start");
+        Check(!cycle.CanFire(12, "SS_IN_A"),
+            "second cycle recovery remains suppressed");
+        Check(cycle.CanFire(10, "SF_IN_Start"),
+            "a genuine pose change starts independent fluid state");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 111 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 123 FemboyMode rules assertions passed.");
         return 0;
     }
 }

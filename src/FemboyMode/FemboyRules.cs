@@ -84,6 +84,31 @@ namespace FemboyMode
                    codeAfter != codeBefore;
         }
 
+        // A finish Start/Loop/A is part of the *same* Sonyu orgasm, even
+        // when native voice codes 325 and 327 are both consumed.
+        internal static bool IsSonyuFinishPhase(string state)
+        {
+            if (string.IsNullOrEmpty(state)) return false;
+            return state.IndexOf("WF_IN_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("WS_IN_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("SF_IN_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("SS_IN_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("WF_OUT_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("WS_OUT_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("SF_OUT_", StringComparison.Ordinal) >= 0 ||
+                   state.IndexOf("SS_OUT_", StringComparison.Ordinal) >= 0;
+        }
+
+        // Unlike *_WF/WS/SF/SS_IN_Loop, the ordinary *_M_IN_Loop
+        // represents a new insertion cycle. Do not arm again in *_IN_A.
+        internal static bool IsSonyuOrdinaryMotionLoop(string state)
+        {
+            if (string.IsNullOrEmpty(state) || IsSonyuFinishPhase(state))
+                return false;
+            return state.EndsWith("_M_IN_Loop", StringComparison.Ordinal) ||
+                   state.EndsWith("_M_OUT_Loop", StringComparison.Ordinal);
+        }
+
         internal static bool IsFemaleInsertionFinishStart(string state)
         {
             if (string.IsNullOrEmpty(state))
@@ -226,6 +251,57 @@ namespace FemboyMode
         internal static long EffectKey(int flagInstanceId, int heroineIndex)
         {
             return ((long)flagInstanceId << 2) | (uint)(heroineIndex & 3);
+        }
+    }
+
+    /// <summary>
+    /// Stateful, per-heroine/per-scene Sonyu orgasm gate. The native game
+    /// signals one finish through HFlag, SetPlay, and several voice codes;
+    /// a short cooldown alone mistakes late recovery cues for new orgasms.
+    /// </summary>
+    internal sealed class FemboySonyuCycleGate
+    {
+        private int pose = int.MinValue;
+        private bool fired;
+        private bool sawFinishPhase;
+
+        internal bool CanFire(int poseId, string state)
+        {
+            Observe(poseId, state);
+            return !fired;
+        }
+
+        internal void MarkFired(int poseId, string state)
+        {
+            Observe(poseId, state);
+            fired = true;
+            if (FemboyRules.IsSonyuFinishPhase(state)) sawFinishPhase = true;
+        }
+
+        internal void Observe(int poseId, string state)
+        {
+            if (pose != poseId)
+            {
+                pose = poseId;
+                fired = false;
+                sawFinishPhase = false;
+            }
+            if (FemboyRules.IsSonyuFinishPhase(state))
+                sawFinishPhase = true;
+            else if (fired && sawFinishPhase &&
+                     FemboyRules.IsSonyuOrdinaryMotionLoop(state))
+            {
+                // A genuine return to ordinary insertion movement is the
+                // re-arm point; post-climax *_IN_A does not re-arm us.
+                fired = false;
+                sawFinishPhase = false;
+            }
+        }
+
+        internal string DiagnosticState
+        {
+            get { return "pose=" + pose + " fired=" + fired +
+                " sawFinish=" + sawFinishPhase; }
         }
     }
 }
