@@ -40,6 +40,12 @@ namespace FemboyMode
             return shots - 1;
         }
 
+        internal static bool NeedsNewFluidPreset(int existingMode,
+            int existingPose, int nextMode, int nextPose)
+        {
+            return existingMode != nextMode || existingPose != nextPose;
+        }
+
         internal static float BallisticHorizontalFraction(float elevation)
         {
             return (float)Math.Cos(SafeFluidElevation(elevation) *
