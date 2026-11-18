@@ -16,6 +16,18 @@ namespace FemboyMode
         private float appliedX = 1f, appliedY = 1f, appliedZ = 1f;
         private int lastLookupFrame = -1000;
 
+        internal bool HasAppliedMaleGeometryScale
+        {
+            get
+            {
+                return scaledBone != null &&
+                    (!Mathf.Approximately(appliedX, 1f) ||
+                     !Mathf.Approximately(appliedY, 1f) ||
+                     !Mathf.Approximately(appliedZ, 1f)) &&
+                    SameScale(scaledBone.localScale, lastWrittenScale);
+            }
+        }
+
         protected override void Update()
         {
             base.Update();
