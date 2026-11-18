@@ -32,6 +32,8 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
+        internal static ConfigEntry<bool> EnableMaleFinishAnimation;
+        internal static ConfigEntry<bool> SuppressFemaleClimaxVoice;
         internal static ConfigEntry<string> MaleFinishBone;
         internal static ConfigEntry<bool> SuppressOriginalFemaleFX;
         internal static ConfigEntry<float> ClimaxFXOffsetX, ClimaxFXOffsetY, ClimaxFXOffsetZ;
@@ -80,6 +82,10 @@ namespace FemboyMode
                 "Explicitly log the current Maker/Free H character rig, finish clip names and installed body GUIDs. Does not log cards or personal names.");
             EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
+            EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
+                "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
+            SuppressFemaleClimaxVoice = Config.Bind("Free H", "Suppress female climax voice", true,
+                "Suppress only marked heroine's native female orgasm dialogue cues. Koikatsu does not provide an equivalent male voice channel; other dialogue and characters are unchanged.");
             MaleFinishBone = Config.Bind("Male finish FX", "Target bone",
                 FemboyRules.DefaultMaleFinishBone,
                 "Native LiquidSiru particle parent bone. Independent of Aibu alignment Target bone.");
@@ -121,6 +127,8 @@ namespace FemboyMode
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
             harmony.PatchAll(typeof(FemboyClimaxHooks));
+            harmony.PatchAll(typeof(FemboyVoiceHooks));
+            harmony.PatchAll(typeof(FemboyMaleAnimationHooks));
             UncensorSelectorCompat.TryPatch(harmony);
             Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
         }
