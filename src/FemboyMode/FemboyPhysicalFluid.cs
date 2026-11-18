@@ -212,8 +212,8 @@ namespace FemboyMode
 
             Quaternion boneFrame = Quaternion.LookRotation(
                 direction, anatomicalUp.normalized);
-            float localPitch = Mathf.Clamp(
-                FemboyModePlugin.FluidLocalPitch.Value, -30f, 30f);
+            float localPitch = FemboyRules.SafeLocalFluidPitch(
+                FemboyModePlugin.FluidLocalPitch.Value);
             transform.rotation = boneFrame * Quaternion.Euler(
                 -localPitch, 0f, 0f);
 
