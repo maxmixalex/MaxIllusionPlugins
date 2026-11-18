@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -22,12 +21,16 @@ namespace FemboyMode
         private static readonly FieldInfo OwnerFlagField =
             typeof(HParticleCtrl).GetField("flags",
                 BindingFlags.Instance | BindingFlags.NonPublic);
-        private static readonly FieldInfo ActionListField =
-            typeof(HSceneProc).GetField("lstProc",
-                BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo AibuRandomField =
             typeof(HAibu).GetField("randSio",
                 BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo ActionFlagsField =
+            typeof(HActionBase).GetField("flags",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+        // Captured once per scene. ShuffleRand.Get is used throughout the game:
+        // never search the Unity scene inside its hot-path Harmony prefix.
+        private static readonly Dictionary<GlobalMethod.ShuffleRand, HFlag> AibuOwners =
+            new Dictionary<GlobalMethod.ShuffleRand, HFlag>();
         // A Free H scene can have two heroines. Never deduplicate separate
         // characters just because they share the same HFlag instance.
         private static readonly Dictionary<long, float> LastEffectByCharacter =
@@ -47,52 +50,71 @@ namespace FemboyMode
         private static bool warnedUnavailable;
         private static bool warnedMissingBone;
 
-        // Vanilla HAibu.Proc uses randSio.Get() to decide both its
-        // female-specific particle and its sound. Suppress that decision
-        // only after our replacement effect has successfully started.
-        // A particle-only prefix leaves the original sound playing.
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HAibu), MethodType.Constructor,
+            new[] { typeof(HFlag.DeliveryMember) })]
+        private static void CaptureAibuOwner(HAibu __instance)
+        {
+            if (__instance == null || AibuRandomField == null ||
+                ActionFlagsField == null)
+                return;
+
+            var random = AibuRandomField.GetValue(__instance)
+                as GlobalMethod.ShuffleRand;
+            var flags = ActionFlagsField.GetValue(__instance) as HFlag;
+            if (random != null && flags != null)
+                AibuOwners[random] = flags;
+        }
+
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HSceneProc), "OnDestroy")]
+        private static void CleanupSceneState(HSceneProc __instance)
+        {
+            if (__instance == null || __instance.flags == null)
+                return;
+
+            HFlag flags = __instance.flags;
+            var expired = new List<GlobalMethod.ShuffleRand>();
+            foreach (var pair in AibuOwners)
+                if (ReferenceEquals(pair.Value, flags))
+                    expired.Add(pair.Key);
+            for (int i = 0; i < expired.Count; i++)
+                AibuOwners.Remove(expired[i]);
+
+            int id = flags.GetInstanceID();
+            LastEffectByCharacter.Remove(FemboyRules.EffectKey(id, 0));
+            LastEffectByCharacter.Remove(FemboyRules.EffectKey(id, 1));
+        }
+
+        // Vanilla HAibu.Proc's randSio.Get decides the female-specific
+        // particle AND its accompanying sound. Block only this exact
+        // random instance, only after the alternate visual was played.
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
         [HarmonyPatch(typeof(GlobalMethod.ShuffleRand), nameof(GlobalMethod.ShuffleRand.Get))]
         private static bool FilterAibuFemaleEffectDecision(
             GlobalMethod.ShuffleRand __instance, ref int __result)
         {
-            if (__instance == null || ActionListField == null ||
-                AibuRandomField == null ||
+            if (__instance == null ||
                 FemboyModePlugin.SuppressOriginalFemaleFX == null ||
                 !FemboyModePlugin.SuppressOriginalFemaleFX.Value ||
                 FemboyModePlugin.EnableMaleClimaxFX == null ||
                 !FemboyModePlugin.EnableMaleClimaxFX.Value)
                 return true;
 
-            HSceneProc[] scenes = UnityEngine.Object.FindObjectsOfType<HSceneProc>();
-            for (int i = 0; i < scenes.Length; i++)
-            {
-                HSceneProc scene = scenes[i];
-                if (scene == null || scene.flags == null || !scene.flags.isFreeH ||
-                    scene.flags.mode != HFlag.EMode.aibu ||
-                    !HasRecentMaleEffect(scene.flags))
-                    continue;
+            HFlag flags;
+            if (!AibuOwners.TryGetValue(__instance, out flags) ||
+                flags == null || !flags.isFreeH ||
+                flags.mode != HFlag.EMode.aibu ||
+                !HasRecentMaleEffect(flags))
+                return true;
 
-                var heroine = scene.flags.GetLeadingHeroine();
-                if (heroine == null ||
-                    !FemboyModePlugin.IsFemboy(heroine.chaCtrl))
-                    continue;
+            var heroine = flags.GetLeadingHeroine();
+            if (heroine == null || !FemboyModePlugin.IsFemboy(heroine.chaCtrl))
+                return true;
 
-                IList actions = ActionListField.GetValue(scene) as IList;
-                if (actions == null) continue;
-                foreach (object action in actions)
-                {
-                    if (!(action is HAibu)) continue;
-                    if (!ReferenceEquals(AibuRandomField.GetValue(action), __instance))
-                        continue;
-
-                    __result = 0;
-                    return false;
-                }
-            }
-
-            return true;
+            __result = 0;
+            return false;
         }
 
         // The vanilla Aibu particle #2 is the female squirt effect. When
