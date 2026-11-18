@@ -203,25 +203,16 @@ namespace FemboyMode
             shooter.ShootAxis = axis;
             shooter.chaCustom = character;
             shooter.isEnable = true;
-            shooter.parentTransform = body.transform;
+            // Do not change the shared UpdateMeta static-mesh parenting
+            // decision. Only our liquid should be driven by this emitter.
+            shooter.parentTransform = null;
 
-            if (shooter.objSourceRoot == null)
-            {
-                foreach (MetaballShoot candidate in host.lstShoot)
-                {
-                    if (candidate != null && candidate.objSourceRoot != null)
-                    {
-                        shooter.objSourceRoot = candidate.objSourceRoot;
-                        break;
-                    }
-                }
-            }
-            if (shooter.objSourceRoot == null)
-            {
-                privateSourceRoot = new GameObject("FemboyMode_PhysicalFluidSource");
-                privateSourceRoot.transform.SetParent(host.transform, false);
-                shooter.objSourceRoot = privateSourceRoot;
-            }
+            // MetaballShoot.MetaBallClear destroys *all children* of its
+            // objSourceRoot. Sharing the male player's root would erase
+            // the other participant's real fluid on cleanup or pose change.
+            privateSourceRoot = new GameObject("FemboyMode_PhysicalFluidSource");
+            privateSourceRoot.transform.SetParent(host.transform, false);
+            shooter.objSourceRoot = privateSourceRoot;
 
             host.lstShoot.Add(shooter);
             return true;
