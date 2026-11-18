@@ -6,9 +6,9 @@ using UnityEngine.UI;
 namespace FemboyMode
 {
     /// <summary>
-    /// An element of the game's existing H UI, NOT an IMGUI overlay.
-    /// The native female gauge is the upper-left HUD reference point;
-    /// the symbol inherits the font/color from existing Unity UI text.
+    /// Attach a native Unity UI marker to the same HScene Canvas that
+    /// contains the heroine gauge. Earlier versions parented the marker
+    /// under gauge.imgBar.parent, which can be clipped by a fill Mask.
     /// </summary>
     internal static class FemboyHMarkerHooks
     {
@@ -30,32 +30,41 @@ namespace FemboyMode
     public sealed class FemboyHMarker : MonoBehaviour
     {
         private HSprite sprite;
-        private GameObject mark;
+        private GameObject marker;
         private Text label;
+        private Canvas canvas;
+        private RectTransform source;
+        private RectTransform canvasRect;
+        private RectTransform markerRect;
+        private float nextSearchTime;
+        private bool reported;
 
         public void Initialize(HSprite sceneSprite)
         {
             sprite = sceneSprite;
-            EnsureNativeHudMark();
+            TryCreate();
         }
 
         private void LateUpdate()
         {
-            if (sprite == null)
+            if (sprite == null || !sprite.flags)
             {
-                if (mark != null) mark.SetActive(false);
+                if (marker != null) marker.SetActive(false);
                 return;
             }
 
-            if (mark == null)
-                EnsureNativeHudMark();
-            if (mark == null)
+            if (marker == null && Time.unscaledTime >= nextSearchTime)
+            {
+                nextSearchTime = Time.unscaledTime + 1f;
+                TryCreate();
+            }
+
+            if (marker == null || canvasRect == null || source == null)
                 return;
 
-            bool visible = sprite.flags != null && sprite.flags.isFreeH &&
+            bool visible = sprite.flags.isFreeH &&
                 FemboyModePlugin.ShowFreeHMarker != null &&
                 FemboyModePlugin.ShowFreeHMarker.Value;
-
             if (visible)
             {
                 var heroine = sprite.GetLeadingHeroine();
@@ -63,74 +72,112 @@ namespace FemboyMode
                     FemboyModePlugin.IsFemboy(heroine.chaCtrl);
             }
 
-            if (mark.activeSelf != visible)
-                mark.SetActive(visible);
+            if (marker.activeSelf != visible)
+                marker.SetActive(visible);
+            if (!visible) return;
+
+            // Position relative to the ORIGINAL female H gauge, but draw
+            // at the top native Canvas level so Mask / RectMask2D used to
+            // clip the gauge fill cannot hide our marker.
+            Vector3[] corners = new Vector3[4];
+            source.GetWorldCorners(corners);
+            Camera camera = canvas.renderMode == RenderMode.ScreenSpaceOverlay
+                ? null : canvas.worldCamera;
+            Vector2 screen = RectTransformUtility.WorldToScreenPoint(
+                camera, corners[1]);
+            Vector2 local;
+            if (RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect, screen, camera, out local))
+            {
+                markerRect.anchoredPosition = local +
+                    new Vector2(26f, -16f);
+            }
         }
 
-        private void EnsureNativeHudMark()
+        private void TryCreate()
         {
-            if (sprite == null || mark != null)
+            if (sprite == null || marker != null)
                 return;
 
-            // Attach directly to the existing female gauge's RectTransform.
-            // It inherits the native Canvas, scaling, visibility and layout.
-            RectTransform nativeParent = null;
             if (sprite.gauge != null && sprite.gauge.Length > 0 &&
                 sprite.gauge[0] != null && sprite.gauge[0].imgBar != null)
-                nativeParent = sprite.gauge[0].imgBar.transform.parent as RectTransform;
+                source = sprite.gauge[0].imgBar.rectTransform;
 
-            if (nativeParent == null && sprite.rawFace != null)
-                nativeParent = sprite.rawFace.transform as RectTransform;
-            if (nativeParent == null)
+            if (source == null && sprite.rawFace != null)
+                source = sprite.rawFace.rectTransform;
+            if (source == null)
                 return;
 
-            mark = new GameObject("FemboyMode_GaugeSymbol",
-                typeof(RectTransform), typeof(Text));
-            mark.transform.SetParent(nativeParent, false);
-            mark.SetActive(false);
-            RectTransform rect = mark.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(0f, 1f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(25f, 25f);
-            rect.anchoredPosition = new Vector2(-10f, 4f);
+            canvas = source.GetComponentInParent<Canvas>();
+            if (canvas == null || canvas.transform == null)
+                return;
 
-            label = mark.GetComponent<Text>();
-            Text nativeLabel = null;
-            Text[] labels = sprite.GetComponentsInChildren<Text>(true);
-            for (int i = 0; i < labels.Length; i++)
+            canvasRect = canvas.transform as RectTransform;
+            if (canvasRect == null)
+                return;
+
+            marker = new GameObject("FemboyMode_HeroineGaugeMark",
+                typeof(RectTransform), typeof(Text));
+            marker.transform.SetParent(canvasRect, false);
+            marker.transform.SetAsLastSibling();
+            marker.SetActive(false);
+
+            markerRect = marker.GetComponent<RectTransform>();
+            markerRect.anchorMin = markerRect.anchorMax = new Vector2(0.5f, 0.5f);
+            markerRect.pivot = new Vector2(0.5f, 0.5f);
+            markerRect.sizeDelta = new Vector2(54f, 28f);
+
+            label = marker.GetComponent<Text>();
+            Text nativeText = source.GetComponentInParent<Text>();
+            if (nativeText == null)
             {
-                if (labels[i] != null && labels[i] != label &&
-                    labels[i].font != null)
+                Text[] texts = canvas.GetComponentsInChildren<Text>(true);
+                foreach (Text candidate in texts)
                 {
-                    nativeLabel = labels[i];
-                    break;
+                    if (candidate != null && candidate.font != null)
+                    {
+                        nativeText = candidate;
+                        break;
+                    }
                 }
             }
 
-            label.font = nativeLabel != null ? nativeLabel.font
-                : Resources.GetBuiltinResource<Font>("Arial.ttf");
-            label.text = label.font != null && label.font.HasCharacter('⚥')
-                ? "⚥" : "♂";
-            label.fontSize = nativeLabel != null
-                ? Mathf.Max(15, nativeLabel.fontSize) : 19;
-            label.fontStyle = nativeLabel != null
-                ? nativeLabel.fontStyle : FontStyle.Bold;
-            label.color = nativeLabel != null
-                ? nativeLabel.color : Color.white;
+            Font font = nativeText != null ? nativeText.font :
+                Resources.GetBuiltinResource<Font>("Arial.ttf");
+            if (font == null)
+            {
+                Object.Destroy(marker);
+                marker = null;
+                return;
+            }
+
+            label.font = font;
+            // Never render an unsupported Unicode symbol as a blank box.
+            label.text = font.HasCharacter('⚥') ? "⚥" :
+                font.HasCharacter('♂') ? "♂" : "F";
+            label.fontSize = 23;
+            label.fontStyle = FontStyle.Bold;
+            label.color = nativeText != null ? nativeText.color : Color.white;
             label.alignment = TextAnchor.MiddleCenter;
             label.raycastTarget = false;
 
-            if (FemboyModePlugin.VerboseLogging != null &&
-                FemboyModePlugin.VerboseLogging.Value)
+            Outline outline = marker.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.75f);
+            outline.effectDistance = new Vector2(1f, -1f);
+            outline.useGraphicAlpha = true;
+
+            if (!reported)
+            {
+                reported = true;
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Femboy marker attached to native female H gauge: " +
-                    nativeParent.name);
+                    "Native H gauge marker attached to Canvas '" + canvas.name +
+                    "' beside '" + source.name + "', glyph=" + label.text);
+            }
         }
 
         private void OnDestroy()
         {
-            if (mark != null) Destroy(mark);
+            if (marker != null) Destroy(marker);
         }
     }
 }
