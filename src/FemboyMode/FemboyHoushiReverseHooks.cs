@@ -575,7 +575,7 @@ namespace FemboyMode
             if (!GetMarkedActors(out heroine, out partner)) return;
             if (roleFollower == null)
                 roleFollower = gameObject.AddComponent<FemboyHoushiRoleRetargeter>();
-            active = roleFollower.Begin(scene);
+            active = roleFollower.Begin(scene, next);
         }
 
 
