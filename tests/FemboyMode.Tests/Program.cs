@@ -204,24 +204,18 @@ internal static class Program
         Check(!FemboyRules.IsFemaleInsertionFinishStart("A_M_OUT_Start"),
             "male-only climax does not trigger heroine liquid");
 
-        Check(FemboyRules.BallisticHorizontalFraction(0f) > 0.999f,
-            "zero-degree launch has full horizontal initial velocity");
-        Check(Math.Abs(FemboyRules.BallisticVerticalFraction(0f)) < 0.001f,
-            "zero-degree launch has no artificial upward component");
-        Check(FemboyRules.BallisticHorizontalFraction(18f) > 0.94f &&
-              FemboyRules.BallisticHorizontalFraction(18f) < 0.96f,
-            "default 18-degree launch has substantial forward velocity");
-        Check(FemboyRules.BallisticVerticalFraction(18f) > 0.30f &&
-              FemboyRules.BallisticVerticalFraction(18f) < 0.32f,
-            "default 18-degree launch has upward initial velocity");
-        Check(FemboyRules.BallisticHorizontalFraction(60f) > 0.49f &&
-              FemboyRules.BallisticHorizontalFraction(60f) < 0.51f,
-            "high-angle launch still has horizontal travel");
-        Check(Math.Abs(FemboyRules.BallisticVerticalFraction(float.NaN) -
-              FemboyRules.BallisticVerticalFraction(18f)) < 0.0001f,
-            "malformed launch angle defaults to 18 degrees");
-        Check(FemboyRules.BallisticHorizontalFraction(90f) > 0.49f,
-            "elevation above 60 degrees cannot silently become vertical freefall");
+        Check(FemboyRules.SafeLocalFluidPitch(0f) == 0f,
+            "default fluid follows actual bone forward with no fixed world tilt");
+        Check(FemboyRules.SafeLocalFluidPitch(12.5f) == 12.5f,
+            "relative pitch correction is preserved");
+        Check(FemboyRules.SafeLocalFluidPitch(-40f) == -30f,
+            "extreme downward bone-local correction is limited");
+        Check(FemboyRules.SafeLocalFluidPitch(45f) == 30f,
+            "extreme upward bone-local correction is limited");
+        Check(FemboyRules.SafeLocalFluidPitch(float.NaN) == 0f,
+            "malformed pitch never produces an invalid quaternion");
+        Check(FemboyRules.SafeLocalFluidPitch(float.PositiveInfinity) == 0f,
+            "infinite pitch returns to model-forward direction");
 
         Check(!FemboyRules.NeedsNewFluidPreset(0, 9, 0, 9),
             "same Aibu scene and pose reuses a physical fluid source");
@@ -260,7 +254,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 107 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 106 FemboyMode rules assertions passed.");
         return 0;
     }
 }
