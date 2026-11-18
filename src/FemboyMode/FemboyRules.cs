@@ -40,6 +40,27 @@ namespace FemboyMode
             return shots - 1;
         }
 
+        internal static float BallisticHorizontalFraction(float elevation)
+        {
+            return (float)Math.Cos(SafeFluidElevation(elevation) *
+                Math.PI / 180.0);
+        }
+
+        internal static float BallisticVerticalFraction(float elevation)
+        {
+            return (float)Math.Sin(SafeFluidElevation(elevation) *
+                Math.PI / 180.0);
+        }
+
+        private static float SafeFluidElevation(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                value = 18f;
+            if (value < -10f) return -10f;
+            if (value > 60f) return 60f;
+            return value;
+        }
+
         internal static bool IsFemaleInsertionFinishStart(string state)
         {
             if (string.IsNullOrEmpty(state))
