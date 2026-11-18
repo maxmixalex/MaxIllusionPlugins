@@ -73,7 +73,9 @@ function Add-RelativeFile {
         $Relative -match '(^|[/\\])\.\.([/\\]|$)') {
         throw "ExtraRelativeFiles must stay within GameRoot: $Relative"
     }
-    $p = Join-Path $script:Root ($Relative.Replace('/', '\'))
+    $separator = [IO.Path]::DirectorySeparatorChar
+    $relativeFs = $Relative.Replace([char]'\', $separator).Replace([char]'/', $separator)
+    $p = Join-Path $script:Root $relativeFs
     if (Test-Path -LiteralPath $p -PathType Leaf) {
         Add-DebugFile (Get-Item -LiteralPath $p)
     } else {
@@ -91,7 +93,7 @@ try {
     )
     foreach ($dataDir in @('Koikatu_Data', 'Koikatsu Party_Data')) {
         foreach ($name in $managedNames) {
-            $p = Join-Path $script:Root ($dataDir + '\Managed\' + $name)
+            $p = Join-Path $script:Root ($dataDir + '/Managed/' + $name)
             if (Test-Path -LiteralPath $p -PathType Leaf) {
                 Add-DebugFile (Get-Item -LiteralPath $p)
             }
@@ -100,7 +102,7 @@ try {
 
     # BepInEx / Harmony loader binaries.
     foreach ($name in @('BepInEx.dll', '0Harmony.dll', 'BepInEx.Harmony.dll')) {
-        foreach ($folder in @('BepInEx\core', 'BepInEx')) {
+        foreach ($folder in @('BepInEx/core', 'BepInEx')) {
             $p = Join-Path $script:Root ($folder + '\' + $name)
             if (Test-Path -LiteralPath $p -PathType Leaf) {
                 Add-DebugFile (Get-Item -LiteralPath $p)
@@ -109,7 +111,7 @@ try {
     }
 
     # Only relevant mod APIs / compatibility DLLs, not every installed mod.
-    $pluginRoot = Join-Path $script:Root 'BepInEx\plugins'
+    $pluginRoot = Join-Path $script:Root 'BepInEx/plugins'
     if (Test-Path -LiteralPath $pluginRoot -PathType Container) {
         $wanted = '^(KKAPI|ExtensibleSaveFormat|Sideloader|KK_UncensorSelector|KKABMX|KK_BetterSquirt|KK_BecomeTrap|KK_MultiTeamH|KK_FemboyMode|KK_ClothingUnlocker|KK_HCtrl|KK_HSceneOptions|KK_MaterialEditor|KKMaterialEditor|KK_AnimationController|BepInEx\.ConfigurationManager|MultiTeamH|UncensorSelector)$'
         Get-ChildItem -LiteralPath $pluginRoot -Filter '*.dll' -Recurse -File |
@@ -158,10 +160,10 @@ try {
     }
 
     if ($IncludeDiagnostics) {
-        Add-RelativeFile 'BepInEx\config\MaxMixAlex.FemboyMode.cfg'
-        $logPath = Join-Path $script:Root 'BepInEx\LogOutput.log'
+        Add-RelativeFile 'BepInEx/config/MaxMixAlex.FemboyMode.cfg'
+        $logPath = Join-Path $script:Root 'BepInEx/LogOutput.log'
         if (Test-Path -LiteralPath $logPath -PathType Leaf) {
-            $logOut = Join-Path $staging 'BepInEx\LogOutput.last2000.txt'
+            $logOut = Join-Path $staging 'BepInEx/LogOutput.last2000.txt'
             $logDir = Split-Path -Parent $logOut
             if (-not (Test-Path -LiteralPath $logDir)) {
                 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
