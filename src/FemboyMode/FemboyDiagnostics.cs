@@ -138,6 +138,13 @@ namespace FemboyMode
                 }
                 log.LogInfo("[FemboyMode diagnostics] " + label + " candidateBones=[" +
                     selected + "]" + (kept == 45 ? " (truncated)" : ""));
+                if (FemboyModePlugin.IsFemboy(c))
+                {
+                    LogBoneResolution(log, label, c.objBodyBone.transform,
+                        "male geometry", FemboyModePlugin.MaleGeometryBone);
+                    LogBoneResolution(log, label, c.objBodyBone.transform,
+                        "Kokan action anchor", FemboyModePlugin.KokanAnchorBone);
+                }
             }
 
             if (c.animBody != null && c.animBody.runtimeAnimatorController != null)
@@ -167,6 +174,27 @@ namespace FemboyMode
                     " finishCandidates=[" + selected + "]" +
                     (kept == 45 ? " (truncated)" : ""));
             }
+ 
+        private static void LogBoneResolution(
+            ManualLogSource log, string label, Transform root, string purpose,
+            BepInEx.Configuration.ConfigEntry<string> nameSetting)
+        {
+            if (nameSetting == null) return;
+            Transform resolved = FemboyRigResolver.FindBone(root, nameSetting.Value);
+            if (resolved == null)
+            {
+                log.LogInfo("[FemboyMode diagnostics] " + label + " " + purpose +
+                    ": configured=" + nameSetting.Value + " MISSING");
+                return;
+            }
+
+            Transform parent = resolved.parent;
+            log.LogInfo("[FemboyMode diagnostics] " + label + " " + purpose +
+                ": configured=" + nameSetting.Value + " resolved=" + resolved.name +
+                " parent=" + (parent == null ? "(none)" : parent.name) +
+                " localPosition=" + resolved.localPosition +
+                " localScale=" + resolved.localScale);
+        }
         }
     }
 }
