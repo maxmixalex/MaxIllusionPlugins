@@ -422,7 +422,7 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 ### What the v0.4.6 runtime log established
 
 - LogOutput(5).log: 104 Reversed menu items were added, but selecting them repeatedly logged that an existing AnimatorOverrideController prevented all role overrides. In RX18, an existing override controller is normal and must not be treated as a fatal conflict.
-- The Sonoma/Sonyu animation can enter subsequent SS/SF/WS climax Start states without visiting the ordinary M_IN_Loop or recovery state. At the end of the test, HFlag.finish was sameS while the old emitter gate was still fired=True.
+- The Sonyu animation can enter subsequent SS/SF/WS climax Start states without visiting the ordinary M_IN_Loop or recovery state. At the end of the test, HFlag.finish was sameS while the old emitter gate was still fired=True.
 - Combined finishes can consume female climax voice 318/319 before a later 325–330 cue. Not every later cue is a new orgasm, and a recovery *_A cue must never cause a second discharge.
 
 ### Corrected implementation
