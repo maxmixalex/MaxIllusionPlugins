@@ -49,6 +49,49 @@ namespace FemboyMode
                 Trigger(flags);
         }
 
+        // The RX18 log proves Sonyu voice code 326 fired for a marked
+        // heroine in A_SF_IN_Loop, but none of the prior Sonyu fluid
+        // callbacks reached the emitter: its status remained mode=aibu.
+        // HVoiceCtrl.VoiceProc consumes the native 325..330 code exactly
+        // once at climax. Use that verified actor-local event as an
+        // independent fallback, including female-initiative (+38) voices.
+        // This is intentionally BEFORE VoiceProc clears playVoices[].
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HVoiceCtrl), "VoiceProc")]
+        private static void OnSonyuClimaxVoice(
+            HVoiceCtrl __instance, ChaControl _female, int _main)
+        {
+            if (__instance == null || _female == null ||
+                _main < 0 || _main > 1)
+                return;
+
+            HFlag flags = __instance.flags;
+            if (flags == null || !flags.isFreeH ||
+                flags.mode != HFlag.EMode.sonyu ||
+                flags.voice == null || flags.voice.playVoices == null ||
+                flags.voice.playVoices.Length <= _main)
+                return;
+
+            int code = flags.voice.playVoices[_main];
+            if (!FemboyRules.IsSonyuClimaxStartVoice(code))
+                return;
+
+            // For multi-heroines, never apply the selected heroine's
+            // finish to her partner's voice channel.
+            var leading = flags.GetLeadingHeroine();
+            if (leading == null || !ReferenceEquals(leading.chaCtrl, _female) ||
+                !FemboyModePlugin.IsFemboy(_female))
+                return;
+
+            if (FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Sonyu climax voice fallback fired for selected actor: " +
+                    "code=" + code + " channel=" + _main +
+                    " state=" + flags.nowAnimStateName);
+            Trigger(flags);
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuOrg))]
         private static void OnSonyuClimax(HFlag __instance)
