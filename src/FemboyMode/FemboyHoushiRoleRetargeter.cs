@@ -6,7 +6,7 @@ namespace FemboyMode
 {
     // Restore visual-only changes before the game's animator evaluates the
     // next frame. The late retarget pass never becomes the next native input.
-    [DefaultExecutionOrder(-9000)]
+    [DefaultExecutionOrder(-20000)]
     public sealed class FemboyHoushiRoleRestorer : MonoBehaviour
     {
         internal FemboyHoushiRoleRetargeter Owner;
@@ -18,15 +18,16 @@ namespace FemboyMode
     }
 
     /// <summary>
-    /// Transfer only human FK joint poses across actor roles. Unity's
-    /// AnimatorOverrideController swaps by clip name, but a male cm_j_* clip
-    /// cannot drive a female cf_j_* skeleton (and vice versa). This component
-    /// reads BOTH already-evaluated native pose streams, retargets the deltas
+    /// Transfer only human FK joint poses across actor roles. Koikatsu uses
+    /// the same cf_j_* BODY bone names for BOTH male and female actors;
+    /// cm_J_dan* denotes additional genital geometry, not a separate male
+    /// body. This component reads BOTH evaluated native pose streams and
+    /// retargets the deltas
     /// relative to each character's neutral pose, then restores the inputs
     /// before the next evaluation. Facial blendshapes, IK controls, custom
     /// geometry, clothes, voice and original controllers are never replaced.
     /// </summary>
-    [DefaultExecutionOrder(9000)]
+    [DefaultExecutionOrder(30000)]
     public sealed class FemboyHoushiRoleRetargeter : MonoBehaviour
     {
         private sealed class Joint
@@ -46,6 +47,11 @@ namespace FemboyMode
         private ChaControl male;
         private Transform femaleRoot;
         private Transform maleRoot;
+        private Transform femaleHips;
+        private Transform maleHips;
+        private HSceneProc.AnimationListInfo activeAction;
+        private int framesApplied;
+        private float maxVisualDelta;
         private readonly List<Joint> joints = new List<Joint>();
         private FemboyHoushiRoleRestorer restorer;
         private bool active;
@@ -78,6 +84,8 @@ namespace FemboyMode
             male = process.male;
             femaleRoot = female.objBodyBone.transform;
             maleRoot = male.objBodyBone.transform;
+            femaleHips = null;
+            maleHips = null;
             joints.Clear();
             var maleMap = new Dictionary<string, Transform>(StringComparer.Ordinal);
             foreach (Transform bone in maleRoot.GetComponentsInChildren<Transform>(true))
@@ -102,6 +110,11 @@ namespace FemboyMode
                     FemaleNeutral = bone.localRotation,
                     MaleNeutral = matching.localRotation
                 });
+                if (FemboyRules.IsHoushiRootJoint(key))
+                {
+                    femaleHips = bone;
+                    maleHips = matching;
+                }
             }
 
             if (restorer == null)
@@ -113,10 +126,12 @@ namespace FemboyMode
             restorer.Owner = this;
         }
 
-        internal bool Begin(HSceneProc process)
+        internal bool Begin(HSceneProc process,
+            HSceneProc.AnimationListInfo reversedAction)
         {
             Attach(process);
-            if (joints.Count < 12 || femaleRoot == null || maleRoot == null)
+            if (joints.Count < 12 || femaleRoot == null || maleRoot == null ||
+                femaleHips == null || maleHips == null)
             {
                 FemboyModePlugin.LogOptionalIntegrationProblem(
                     "Reversed Houshi cannot retarget this rig: only " +
@@ -124,21 +139,21 @@ namespace FemboyMode
                     "No transforms or controller assets will be modified.");
                 return false;
             }
+            activeAction = reversedAction;
             active = true;
-            int pose = process.flags == null ||
-                process.flags.nowAnimationInfo == null ? -1 :
-                process.flags.nowAnimationInfo.id;
-            if (lastLogPose != pose)
-            {
-                lastLogPose = pose;
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Reversed Houshi body retarget active: " + joints.Count +
-                    " paired FK joints; original animator controllers and " +
-                    "facial channels retained, pose=" + pose +
-                    " exchangeRenderRoots=" +
-                    (FemboyModePlugin.ReverseHoushiSwapVisualRoots != null &&
-                     FemboyModePlugin.ReverseHoushiSwapVisualRoots.Value));
-            }
+            framesApplied = 0;
+            maxVisualDelta = 0f;
+            int pose = reversedAction == null ? -1 : reversedAction.id;
+            lastLogPose = pose;
+            FemboyModePlugin.LogOptionalIntegrationProblem(
+                "Reversed Houshi body retarget active: " + joints.Count +
+                " real cf_j_* body joint pairs, hipPair=" +
+                (femaleHips != null && maleHips != null) +
+                ", sourcePose=" + pose +
+                ", exchangeRenderRoots=" +
+                (FemboyModePlugin.ReverseHoushiSwapVisualRoots != null &&
+                 FemboyModePlugin.ReverseHoushiSwapVisualRoots.Value) +
+                "; native controllers and facial channels retained.");
             return true;
         }
 
@@ -146,6 +161,7 @@ namespace FemboyMode
         {
             RestoreNativePose();
             active = false;
+            activeAction = null;
         }
 
         internal void RestoreNativePose()
@@ -185,15 +201,24 @@ namespace FemboyMode
             if (!active) return;
             if (scene == null || scene.flags == null ||
                 scene.flags.mode != HFlag.EMode.houshi ||
-                scene.flags.nowAnimationInfo == null ||
-                !FemboyRules.IsReversedHoushiName(
-                    scene.flags.nowAnimationInfo.nameAnimation) ||
+                (scene.flags.nowAnimationInfo == null ||
+                 (!ReferenceEquals(scene.flags.nowAnimationInfo, activeAction) &&
+                  !FemboyRules.IsReversedHoushiName(
+                      scene.flags.nowAnimationInfo.nameAnimation))) ||
                 female == null || male == null)
             {
                 Stop();
                 return;
             }
 
+            // Native actor ROOTS may coincide even though their animated
+            // pelvis (cf_j_hips) trajectories differ. Capture each hip's
+            // WORLD position BEFORE swapping joints; use this for actual
+            // giver/receiver location exchange below.
+            Vector3 nativeFemaleHipWorld = femaleHips == null
+                ? femaleRoot.position : femaleHips.position;
+            Vector3 nativeMaleHipWorld = maleHips == null
+                ? maleRoot.position : maleHips.position;
             // Capture the complete ORIGINAL pose for both actors before
             // touching a single transform. This prevents intra-frame feedback.
             for (int i = 0; i < joints.Count; i++)
@@ -216,6 +241,12 @@ namespace FemboyMode
                 j.Male.localRotation = j.LastMale;
             }
             modified = true;
+            framesApplied++;
+            if (framesApplied == 1)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Reversed Houshi first rendered frame: joints=" +
+                    joints.Count + " femaleHip=" + nativeFemaleHipWorld +
+                    " maleHip=" + nativeMaleHipWorld);
 
             if (FemboyModePlugin.ReverseHoushiSwapVisualRoots == null ||
                 !FemboyModePlugin.ReverseHoushiSwapVisualRoots.Value ||
@@ -227,10 +258,20 @@ namespace FemboyMode
             originalMaleRoot = maleRoot.position;
             originalFemaleRotation = femaleRoot.rotation;
             originalMaleRotation = maleRoot.rotation;
+            // Swapping objBodyBone positions alone was ineffective when
+            // both parent roots share a native H position. Align the actual
+            // ANIMATED PELVIS positions to the other actor's original pelvis
+            // instead. The male now follows the original giver's location,
+            // while the marked female follows the receiver's location.
             femaleRoot.SetPositionAndRotation(
                 originalMaleRoot, originalMaleRotation);
             maleRoot.SetPositionAndRotation(
                 originalFemaleRoot, originalFemaleRotation);
+            if (femaleHips != null && maleHips != null)
+            {
+                femaleRoot.position += nativeMaleHipWorld - femaleHips.position;
+                maleRoot.position += nativeFemaleHipWorld - maleHips.position;
+            }
             writtenFemaleRoot = femaleRoot.position;
             writtenMaleRoot = maleRoot.position;
             writtenFemaleRotation = femaleRoot.rotation;
