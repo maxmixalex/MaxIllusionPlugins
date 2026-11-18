@@ -508,3 +508,14 @@ These changes follow verified RX18 0.4.9 feedback: the full body-role reversal n
 - CI: .NET Framework 3.5 plugin build, headless regression rules, PowerShell collector verification and packaging. **185** headless assertions include underwear-covered vs exposed contact and reversed oral marker.
 - Runtime acceptance is still required for the badge's actual screen visibility, the hand's contact position across underwear states, and correct mouth motion during imported/native reversed oral animations. Runtime logs are not proof of final visual alignment.
 - These improvements intentionally do not change the previously accepted Sonyu fluid cycle or kPlug action catalog.
+
+## v0.4.11 — Compact H indicator, live underwear state, reversed Siru stain ownership
+
+- User screenshot showed the previous 73x27 upper-left `♂ 伪娘` rectangle overlapping native pleasure HUD. The H flag is now a compact 22px teal, cream-bordered circle carrying a white sex glyph, anchored just after the native portrait status chip rather than across the portrait or gauge. Source is the portrait top-left, not a variable fill bar. Logs say whether the badge is displayed and where it was positioned.
+- In v0.4.10 the code treated `ChaControl.notShorts` as the *current* underwear position. Existing Koikatsu clothing mods demonstrate that the dynamic state comes from `ChaControl.fileStatus.clothesState[3]`: 0=On, 1=Shift, 2=Hang, 3=Off. The Kokan hand proxy now follows **the current clothing state** each frame: use native contact at On; use the male anatomy contact at Shift/Hang/Off or when shorts are absent. Extra male collider follows the same exposure rule. Verbose logs include the actual status byte.
+- In a reversed Houshi animation, native HHoushi still writes liquid stains to its original heroine object. `FemboyReversedSiruHooks` suppresses positive `ChaControl.SetSiruFlags` on the marked heroine only for active [反转] service actions, instead writing the requested Siru region/intensity to the original male character. Zero/cleanup operations are untouched. This path is compatible with the installed MaleJuice male material support if active.
+- The working v0.4.9 body role swap, v0.4.8 HCtrl/Metaball fluid, and native/AnimationLoader imported action menu are unchanged.
+- A mechanical FlatLock source pack was separately generated as original two-piece Koikatsu-scale OBJ/GLB/STL plus a Unity 5.6.2f1 ModdingTools accessory project. It targets Maker categories `ao_kokan (130)` and `ao_waist (126)` and is **not a playable zipmod until Unity compiles the assets**.
+
+### Runtime verification
+Confirm that the new circle is not covering the portrait, gauges or top-left status; cycle underwear through On -> Shift -> Hang -> Off and check hand movement; finish a reversed Houshi action with Siru and verify the male receives the overlay while the marked heroine remains unstained. CI compile and 188 headless rules assertions cannot verify these visual behaviors.
