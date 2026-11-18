@@ -148,8 +148,29 @@ namespace FemboyMode
                 clicked.GetComponent<HSprite.AnimationInfoComponent>();
             HSceneProc.AnimationListInfo selected =
                 component == null ? null : component.info;
-            if (selected == null || !reversed.Contains(selected))
-                return false;
+            if (selected == null) return false;
+            if (!reversed.Contains(selected))
+            {
+                // HSprite sometimes copies AnimationListInfo for pooled rows.
+                // The copy is not a key in AnimationLoader's mapping. Resolve
+                // to the canonical clone before calling ChangeAnimator, or
+                // imported controllers silently fall back to donor assets.
+                if (!FemboyRules.IsReversedHoushiName(selected.nameAnimation))
+                    return false;
+                HSceneProc.AnimationListInfo canonical = null;
+                foreach (HSceneProc.AnimationListInfo candidate in reversed)
+                {
+                    if (candidate.id == selected.id &&
+                        candidate.kindHoushi == selected.kindHoushi &&
+                        candidate.nameAnimation == selected.nameAnimation)
+                    {
+                        canonical = candidate;
+                        break;
+                    }
+                }
+                if (canonical == null) return false;
+                selected = canonical;
+            }
 
             FindScene();
             Animator heroine, partner;
