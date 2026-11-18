@@ -162,6 +162,11 @@ namespace FemboyMode
                 // donor id and can silently ignore an otherwise valid click.
                 scene.flags.selectAnimationListInfo = null;
                 scene.ChangeAnimator(selected, true);
+                // Direct ChangeAnimator may return before its original
+                // caller updates HFlag.nowAnimationInfo. Make the new mode
+                // authoritative now, as MultiTeamH does for direct entries.
+                scene.flags.nowAnimationInfo = selected;
+                scene.flags.mode = selected.mode;
                 scene.flags.selectAnimationListInfo = null;
                 scene.flags.voiceWait = false;
                 Toggle toggled = clicked.GetComponent<Toggle>();
@@ -400,6 +405,7 @@ namespace FemboyMode
             {
                 HSceneProc.AnimationListInfo donor = donors[i];
                 if (string.IsNullOrEmpty(donor.nameAnimation) ||
+                    !SceneAllowsImport(donor) ||
                     donor.paramFemale == null || donor.paramMale == null ||
                     (donor.pathFemaleBase1 != null &&
                      (!string.IsNullOrEmpty(donor.pathFemaleBase1.assetpath) ||
