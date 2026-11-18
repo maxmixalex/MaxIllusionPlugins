@@ -17,7 +17,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $script:Root = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $GameRoot).Path)
 $script:Root = $script:Root.TrimEnd([char[]]@('\', '/'))
-if ($script:Root -match '^[A-Za-z]:
+if ($script:Root.Length -eq 2 -and $script:Root[1] -eq ':') { $script:Root += [IO.Path]::DirectorySeparatorChar }
 $destination = [IO.Path]::GetFullPath($OutputZip)
 $staging = Join-Path ([IO.Path]::GetTempPath()) ('kk-inspect-' + [guid]::NewGuid().ToString('N'))
 $script:Staging = $staging
