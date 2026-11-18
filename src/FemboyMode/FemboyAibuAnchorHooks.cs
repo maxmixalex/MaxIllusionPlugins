@@ -305,7 +305,7 @@ namespace FemboyMode
             // world-space shaft center into the parent's local coordinates.
             if (shaftRoot != null && shaftTip != null)
             {
-                float fraction = Mathf.Clamp01(FemboyModePlugin.KokanTipFraction.Value);
+                float fraction = FemboyRules.SafeShaftFraction(FemboyModePlugin.KokanTipFraction.Value);
                 Vector3 worldCenter = Vector3.Lerp(
                     shaftRoot.position, shaftTip.position, fraction);
                 offset += shaftRoot.InverseTransformPoint(worldCenter);
