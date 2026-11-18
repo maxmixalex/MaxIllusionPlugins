@@ -9,6 +9,7 @@ param(
     [switch]$IncludeExecutables,
     [switch]$IncludeDiagnostics,
     [switch]$IncludeAssetInventory,
+    [switch]$OnlyExtraFiles,
     [string[]]$ExtraRelativeFiles = @(),
     [ValidateRange(1, 2000)] [int]$MaxSingleFileMB = 100,
     [ValidateRange(1, 4000)] [int]$MaxTotalMB = 350
@@ -83,8 +84,13 @@ function Add-RelativeFile {
     }
 }
 
+if ($OnlyExtraFiles -and $ExtraRelativeFiles.Count -eq 0) {
+    throw '-OnlyExtraFiles requires at least one -ExtraRelativeFiles path.'
+}
+
 New-Item -ItemType Directory -Path $staging -Force | Out-Null
 try {
+    if (-not $OnlyExtraFiles) {
     # Original game managed assemblies (including voice/animation call sites).
     $managedNames = @(
         'Assembly-CSharp.dll', 'Assembly-CSharp-firstpass.dll',
@@ -126,6 +132,8 @@ try {
             ForEach-Object { Add-DebugFile $_ }
     }
 
+    }
+ 
     # Only explicit individual files (for example a needed .unity3d list bundle).
     foreach ($relative in $ExtraRelativeFiles) {
         Add-RelativeFile $relative
@@ -181,6 +189,7 @@ try {
         'Created locally. This script never uploads files.'
         'No game assets, cards, saves, user configurations or logs are included by default.'
         'IncludeAssetInventory writes only asset paths and file sizes, never bundle bytes.'
+        'OnlyExtraFiles collects only explicitly requested files (no repeated DLL/EXE package).'
         'Review the archive before sharing it privately.'
         ('Collected UTC: ' + [DateTime]::UtcNow.ToString('o'))
         ('Binary count: ' + $script:Manifest.Count)
