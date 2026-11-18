@@ -441,3 +441,29 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 4. Repeat with kPlug imported motions and female-initiative variations. Capture verbose logs only if a runtime issue persists.
 
 Build and 155 headless rules assertions passed on the development branch. The pull request stays draft until real in-game acceptance.
+
+## 0.4.8 — HCtrl pre-combined climax and native/kPlug reverse-menu binding
+
+Based on real Koikatsu RX18 LogOutput(6).log. This supersedes the ineffective 0.4.7 cross-gender clip-name swap.
+
+### HCtrl sequence
+- HCtrl can enter `A_OLoop` (before simultaneous climax) and subsequently request `A_SS_IN_Start` without advancing `HFlag.AddSonyuOrg`. Previously the Sonyu gate stayed `fired=true`, suppressing physical emission.
+- The cycle gate now observes `A_OLoop`/`A_OStart` as a distinct pre-combined phase boundary; a later finish Start rearms emission even without a new native counter. It never emits during pre-climax or recovery and still waits for the original consumed voice signal.
+- A semantic cycle transition no longer suffers from a global 0.9s Sonyu cooldown: fast HCtrl pre -> climax clicks are allowed. The Aibu cooldown is unchanged.
+
+### kPlug / AnimationLoader integration
+- IllusionMods/AnimationLoader (https://github.com/IllusionMods/AnimationLoader) reads its `swapAnimationMapping` both to label imported actions in `LoadMotionList` and to load imported controller bundles in `ChangeAnimator`. Merely cloning `AnimationListInfo` lost both.
+- Clone and register corresponding `SwapAnimationInfo` metadata for each reverse import, changing only `AnimationName` on the copy; retain imported controller and asset paths and Studio ID. Imported list entries and compatible H-point/category constraints are now distinguished from native action entries.
+- Deduplicate donors by stable native pose ID/category/name or imported GUID/StudioId/asset+controller identity, rather than temporary object reference. This prevents the previous large pile of repeated native menu rows.
+- When the UI copies a selected action into a pooled button, resolve that copied row back to its canonical mapped reverse clone; call native `HSceneProc.ChangeAnimator` once instead of allowing the donor-ID equality check to discard the click.
+- New menu logs report `sourceNative`, `sourceImported`, `importedEligible` and `mappingAvailable`. They must be evaluated separately; no longer assume that every 104-action count includes imported poses.
+
+### Runtime role motion
+- Native female `cf_j_*` and male `cm_j_*` curves address different rig paths. The old same-name AnimatorOverrideController clip swap could not produce true role reversal and has been removed.
+- New `FemboyHoushiRoleRetargeter`: read both native pose streams, transfer rest-relative FK motion between matching body joints only, and restore original inputs before the next native animation update. Expressions, blendshapes, collider/cloth/penis add-ons, controllers and voice are left intact. The strict 12-joint minimum prevents applying a broken rig transfer.
+- New optional setting: `Free H / Reversed Houshi exchange visible actor positions` (default ON). Turn OFF if a third-party IK or camera plugin needs the original actor visual-root positions.
+
+### Acceptance still required
+- CI: .NET Framework 3.5 build and **172** rules assertions pass. These assertions check HCtrl phase transitions, stable catalogue identifiers and the body-joint whitelist, not scene-rendered poses.
+- Real Koikatsu RX18 tests still needed: native and kPlug reverse list counts/localization, correct imported motion bundles after click, actor contact/IK/face, clean return to ordinary pose, and one physical-fluid burst for each HCtrl pre-combined -> combined climax.
+- Look for `Reversed Houshi body retarget active` and a nonzero `sourceImported`; if absent, the runtime did not deliver the requested behavior.
