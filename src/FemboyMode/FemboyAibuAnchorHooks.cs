@@ -472,6 +472,58 @@ namespace FemboyMode
     }
 
     /// <summary>
+    /// Preserves the H hand item's original animated parent rotation,
+    /// orientation and scale. Only transfers its *world position* by the
+    /// displacement between the native female Kokan reference and the
+    /// model-specific male touch target. Full-body animation remains native.
+    /// </summary>
+    public sealed class FemboyKokanHandProxy : MonoBehaviour
+    {
+        private Transform original;
+        private Transform nativeContact;
+        private Transform targetContact;
+
+        public void Configure(Transform sourceParent, Transform nativeTouch,
+            Transform targetTouch)
+        {
+            original = sourceParent;
+            nativeContact = nativeTouch;
+            targetContact = targetTouch;
+            Align();
+        }
+
+        private void LateUpdate()
+        {
+            Align();
+        }
+
+        private void Align()
+        {
+            if (original == null || nativeContact == null)
+                return;
+
+            // Disabled integration should not detach an item whose native
+            // parent is currently this proxy.
+            Vector3 shift = Vector3.zero;
+            if (targetContact != null &&
+                FemboyModePlugin.EnableKokanAnchor != null &&
+                FemboyModePlugin.EnableKokanAnchor.Value)
+            {
+                shift = targetContact.position - nativeContact.position;
+                if (FemboyModePlugin.KokanHandOffsetX != null)
+                    shift += new Vector3(
+                        FemboyModePlugin.KokanHandOffsetX.Value,
+                        FemboyModePlugin.KokanHandOffsetY.Value,
+                        FemboyModePlugin.KokanHandOffsetZ.Value);
+            }
+
+            transform.position = original.position + shift;
+            transform.rotation = original.rotation;
+            transform.localScale = Vector3.one;
+        }
+    }
+
+    /// <summary>
     /// Applies position/rotation changes from BepInEx ConfigurationManager
     /// while a Free H scene remains open, allowing live calibration.
     /// </summary>
