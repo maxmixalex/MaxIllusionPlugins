@@ -46,6 +46,7 @@ namespace FemboyMode
         internal static ConfigEntry<string> KokanAnchorBone;
         internal static ConfigEntry<bool> EnableKokanHitCollider;
         internal static ConfigEntry<float> KokanHitRadius;
+        internal static ConfigEntry<float> KokanTipFraction;
         internal static ConfigEntry<float> KokanOffsetX;
         internal static ConfigEntry<float> KokanOffsetY;
         internal static ConfigEntry<float> KokanOffsetZ;
@@ -112,6 +113,8 @@ namespace FemboyMode
                 "Provide a new Kokan raycast target around the re-anchored male geometry while leaving original colliders untouched.");
             KokanHitRadius = Config.Bind("Aibu alignment", "Target hit radius", 0.05f,
                 "Radius of the new Kokan sphere collider (Unity units, clamped 0.005 to 0.25).");
+            KokanTipFraction = Config.Bind("Aibu alignment", "Aim along shaft (0 root, 1 tip)", 0.50f,
+                "Compute the real scaled contact point between the base cm_J_dan100 bone and end cm_J_dan109 bone. Clamp 0..1. Local X/Y/Z offsets still work.");
             KokanOffsetX = Config.Bind("Aibu alignment", "Offset X", 0f,
                 "Local X offset relative to the target bone (Unity units).");
             KokanOffsetY = Config.Bind("Aibu alignment", "Offset Y", 0f,
