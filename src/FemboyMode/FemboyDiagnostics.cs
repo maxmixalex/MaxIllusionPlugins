@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
 using System.Text;
 using BepInEx.Logging;
 using ExtensibleSaveFormat;
@@ -61,6 +62,12 @@ namespace FemboyMode
                     log.LogInfo("[FemboyMode diagnostics] HScene particle=" +
                         (proc.particle != null) + " secondParticle=" + (proc.particle1 != null) +
                         " hand=" + (proc.hand != null) + " secondHand=" + (proc.hand1 != null));
+
+                    // The installed H mods may append items *after* the
+                    // original Aibu layer is read. Inspect the actual
+                    // runtime wheel, not only h/list/00_00.unity3d.
+                    if (proc.hand != null)
+                        DumpActualKokanWheel(log, proc.hand);
 
                     if (proc.voice != null && proc.voice.nowVoices != null)
                         for (int index = 0; index < proc.voice.nowVoices.Length; index++)
@@ -185,6 +192,58 @@ namespace FemboyMode
                 log.LogInfo("[FemboyMode diagnostics] " + label +
                     " finishCandidates=[" + selected + "]" +
                     (kept == 45 ? " (truncated)" : ""));
+            }
+        }
+
+        private static void DumpActualKokanWheel(
+            ManualLogSource log, HandCtrl hand)
+        {
+            if (hand.flags == null || !hand.flags.isFreeH)
+                return;
+
+            FieldInfo layersField = typeof(HandCtrl).GetField(
+                "dicAreaLayerInfos",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo itemField = typeof(HandCtrl).GetField(
+                "dicItem", BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo selectedField = typeof(HandCtrl).GetField(
+                "areaItem", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            var layers = layersField == null ? null :
+                layersField.GetValue(hand) as Dictionary<int, HandCtrl.LayerInfo>[];
+            if (layers == null || layers.Length < 3 || layers[2] == null)
+                return;
+
+            var objects = itemField == null ? null :
+                itemField.GetValue(hand) as Dictionary<int, HandCtrl.AibuItem>;
+            var selected = selectedField == null ? null :
+                selectedField.GetValue(hand) as int[];
+            int selectedId = selected != null && selected.Length > 2
+                ? selected[2] : -1;
+            log.LogInfo("[FemboyMode diagnostics] Kokan native wheel rows=" +
+                layers[2].Count + " selected=" + selectedId);
+
+            var keys = new List<int>(layers[2].Keys);
+            keys.Sort();
+            foreach (int key in keys)
+            {
+                HandCtrl.LayerInfo row = layers[2][key];
+                if (row == null) continue;
+                string itemNames = "";
+                if (row.idObjects != null)
+                    for (int i = 0; i < row.idObjects.Length; i++)
+                    {
+                        int id = row.idObjects[i];
+                        HandCtrl.AibuItem item;
+                        if (objects == null || !objects.TryGetValue(id, out item) ||
+                            item == null) continue;
+                        if (itemNames.Length > 0) itemNames += ", ";
+                        itemNames += id + "=" +
+                            (item.obj == null ? "(none)" : item.obj.name);
+                    }
+
+                log.LogInfo("[FemboyMode diagnostics] Kokan wheel key=" + key +
+                    " icon=" + row.idIocn + " objects=" + itemNames);
             }
         }
 
