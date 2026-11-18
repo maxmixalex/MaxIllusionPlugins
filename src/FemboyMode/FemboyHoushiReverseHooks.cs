@@ -232,6 +232,21 @@ namespace FemboyMode
                 property.GetValue(metadata, null) as string ?? "";
         }
 
+        private static int ReadImportInt(object metadata, string member)
+        {
+            if (metadata == null) return -1;
+            FieldInfo field = AccessTools.Field(metadata.GetType(), member);
+            object value = field == null ? null : field.GetValue(metadata);
+            if (value == null)
+            {
+                PropertyInfo property = AccessTools.Property(
+                    metadata.GetType(), member);
+                value = property == null ? null :
+                    property.GetValue(metadata, null);
+            }
+            return value is int ? (int)value : -1;
+        }
+
         private static string ImportSourceKey(object metadata)
         {
             if (metadata == null) return null;
@@ -241,8 +256,9 @@ namespace FemboyMode
             string femaleClip = ReadImportString(metadata, "ControllerFemale");
             string maleClip = ReadImportString(metadata, "ControllerMale");
             string guid = ReadImportString(metadata, "Guid");
-            return "import:" + guid + "|" + name + "|" + female + "|" +
-                femaleClip + "|" + male + "|" + maleClip;
+            return FemboyRules.ImportedHoushiActionKey(guid,
+                ReadImportInt(metadata, "StudioId"), name, female,
+                femaleClip, male, maleClip);
         }
 
         // AnimationLoader's two Harmony hooks read the SAME mapping:
@@ -444,8 +460,8 @@ namespace FemboyMode
                     metadata = mapping[donor];
                 string importedKey = ImportSourceKey(metadata);
                 string key = importedKey ??
-                    ("native:" + donor.id + "|" + donor.kindHoushi +
-                     "|" + donor.nameAnimation);
+                    FemboyRules.NativeHoushiActionKey(
+                        donor.id, donor.kindHoushi, donor.nameAnimation);
                 if (!uniqueThisPass.Add(key)) continue;
 
                 string name = metadata == null ? donor.nameAnimation :

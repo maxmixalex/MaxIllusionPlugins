@@ -395,13 +395,35 @@ internal static class Program
         Check(FemboyRules.SharedHoushiJointKey("cm_j_hand_L", false) == null,
             "opposite gender's prefixed joints cannot be substituted");
 
+        Check(FemboyRules.NativeHoushiActionKey(12, 1, "A") ==
+              FemboyRules.NativeHoushiActionKey(12, 1, "A"),
+            "same native donor copied by HSprite cannot create duplicate menu rows");
+        Check(FemboyRules.NativeHoushiActionKey(12, 1, "A") !=
+              FemboyRules.NativeHoushiActionKey(13, 1, "A"),
+            "different native donor ids remain distinct");
+        Check(FemboyRules.ImportedHoushiActionKey("pkg", 12, "Service", "female/a",
+              "khh_f_60", "male/a", "khh_m_60") ==
+              FemboyRules.ImportedHoushiActionKey("pkg", 12, "Service", "female/a",
+              "khh_f_60", "male/a", "khh_m_60"),
+            "copied kPlug AnimationLoader entry is stable by asset identity");
+        Check(FemboyRules.ImportedHoushiActionKey("pkg", 12, "Service", "female/a",
+              "khh_f_60", "male/a", "khh_m_60") !=
+              FemboyRules.ImportedHoushiActionKey("pkg", 13, "Service", "female/a",
+              "khh_f_60", "male/a", "khh_m_60"),
+            "imported StudioId differentiates actions reusing the same controller bundle");
+        Check(FemboyRules.ImportedHoushiActionKey("pkg", 12, "Service", "female/a",
+              "khh_f_60", "male/a", "khh_m_60") !=
+              FemboyRules.ImportedHoushiActionKey("pkg", 12, "Service", "female/b",
+              "khh_f_60", "male/a", "khh_m_60"),
+            "kPlug asset path differences cannot be collapsed with vanilla donors");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 167 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 172 FemboyMode rules assertions passed.");
         return 0;
     }
 }

@@ -148,6 +148,22 @@ namespace FemboyMode
                    state.EndsWith("_M_OUT_Loop", StringComparison.Ordinal);
         }
 
+        internal static string NativeHoushiActionKey(int id, int category,
+            string name)
+        {
+            return "native:" + id + "|" + category + "|" + (name ?? "");
+        }
+
+        internal static string ImportedHoushiActionKey(string guid,
+            int studioId, string name, string femalePath,
+            string femaleController, string malePath, string maleController)
+        {
+            return "import:" + (guid ?? "") + "|" + studioId + "|" +
+                (name ?? "") + "|" + (femalePath ?? "") + "|" +
+                (femaleController ?? "") + "|" + (malePath ?? "") + "|" +
+                (maleController ?? "");
+        }
+
         internal static bool IsReversedHoushiName(string name)
         {
             return !string.IsNullOrEmpty(name) &&
