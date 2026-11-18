@@ -31,16 +31,34 @@ namespace FemboyMode
         private static void OnAibuOrgasmLoop(HActionBase __instance,
             string _nextAnimation)
         {
-            if (!(__instance is HAibu) ||
-                _nextAnimation != "Orgasm_Loop" || ActionFlagsField == null)
+            if (ActionFlagsField == null) return;
+
+            HFlag flags = ActionFlagsField.GetValue(__instance) as HFlag;
+            if (__instance is HAibu && _nextAnimation == "Orgasm_Loop")
+            {
+                Trigger(flags);
                 return;
-            Trigger(ActionFlagsField.GetValue(__instance) as HFlag);
+            }
+
+            // Sonyu calls AddSonyuOrg/AddSonyuAnalOrg *before* the actual
+            // WF/WS/SF/SS start state. Other Harmony patches may intercept
+            // those counters. Catch the real state transition as a fallback.
+            if (__instance is HSonyu && flags != null &&
+                (int)flags.finish >= 3 && (int)flags.finish <= 6 &&
+                FemboyRules.IsFemaleInsertionFinishStart(_nextAnimation))
+                Trigger(flags);
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuOrg))]
-        [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuAnalOrg))]
         private static void OnSonyuClimax(HFlag __instance)
+        {
+            Trigger(__instance);
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuAnalOrg))]
+        private static void OnSonyuAnalClimax(HFlag __instance)
         {
             Trigger(__instance);
         }
