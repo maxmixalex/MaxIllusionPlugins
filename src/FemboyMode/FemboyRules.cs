@@ -13,13 +13,25 @@ namespace FemboyMode
         internal const string DefaultMaleFinishBone = "cm_J_dan109_00";
 
         /// <summary>
-        /// Original RX18 aibulayer_02 entry 4 is the phallus-shaped
-        /// p_item_vibe (AibuItemObject IDs 7/8), immediately after
-        /// the electric-massager denma row 3. Disable only this entry.
+        /// RX18 base aibulayer_02 entry 4 (icon 25, objects 7/8) is
+        /// the VIBRATOR p_item_vibe. The optional phallus-shaped item
+        /// the user wants disabled is the NEXT item, not this anchor.
         /// </summary>
-        internal static bool IsPhallusToyLayer(int icon, int leftItemId, int rightItemId)
+        internal static bool IsVibratorLayer(int icon, int leftItemId, int rightItemId)
         {
             return icon == 25 && leftItemId == 7 && rightItemId == 8;
+        }
+
+        internal static int NextLayerKeyAfterVibrator(int[] keys, int vibratorKey)
+        {
+            if (keys == null || vibratorKey < 0)
+                return -1;
+
+            int next = int.MaxValue;
+            for (int i = 0; i < keys.Length; i++)
+                if (keys[i] > vibratorKey && keys[i] < next)
+                    next = keys[i];
+            return next == int.MaxValue ? -1 : next;
         }
 
         internal static float SafeShaftFraction(float value)
