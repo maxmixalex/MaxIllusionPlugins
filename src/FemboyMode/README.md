@@ -483,3 +483,28 @@ Based on real Koikatsu RX18 LogOutput(6).log. This supersedes the ineffective 0.
 ### Validation status
 - Compiles against Unity 5.6 / Koikatsu net35; CI runs the current headless rules harness and produces an `KK_FemboyMode` artifact.
 - **Not yet confirmed in the actual user's RX18 game.** Check that a selected `[反转]` action reports `real cf_j_* body joint pairs` and the 30-frame log; then inspect actual giver/receiver movement, world positions, hand/mouth IK and actor faces. At this stage native HHoushi dialogue/progression still uses the original game actor identities.
+
+## 0.4.10 — original-style heroine badge, clothed Aibu contact, reversed mouth expressions
+
+These changes follow verified RX18 0.4.9 feedback: the full body-role reversal now works; native/kPlug menus and the HCtrl physical-fluid cycle also work. This revision leaves their working control paths unchanged.
+
+### Native H-scene UI badge
+- The old Femboy gender glyph was logged as attached to `Canvas/Bar` but was not actually visible to the user. Its anchor was the gauge's clipping fill bar; it also depended on native font support for a little-used Unicode glyph.
+- The new `FemboyMode_NativeHeroineBadge` borrows the CURRENT H scene's original image sprite and UI font, styles a small `♂ 伪娘` (or supported English fallback) panel, and places it on the top-level H Canvas, immediately beside the heroine portrait. It is a UI element, not a separately painted bitmap or added picture asset.
+- The badge remains non-interactive, is clamped to the visible canvas rectangle, and is shown only in marked-character Free H. Runtime logs state actual visible/hidden status and display position rather than just successful object creation.
+
+### Kokan Aibu while underwear is still worn
+- `ChaControl.notShorts` is the native live indicator for whether the underwear surface is away. Previously the Kokan hand proxy ALWAYS shifted from native `cf_d_kokan_REF` to the configured penis bone, causing hands to float while panties remained in place.
+- While `notShorts=false`, use the original HandCtrl panty/clothing contact and turn OFF the supplementary hidden penile hit collider, preserving native raycasting.
+- When the character exposes their anatomy (`notShorts=true`), restore the existing male-geometry anchor, its config offsets and the physical hit collider. This switches live during the scene without rebuilding the scene, touching another actor's hand, or stripping clothing.
+
+### Reversed service expressions
+- 0.4.9 correctly exchanged 32 common human FK body joints, but the native `HHoushi`/voice face controller continued updating the original female card's mouth because the logical native heroine identity was unchanged.
+- For selected reversed Houshi actions, sample BOTH characters' original `fileStatus.mouthPtn` and `fileStatus.mouthOpenMax` AFTER native face updates and exchange them using the game's own `ChangeMouthPtn` and `ChangeMouthOpenMax` APIs. The male performer thus receives the original heroine's oral mouth pattern/opening; the heroine receives the male's mouth pattern/opening.
+- Restore each original channel before the next animation update, only if another face plugin has not replaced the written values. Preserve existing game controllers, actual character data, voices and card identity.
+- New configuration: `Free H / Reversed Houshi swap mouth expressions` (default ON) lets users disable the facial role swap if third-party expression plugins conflict. Logs include native and applied mouth-channel readback.
+
+### Testing
+- CI: .NET Framework 3.5 plugin build, headless regression rules, PowerShell collector verification and packaging. **185** headless assertions include underwear-covered vs exposed contact and reversed oral marker.
+- Runtime acceptance is still required for the badge's actual screen visibility, the hand's contact position across underwear states, and correct mouth motion during imported/native reversed oral animations. Runtime logs are not proof of final visual alignment.
+- These improvements intentionally do not change the previously accepted Sonyu fluid cycle or kPlug action catalog.
