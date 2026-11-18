@@ -72,6 +72,30 @@ jobs:
           }
           Write-Output 'Collector PowerShell syntax OK'
 
+      - name: Smoke test collector with mock game layout
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'kk-mock-root'
+          $managed = Join-Path $root 'Koikatu_Data/Managed'
+          $assetDir = Join-Path $root 'abdata/h/list'
+          New-Item -ItemType Directory -Path $managed -Force | Out-Null
+          New-Item -ItemType Directory -Path $assetDir -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $managed 'Assembly-CSharp.dll') -Value 'test-assembly'
+          Set-Content -LiteralPath (Join-Path $assetDir 'demo.unity3d') -Value 'asset-not-to-copy'
+          $zip = Join-Path $env:RUNNER_TEMP 'koikatsu-mock.zip'
+          ./scripts/Collect-KoikatsuBinaries.ps1 -GameRoot $root -OutputZip $zip -IncludeAssetInventory
+          $extract = Join-Path $env:RUNNER_TEMP 'kk-mock-extracted'
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          foreach ($required in @('Koikatu_Data/Managed/Assembly-CSharp.dll', '_files.csv', '_asset_inventory.csv')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $extract $required))) {
+              throw "Collector missing expected zip entry: $required"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $extract 'abdata/h/list/demo.unity3d')) {
+            throw 'Collector leaked asset bundle bytes into default archive'
+          }
+          Write-Output 'Collector mock archive and metadata inventory verified.'
+
       - name: Package plugin
         if: success()
         uses: actions/upload-artifact@v4
