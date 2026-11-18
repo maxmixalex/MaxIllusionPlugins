@@ -9,7 +9,7 @@
 | 项目 | 介绍 | 使用入口 |
 | --- | --- | --- |
 | [MultiTeamH](src/MultiTeamH/README.md) | 自由 H 的“多P”入口，2F2M 双队、焦点切换、后台流程及可选插件兼容 | `Tab` 切队，`-` 打开面板 |
-| [FemboyMode](src/FemboyMode/README.md) | 女性角色卡伪娘标志、身体模型骨骼缩放、限定男性资源选择、自由 H 动作与特效适配（动画替换未完成） | 女性 Maker「角色 / 身体」页 |
+| [FemboyMode](src/FemboyMode/README.md) | 女性角色卡伪娘标志、男性模型编辑、自由 H 动作约束及角色专属高潮动画/语音适配（Humanoid/Generic 双路径，待实机验证） | 女性 Maker「角色 / 身体」页 |
 | [AccessoryBatchManager](src/AccessoryBatchManager/README.md) | 角色编辑器中的饰品多选、批量整理、跨搭配复制/移动与高亮 | `Shift+=` 或小键盘 `+` |
 | [ClothingCompression](src/ClothingCompression/README.md) | 身体勒肉/局部网格形变，支持服装饰品绑定、左右侧控制和配置保存 | 编辑器“勒肉形变”页，`F8` 高级面板 |
 | [ExpressionControl](src/ExpressionControl/README.md) | 角色表情编辑、表情程序、H/Studio 场景中的表情控制和 XML 预设 | 默认 `L`，可在 XML 中修改 |
