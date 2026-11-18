@@ -177,9 +177,20 @@ namespace FemboyMode
             MetaballShoot native = null;
             MetaballCtrl meta = metaField == null ? null :
                 metaField.GetValue(owner) as MetaballCtrl;
-            if (meta != null && meta.ctrlMetaball != null &&
-                meta.ctrlMetaball.Length > 1)
-                native = meta.ctrlMetaball[1];
+            if (meta != null && meta.ctrlMetaball != null)
+            {
+                // Vanilla uses index 1 for ordinary outside fluid and
+                // index 4 for ANAL outside fluid (MetaballCtrl.Proc).
+                // Previously forcing [1] broke the user's anal pose n14.
+                int targetIndex = owner.flags != null && owner.flags.isAnalPlay
+                    ? 4 : 1;
+                if (meta.ctrlMetaball.Length > targetIndex)
+                    native = meta.ctrlMetaball[targetIndex];
+
+                if ((native == null || native.ShootObj == null) &&
+                    meta.ctrlMetaball.Length > 1)
+                    native = meta.ctrlMetaball[1];
+            }
 
             // Prefer the host already tracking the native outside-shoot
             // object. Its StaticMetaballSeed will process our added shoot.
@@ -287,11 +298,23 @@ namespace FemboyMode
 
         private MetaballShoot LoadVanillaPreset()
         {
-            // Aibu scenes have no active male motion and may not have a
-            // configured MetaballShoot. Resolve the native normal-position
-            // Sonyu outside-fluid preset from the game's own h/list.
+            // Reuse the CURRENT Sonyu pose's Metaball preset first. This
+            // matters for anal positions like khs_m_n14. Aibu has no male
+            // animation preset, so fall back to a standard loaded one.
+            string current = owner.flags != null &&
+                owner.flags.nowAnimationInfo != null &&
+                owner.flags.nowAnimationInfo.paramMale != null
+                ? owner.flags.nowAnimationInfo.paramMale.fileMetaballCtrl
+                : null;
+            MetaballShoot result = string.IsNullOrEmpty(current)
+                ? null : LoadPresetNamed(current);
+            return result ?? LoadPresetNamed("siru_khs_00");
+        }
+
+        private MetaballShoot LoadPresetNamed(string name)
+        {
             List<MetaballParam> presets = GlobalMethod.LoadAllFolder<MetaballParam>(
-                "h/list/", "siru_khs_00");
+                "h/list/", name);
             if (presets == null)
                 return null;
 
@@ -316,7 +339,7 @@ namespace FemboyMode
                         owner.flags.hashAssetBundle.Add(p.BulletAssetPath);
                     return new MetaballShoot
                     {
-                        comment = "FemboyMode native siru_khs_00 outside fluid",
+                        comment = "FemboyMode native " + name + " outside fluid",
                         isEnable = true,
                         ShootObj = projectile,
                         aInterval = (float[])p.Interval.Clone(),
