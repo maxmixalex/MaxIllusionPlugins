@@ -1,0 +1,20 @@
+name: Temporary uncensor donor resource inspection
+on:
+  push:
+    branches: [feat/femboy-character-flag]
+    paths: [.github/workflows/flatlock-penis-donor-temp.yml]
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Koikatsu SoS uncensor donor
+        run: |
+          mkdir -p samples
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 120 --output samples/Koikatsu_SoS_uncensor_reference.zipmod 'https://sideload2.betterrepack.com/download/KKEC/Sideloader%20Modpack%20-%20KK_UncensorSelector/%5BDeathWeasel%5D%20SoS%20Uncensor%20v1.3.zipmod'
+          python3 -c 'import zipfile; p="samples/Koikatsu_SoS_uncensor_reference.zipmod"; z=zipfile.ZipFile(p); assert z.testzip() is None; print(z.namelist())'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: koikatsu-uncensor-donor-reference
+          path: samples/Koikatsu_SoS_uncensor_reference.zipmod
+          compression-level: 0
+          retention-days: 1
