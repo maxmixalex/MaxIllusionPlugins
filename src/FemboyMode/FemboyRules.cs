@@ -51,25 +51,15 @@ namespace FemboyMode
             return existingMode != nextMode || existingPose != nextPose;
         }
 
-        internal static float BallisticHorizontalFraction(float elevation)
+        // Pitch is a rotation in the bone's anatomical local frame,
+        // not an angle above a fixed world-space horizontal plane.
+        internal static float SafeLocalFluidPitch(float degrees)
         {
-            return (float)Math.Cos(SafeFluidElevation(elevation) *
-                Math.PI / 180.0);
-        }
-
-        internal static float BallisticVerticalFraction(float elevation)
-        {
-            return (float)Math.Sin(SafeFluidElevation(elevation) *
-                Math.PI / 180.0);
-        }
-
-        private static float SafeFluidElevation(float value)
-        {
-            if (float.IsNaN(value) || float.IsInfinity(value))
-                value = 18f;
-            if (value < -10f) return -10f;
-            if (value > 60f) return 60f;
-            return value;
+            if (float.IsNaN(degrees) || float.IsInfinity(degrees))
+                return DefaultFluidLocalPitch;
+            if (degrees < -30f) return -30f;
+            if (degrees > 30f) return 30f;
+            return degrees;
         }
 
         /// <summary>
