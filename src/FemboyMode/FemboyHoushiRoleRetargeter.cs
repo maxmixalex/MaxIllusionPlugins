@@ -159,6 +159,13 @@ namespace FemboyMode
 
         internal void Stop()
         {
+            if (active && (framesApplied > 0 ||
+                FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value))
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Reversed Houshi role retarget finished: renderedFrames=" +
+                    framesApplied + " largestFKChangeDegrees=" +
+                    maxVisualDelta.ToString("0.0"));
             RestoreNativePose();
             active = false;
             activeAction = null;
@@ -237,6 +244,9 @@ namespace FemboyMode
                     Quaternion.Inverse(j.FemaleNeutral) * j.NativeFemale;
                 j.LastFemale = j.FemaleNeutral * femaleMotion;
                 j.LastMale = j.MaleNeutral * maleMotion;
+                maxVisualDelta = Mathf.Max(maxVisualDelta,
+                    Quaternion.Angle(j.NativeFemale, j.LastFemale),
+                    Quaternion.Angle(j.NativeMale, j.LastMale));
                 j.Female.localRotation = j.LastFemale;
                 j.Male.localRotation = j.LastMale;
             }
@@ -247,6 +257,12 @@ namespace FemboyMode
                     "Reversed Houshi first rendered frame: joints=" +
                     joints.Count + " femaleHip=" + nativeFemaleHipWorld +
                     " maleHip=" + nativeMaleHipWorld);
+            if (framesApplied == 30)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Reversed Houshi 30-frame playback check: active=True" +
+                    " largestFKChangeDegrees=" +
+                    maxVisualDelta.ToString("0.0") +
+                    " (zero means the two native clips carry identical body motion).");
 
             if (FemboyModePlugin.ReverseHoushiSwapVisualRoots == null ||
                 !FemboyModePlugin.ReverseHoushiSwapVisualRoots.Value ||
