@@ -350,13 +350,28 @@ internal static class Program
         Check(!combined.CanFire(15, "A_SS_IN_Start", 8f),
             "same start code repeated without a new native counter stays deduplicated");
 
+        Check(FemboyRules.IsSonyuCombinedClimaxVoice(318),
+            "native combined finish voice 318 is recognized");
+        Check(FemboyRules.IsSonyuCombinedClimaxVoice(319),
+            "native combined finish voice 319 is recognized");
+        Check(FemboyRules.IsSonyuCombinedClimaxVoice(356),
+            "female-initiative combined finish is recognized");
+        Check(!FemboyRules.IsSonyuCombinedClimaxVoice(325),
+            "ordinary climax voice remains on its own path");
+        Check(FemboyRules.ShouldEmitFromConsumedCombinedVoice(318, -1),
+            "consumed combined cue is eligible for the sameW/sameS callback");
+        Check(!FemboyRules.ShouldEmitFromConsumedCombinedVoice(318, 318),
+            "pending combined voice cannot emit twice");
+        Check(!FemboyRules.IsSonyuFluidEmissionPhase("A_WS_IN_A"),
+            "recovery cue remains ineligible even with a combined voice code");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 149 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 156 FemboyMode rules assertions passed.");
         return 0;
     }
 }

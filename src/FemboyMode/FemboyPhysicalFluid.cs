@@ -53,6 +53,7 @@ namespace FemboyMode
             internal int Channel;
             internal int Code;
             internal bool IsClimax;
+            internal bool IsCombined;
         }
 
         // The RX18 log proves native Sonyu voice code 326 was processed
@@ -85,7 +86,10 @@ namespace FemboyMode
                 return;
 
             int code = flags.voice.playVoices[_main];
-            if (!FemboyRules.IsSonyuClimaxStartVoice(code))
+            bool combined = FemboyRules.IsSonyuCombinedClimaxVoice(code) &&
+                (flags.finish == HFlag.FinishKind.sameW ||
+                 flags.finish == HFlag.FinishKind.sameS);
+            if (!combined && !FemboyRules.IsSonyuClimaxStartVoice(code))
                 return;
 
             var leading = flags.GetLeadingHeroine();
@@ -98,6 +102,7 @@ namespace FemboyMode
             __state.Channel = _main;
             __state.Code = code;
             __state.IsClimax = true;
+            __state.IsCombined = combined;
         }
 
         [HarmonyPostfix]
@@ -114,9 +119,11 @@ namespace FemboyMode
             // VoiceLinkProc / voice-overwrite deferrals keep the original
             // pending code unchanged. Fire only after the native event
             // has truly been accepted or exhausted.
-            if (!FemboyRules.ShouldEmitFromConsumedSonyuVoice(
-                    __state.Code, __state.Flags.voice.playVoices[__state.Channel]) ||
-                !FemboyModePlugin.IsFemboy(__state.Actor))
+            int after = __state.Flags.voice.playVoices[__state.Channel];
+            bool consumed = __state.IsCombined
+                ? FemboyRules.ShouldEmitFromConsumedCombinedVoice(__state.Code, after)
+                : FemboyRules.ShouldEmitFromConsumedSonyuVoice(__state.Code, after);
+            if (!consumed || !FemboyModePlugin.IsFemboy(__state.Actor))
                 return;
 
             if (FemboyModePlugin.VerboseLogging != null &&

@@ -74,6 +74,19 @@ namespace FemboyMode
                    (code >= 363 && code <= 368);
         }
 
+        // 318/319 (and +38 female initiative) can signal a combined
+        // heroine/male finish. Only accept them when HFlag.finish is sameW
+        // or sameS and the animation is in a finish Start/Loop state.
+        internal static bool IsSonyuCombinedClimaxVoice(int code)
+        {
+            return code == 318 || code == 319 || code == 356 || code == 357;
+        }
+
+        internal static bool ShouldEmitFromConsumedCombinedVoice(int before, int after)
+        {
+            return IsSonyuCombinedClimaxVoice(before) && before != after;
+        }
+
         // HVoiceCtrl.VoiceProc can defer a voice for many Update frames.
         // Avoid fluid emission until the original method has actually
         // consumed its pending climax cue.
