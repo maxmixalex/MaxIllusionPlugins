@@ -141,8 +141,17 @@ namespace FemboyMode
             if (mode == 0)
                 return voiceCode == 142 || voiceCode == 143;
             if (mode == 2)
-                return voiceCode == 318 || voiceCode == 319 ||
-                    (voiceCode >= 325 && voiceCode <= 330);
+            {
+                // Female-initiative poses use a +38 offset in HSonyu.Proc
+                // (Game.isAdd20 && nowAnimationInfo.isFemaleInitiative).
+                // The previous filter silently missed those scenes.
+                int code = voiceCode;
+                if ((code >= 356 && code <= 357) ||
+                    (code >= 363 && code <= 368))
+                    code -= 38;
+                return code == 318 || code == 319 ||
+                    (code >= 325 && code <= 330);
+            }
             return false;
         }
 
