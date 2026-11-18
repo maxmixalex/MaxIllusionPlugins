@@ -33,6 +33,7 @@ namespace FemboyMode
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
+        internal static ConfigEntry<bool> EnableMaleBonePoseFollow;
         internal static ConfigEntry<bool> SuppressFemaleClimaxVoice;
         internal static ConfigEntry<string> MaleFinishBone;
         internal static ConfigEntry<bool> SuppressOriginalFemaleFX;
@@ -84,6 +85,8 @@ namespace FemboyMode
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
             EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
                 "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
+            EnableMaleBonePoseFollow = Config.Bind("Free H", "Copy native male geometry climax motion", true,
+                "For Generic rigs or imported male geometry, copy only matching native cm_J_dan100..109 bone rotations from the animated male to the marked actor during heroine climax. Keep the female full-body animation, bone positions/scales and all unmarked characters unchanged.");
             SuppressFemaleClimaxVoice = Config.Bind("Free H", "Suppress female climax voice", true,
                 "Suppress only marked heroine's native female orgasm dialogue cues. Koikatsu does not provide an equivalent male voice channel; other dialogue and characters are unchanged.");
             MaleFinishBone = Config.Bind("Male finish FX", "Target bone",
