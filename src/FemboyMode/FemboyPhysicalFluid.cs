@@ -312,12 +312,19 @@ namespace FemboyMode
                 owner.flags.nowAnimationInfo.paramMale != null
                 ? owner.flags.nowAnimationInfo.paramMale.fileMetaballCtrl
                 : null;
+            int wantedId = owner.flags != null && owner.flags.isAnalPlay
+                ? 4 : 1;
             MetaballShoot result = string.IsNullOrEmpty(current)
-                ? null : LoadPresetNamed(current);
-            return result ?? LoadPresetNamed("siru_khs_00");
+                ? null : LoadPresetNamed(current, wantedId);
+            if (result == null && wantedId != 1 &&
+                !string.IsNullOrEmpty(current))
+                result = LoadPresetNamed(current, 1);
+            if (result == null)
+                result = LoadPresetNamed("siru_khs_00", wantedId);
+            return result ?? LoadPresetNamed("siru_khs_00", 1);
         }
 
-        private MetaballShoot LoadPresetNamed(string name)
+        private MetaballShoot LoadPresetNamed(string name, int wantedId)
         {
             List<MetaballParam> presets = GlobalMethod.LoadAllFolder<MetaballParam>(
                 "h/list/", name);
@@ -330,7 +337,7 @@ namespace FemboyMode
                     continue;
                 foreach (MetaballParam.Param p in preset.param)
                 {
-                    if (p == null || p.ID != 1 || !p.Enable ||
+                    if (p == null || p.ID != wantedId || !p.Enable ||
                         string.IsNullOrEmpty(p.BulletAssetPath) ||
                         string.IsNullOrEmpty(p.ObjBullet) ||
                         p.Interval == null || p.Interval.Length == 0)
