@@ -217,8 +217,15 @@ namespace FemboyMode
                 return;
             }
 
+            // The original LiquidSiru particle is attached to cm_J_dan109_00,
+            // not to cm_J_dan100_00 used by the hand/contact anchor.
+            // Prefer the actual particle parent if available in the marked
+            // character's replacement rig, with safe model-specific fallback.
             Transform bone = FemboyRigResolver.FindBone(character.objBodyBone.transform,
-                FemboyModePlugin.KokanAnchorBone.Value);
+                FemboyModePlugin.MaleFinishBone.Value);
+            if (bone == null)
+                bone = FemboyRigResolver.FindBone(character.objBodyBone.transform,
+                    FemboyModePlugin.KokanAnchorBone.Value);
             if (bone == null)
                 bone = FemboyRigResolver.FindBone(character.objBodyBone.transform, "cf_d_kokan");
             if (bone == null)
