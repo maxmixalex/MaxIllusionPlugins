@@ -66,6 +66,24 @@ namespace FemboyMode
         }
 
         /// <summary>
+        /// The original HVoiceCtrl loads the two heroine voice tables, not a
+        /// separate male voice channel. These codes designate the female
+        /// climax-specific line choices in the Aibu and Sonyu state machines.
+        /// 142/143 = Aibu climax/start recovery; 318/319 and 325..330 =
+        /// Sonyu female climax/combined-finish voice selections.
+        /// Never suppress male-only inside/outside cue indices (320..324).
+        /// </summary>
+        internal static bool IsFemaleClimaxVoice(int mode, int voiceCode)
+        {
+            if (mode == 0)
+                return voiceCode == 142 || voiceCode == 143;
+            if (mode == 2)
+                return voiceCode == 318 || voiceCode == 319 ||
+                    (voiceCode >= 325 && voiceCode <= 330);
+            return false;
+        }
+
+        /// <summary>
         /// Deduplicate particle FX for the currently active heroine, not
         /// for the shared HFlag instance alone.
         /// </summary>
