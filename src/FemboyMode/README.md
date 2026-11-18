@@ -1,4 +1,4 @@
-# Femboy Mode for Koikatsu — v0.3.1
+# Femboy Mode for Koikatsu — v0.3.2
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
@@ -11,7 +11,7 @@ Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Fr
 - **Body model controls:** X, Y, Z sliders under Body > All (0.5–2.0 scale, 1.0 neutral) are shown only when the character is marked; they act on the separately configurable `Male geometry bone` (`cm_j_dan100` by default) when it exists in the installed male geometry; individual values persist in the character card. These are **new model-specific controls**, not a transplant of all vanilla male Maker panels. Absent bones are safely ignored.
 - **Free H filtering:** the two native non-anal insertion action buttons are hidden for the marked leading heroine, on **both** seven-button UI pages (normal and female-initiative). Their click handlers are guarded, without forcing unavailable positions or changing the unmarked heroine's behavior.
 - **Kokan touch relocation:** action anchors are created *after* optional body objects load, immediately before the game's `HandCtrl.InitHitReactionCollider`; a configurable male-bone hit sphere is added. A `GetOnMouseAibuCollider` postfix favors this sphere over the old female-model Kokan collider and rejects the old region for marked characters. The original actor's touch-area restrictions remain intact. The fallback is `cf_d_kokan` if the configured target bone is absent.
-- **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The original Aibu squirt particle **and its associated sound** are suppressed only if the replacement effect was successfully started; otherwise vanilla effects remain. Effects are selected using the leading heroine's scene particle controller (never the first arbitrary HParticleCtrl in the scene). This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
+- **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The original Aibu squirt particle **and its associated sound** are suppressed only if the replacement effect was successfully started; otherwise vanilla effects remain. The original `HAibu.randSio` instance is captured once at construction and released when the scene closes, avoiding Unity scene scans during unrelated random calls. Effects are selected using the leading heroine's scene particle controller (never the first arbitrary HParticleCtrl in the scene). This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
 
 ## Configuration
 
@@ -54,7 +54,7 @@ For a local headless regression run (requires .NET SDK 9):
 dotnet run --project tests/FemboyMode.Tests/FemboyMode.Tests.csproj -c Release
 ```
 
-This checks the normal/female-initiative action-button offsets, numeric scale validation and distinct FX keys for two heroines. GitHub Actions also runs these assertions before uploading the DLL.
+This checks the normal/female-initiative action-button offsets, numeric scale validation and distinct FX keys for two heroines. GitHub Actions also runs these assertions before uploading the DLL. The same job validates the collector's PowerShell syntax and executes a synthetic archive smoke test to ensure it includes the intended DLL and metadata but not the original asset bundle.
 
 To smoke-test the plugin: install the DLL, open female Maker, check **Parameter → Character** and **Body → All**, enable the marker, save the character card, then reopen Maker before checking UncensorSelector body options. The first game log is `BepInEx/LogOutput.log`. For model-specific contact reports, include the selected UncensorSelector body/part and configured bone names.
 
@@ -81,8 +81,10 @@ The inventory deliberately omits character names and card filenames.
 To also collect the new diagnostic log tail and this plugin's config, run:
 
 ```powershell
-.\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" -IncludeExecutables -IncludeDiagnostics
+.\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" -IncludeExecutables -IncludeDiagnostics -IncludeAssetInventory
 ```
+
+The optional `-IncludeAssetInventory` writes `_asset_inventory.csv` with candidate H/voice bundle names and sizes **without copying bundle bytes**. This helps determine which files are relevant before requesting any larger assets.
 
 Use `-ExtraRelativeFiles @('abdata/h/list/specific-file.unity3d')` only
 when a precise animation/voice asset path has been confirmed. The collector
