@@ -110,6 +110,12 @@ namespace FemboyMode
                     " Y=" + mode.GeometryScaleY + " Z=" + mode.GeometryScaleZ +
                     " scaleApplied=" + mode.HasAppliedMaleGeometryScale);
 
+            FemboyPhysicalFluidEmitter fluid =
+                c.gameObject.GetComponent<FemboyPhysicalFluidEmitter>();
+            if (fluid != null)
+                log.LogInfo("[FemboyMode diagnostics] " + label +
+                    " fluid status: " + fluid.DiagnosticStatus);
+
             if (c.chaFile != null)
             {
                 PluginData selector = ExtendedSave.GetExtendedDataById(
