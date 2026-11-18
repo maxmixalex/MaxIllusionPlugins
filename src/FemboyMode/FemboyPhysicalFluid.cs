@@ -207,8 +207,6 @@ namespace FemboyMode
         private ChaControl actor;
         private Transform shaftRoot;
         private Transform shaftTip;
-        private bool warned;
-
         public void Configure(ChaControl target, Transform root, Transform tip)
         {
             actor = target;
