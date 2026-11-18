@@ -30,6 +30,16 @@ namespace FemboyMode
     [DefaultExecutionOrder(30000)]
     public sealed class FemboyHoushiRoleRetargeter : MonoBehaviour
     {
+        // The native HHoushi face controller still drives the heroine even
+        // after the body role was reversed. Snapshot the two LIVE mouth
+        // channels separately from the FK joints and exchange their visual
+        // patterns only for the selected Reversed action.
+        private struct MouthState
+        {
+            internal int Pattern;
+            internal float Open;
+        }
+
         private sealed class Joint
         {
             internal Transform Female;
@@ -52,6 +62,12 @@ namespace FemboyMode
         private HSceneProc.AnimationListInfo activeAction;
         private int framesApplied;
         private float maxVisualDelta;
+        private MouthState nativeFemaleMouth;
+        private MouthState nativeMaleMouth;
+        private MouthState appliedFemaleMouth;
+        private MouthState appliedMaleMouth;
+        private bool mouthsModified;
+        private bool mouthLogged;
         private readonly List<Joint> joints = new List<Joint>();
         private FemboyHoushiRoleRestorer restorer;
         private bool active;
@@ -143,6 +159,7 @@ namespace FemboyMode
             active = true;
             framesApplied = 0;
             maxVisualDelta = 0f;
+            mouthLogged = false;
             int pose = reversedAction == null ? -1 : reversedAction.id;
             lastLogPose = pose;
             FemboyModePlugin.LogOptionalIntegrationProblem(
@@ -171,8 +188,69 @@ namespace FemboyMode
             activeAction = null;
         }
 
+        private static MouthState ReadMouth(ChaControl actor)
+        {
+            return new MouthState
+            {
+                Pattern = actor.fileStatus.mouthPtn,
+                Open = actor.fileStatus.mouthOpenMax
+            };
+        }
+
+        private static void SetMouth(ChaControl actor, MouthState target)
+        {
+            if (actor == null) return;
+            if (actor.fileStatus.mouthPtn != target.Pattern)
+                actor.ChangeMouthPtn(target.Pattern, true);
+            if (Mathf.Abs(actor.fileStatus.mouthOpenMax - target.Open) > 0.001f)
+                actor.ChangeMouthOpenMax(target.Open);
+        }
+
+        private void SwapLiveMouths()
+        {
+            if (female == null || male == null) return;
+            nativeFemaleMouth = ReadMouth(female);
+            nativeMaleMouth = ReadMouth(male);
+            appliedFemaleMouth = nativeMaleMouth;
+            appliedMaleMouth = nativeFemaleMouth;
+            SetMouth(female, appliedFemaleMouth);
+            SetMouth(male, appliedMaleMouth);
+            mouthsModified = true;
+            if (!mouthLogged)
+            {
+                mouthLogged = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Reversed Houshi face channels exchanged: heroine native mouth=" +
+                    nativeFemaleMouth.Pattern + "/" + nativeFemaleMouth.Open +
+                    " male native mouth=" + nativeMaleMouth.Pattern + "/" +
+                    nativeMaleMouth.Open +
+                    "; mouth-pattern and opening now follow opposite role.");
+            }
+        }
+
         internal void RestoreNativePose()
         {
+            if (mouthsModified)
+            {
+                // Do not undo an intervening face-control plugin's update.
+                // Only restore an actor if the visual mouth still matches
+                // the exact state that our role follower wrote.
+                if (female != null)
+                {
+                    MouthState current = ReadMouth(female);
+                    if (current.Pattern == appliedFemaleMouth.Pattern &&
+                        Mathf.Abs(current.Open - appliedFemaleMouth.Open) < 0.02f)
+                        SetMouth(female, nativeFemaleMouth);
+                }
+                if (male != null)
+                {
+                    MouthState current = ReadMouth(male);
+                    if (current.Pattern == appliedMaleMouth.Pattern &&
+                        Mathf.Abs(current.Open - appliedMaleMouth.Open) < 0.02f)
+                        SetMouth(male, nativeMaleMouth);
+                }
+                mouthsModified = false;
+            }
             if (!modified) return;
             for (int i = 0; i < joints.Count; i++)
             {
@@ -251,6 +329,7 @@ namespace FemboyMode
                 j.Male.localRotation = j.LastMale;
             }
             modified = true;
+            SwapLiveMouths();
             framesApplied++;
             if (framesApplied == 1)
                 FemboyModePlugin.LogOptionalIntegrationProblem(
