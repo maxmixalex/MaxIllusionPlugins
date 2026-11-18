@@ -71,13 +71,19 @@ internal static class Program
         Check(FemboyRules.BoneMatchRank("cm_j_dan100", "") == -1,
             "empty actual name is rejected");
 
+        Check(FemboyRules.DefaultMaleFinishBone == "cm_J_dan109_00",
+            "native LiquidSiru uses the actual male finish bone");
+        Check(FemboyRules.BoneMatchRank("cm_J_dan109_00",
+            "cm_J_dan109_00") == 0,
+            "indexed male finish bone is an exact match");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 25 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 27 FemboyMode rules assertions passed.");
         return 0;
     }
 }
