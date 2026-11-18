@@ -13,6 +13,16 @@ namespace FemboyMode
         internal const string DefaultMaleFinishBone = "cm_J_dan109_00";
 
         /// <summary>
+        /// Original RX18 aibulayer_02 entry 4 is the phallus-shaped
+        /// p_item_vibe (AibuItemObject IDs 7/8), immediately after
+        /// the electric-massager denma row 3. Disable only this entry.
+        /// </summary>
+        internal static bool IsPhallusToyLayer(int icon, int leftItemId, int rightItemId)
+        {
+            return icon == 25 && leftItemId == 7 && rightItemId == 8;
+        }
+
+        /// <summary>
         /// Sonyu Start has two pages of seven actions, selected by
         /// HSceneProc.AnimationListInfo.isFemaleInitiative.
         /// </summary>
