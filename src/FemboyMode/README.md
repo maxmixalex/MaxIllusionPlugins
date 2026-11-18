@@ -415,3 +415,29 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 - The Houshi menu is synchronized from its live use-list, UI list, all three categorized native submenus and the Animation Loader import mapping (the same import mapping inspected by MultiTeamH), capturing late kPlug-compatible additions. Each original action remains untouched; generated duplicates have stable internal `[Reversed]` names.
 - Visible motion-row labels are localized like MultiTeamH: KK_Chinese `GetText` first, XUnity AutoTranslator fallback; Chinese UI displays **[反转]**. Rebuilding the native menu reapplies the labels to pooled UI rows.
 - **Runtime validation required:** motion-clips may still have authored poses and contact/IK/camera targets specific to the original actors, so evaluate actual Houshi actions (including kPlug) before considering this feature finished. CI validates compile and rules, not on-screen alignment.
+
+
+## 0.4.7 — RX18 repeated/combined climax and existing animator-override compatibility
+
+### What the v0.4.6 runtime log established
+
+- LogOutput(5).log: 104 Reversed menu items were added, but selecting them repeatedly logged that an existing AnimatorOverrideController prevented all role overrides. In RX18, an existing override controller is normal and must not be treated as a fatal conflict.
+- The Sonoma/Sonyu animation can enter subsequent SS/SF/WS climax Start states without visiting the ordinary M_IN_Loop or recovery state. At the end of the test, HFlag.finish was sameS while the old emitter gate was still fired=True.
+- Combined finishes can consume female climax voice 318/319 before a later 325–330 cue. Not every later cue is a new orgasm, and a recovery *_A cue must never cause a second discharge.
+
+### Corrected implementation
+
+- HFlag.AddSonyuOrg / AddSonyuAnalOrg now record a per-marked-character native orgasm serial; they do *not* discharge fluid. A consumed native climax voice 325–330 (plus female-initiative 363–368), or combined-finish-only 318/319 (plus 356/357), starts native MetaballShoot only during a native Start/Loop emission phase. A new native orgasm serial can re-arm when a previous climax did not pass through the ordinary loop; 0.9 s protects against same-event callback duplication.
+- Houshi role reversal now preserves the existing animator-override chain from kPlug/game/other plugins, resolves its effective animation clips, then creates an independent override layer rooted in the original state machine. Any third-party clip mappings unrelated to the chosen Houshi motion remain intact. Unity 5.6 ApplyOverrides batches changes to avoid repeatedly reallocating animation clip bindings.
+- Unlike 0.4.6, an actor already using AnimatorOverrideController is not automatically rejected. When another plugin replaces the temporary controller during playback, the plugin releases its own layer safely and makes at most two timed retry attempts during the same selected Reversed action.
+- Names are localized in the cloned native AnimationListInfo itself (Chinese [反转] with KK_Chinese, otherwise [Reversed]), and both prefixes continue to be identifiable when HSprite rebinds a copied row.
+- The old direct 278-bone / facial-transform swap remains removed.
+
+### Acceptance tests still requiring real Koikatsu
+
+1. Select vanilla and imported kPlug Houshi [反转] actions. There should be one correctly named clone per donor, and the log should report an installed paired-motion clip layer rather than a blanket AnimatorOverrideController skip.
+2. Observe actual actor service/receiver motion, facial expressions, IK contact, and return to the original action. Matching clip names and passing CI cannot prove the animation curves target the required bones.
+3. In a single Sonyu pose, perform ordinary and combined (sameW/sameS) orgasms repeatedly, including immediate recovery-to-new-Start. Check precisely one physical-fluid burst for each *distinct* climax and no duplicate on recovery.
+4. Repeat with kPlug imported motions and female-initiative variations. Capture verbose logs only if a runtime issue persists.
+
+Build and 155 headless rules assertions passed on the development branch. The pull request stays draft until real in-game acceptance.
