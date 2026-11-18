@@ -108,7 +108,11 @@ namespace FemboyMode
             if (source == null)
                 return;
 
-            canvas = source.GetComponentInParent<Canvas>();
+            Canvas[] ancestors = source.GetComponentsInParent<Canvas>(true);
+            // Use the outermost H Canvas. A nested Canvas or mask may clip
+            // the gauge bar and our old badge was invisible to the user.
+            canvas = ancestors == null || ancestors.Length == 0
+                ? null : ancestors[ancestors.Length - 1];
             if (canvas == null || canvas.transform == null)
                 return;
 
@@ -157,7 +161,16 @@ namespace FemboyMode
                 font.HasCharacter('♂') ? "♂" : "F";
             label.fontSize = 23;
             label.fontStyle = FontStyle.Bold;
-            label.color = nativeText != null ? nativeText.color : Color.white;
+            Color nativeColor = sprite.gauge != null &&
+                sprite.gauge.Length > 0 && sprite.gauge[0] != null &&
+                sprite.gauge[0].imgBar != null
+                ? sprite.gauge[0].imgBar.color
+                : (nativeText != null ? nativeText.color : Color.white);
+            // Some native text templates have alpha=0 while inactive.
+            // Use the visible heroine gauge color but force an opaque
+            // glyph, with the black outline for contrast.
+            nativeColor.a = 1f;
+            label.color = nativeColor;
             label.alignment = TextAnchor.MiddleCenter;
             label.raycastTarget = false;
 
