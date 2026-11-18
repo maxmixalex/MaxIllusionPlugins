@@ -307,18 +307,22 @@ internal static class Program
             "injected role-swapped service entry is detectable");
         Check(!FemboyRules.IsReversedHoushiName("Test"),
             "ordinary donor action remains untouched");
-        Check(FemboyRules.ReversedBodyBoneKey("cf_J_Arm00") == "j_arm00",
-            "female native upper-body bone maps to common animation key");
-        Check(FemboyRules.ReversedBodyBoneKey("cm_J_Arm00") == "j_arm00",
-            "male native upper-body bone uses the same key");
-        Check(FemboyRules.ReversedBodyBoneKey("cm_J_dan109_00") == null,
-            "male geometry is never applied to another actor's joints");
-        Check(FemboyRules.ReversedBodyBoneKey("cf_j_ana") == null,
-            "anatomical collision targets are not reversed");
-        Check(FemboyRules.IsReversedRootMotionBone("j_root"),
-            "root translation is exchanged with rotation");
-        Check(!FemboyRules.IsReversedRootMotionBone("j_arm00"),
-            "limb proportions are not overwritten");
+        Check(FemboyRules.IsHoushiBodyMotionClip("M_IN_Loop"),
+            "standard native Houshi motion can be overridden with paired clip");
+        Check(FemboyRules.IsHoushiBodyMotionClip("SM_OUT_A"),
+            "kPlug-compatible SM action motion can be overridden");
+        Check(FemboyRules.IsHoushiBodyMotionClip("ML_OUT_Start"),
+            "kPlug-compatible ML action start is recognized");
+        Check(FemboyRules.IsHoushiBodyMotionClip("S_IN_Start"),
+            "short native Houshi insertion motion is recognized");
+        Check(!FemboyRules.IsHoushiBodyMotionClip("A_SF_IN_Start"),
+            "Sonyu climax state must not enter Houshi clip overrides");
+        Check(!FemboyRules.IsHoushiBodyMotionClip("Orgasm_Loop"),
+            "female facial climax animations are left native");
+        Check(!FemboyRules.IsHoushiBodyMotionClip("cf_j_head"),
+            "shared body bone names are not treated as animation clips");
+        Check(!FemboyRules.IsHoushiBodyMotionClip("M_Kiss_A"),
+            "unrelated face and kiss states are not overridden");
 
         if (failures > 0)
         {
@@ -326,7 +330,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 136 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 138 FemboyMode rules assertions passed.");
         return 0;
     }
 }

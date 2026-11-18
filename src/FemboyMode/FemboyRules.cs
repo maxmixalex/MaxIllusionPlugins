@@ -121,32 +121,22 @@ namespace FemboyMode
                 name.StartsWith("[Reversed] ", StringComparison.Ordinal);
         }
 
-        // Keep only body-joint transforms; exclude facial controls, cloth,
-        // genital add-ons and IK targets from the shared animation transfer.
-        internal static string ReversedBodyBoneKey(string name)
+        // Koikatsu Houshi body clips have the S/M/L or SM/ML motion
+        // variants. Never exchange actor facial, reaction, or Sonyu clips.
+        internal static bool IsHoushiBodyMotionClip(string name)
         {
-            if (string.IsNullOrEmpty(name) || name.Length < 6 ||
-                !(name.StartsWith("cf_", StringComparison.OrdinalIgnoreCase) ||
-                  name.StartsWith("cm_", StringComparison.OrdinalIgnoreCase)))
-                return null;
-            string stem = name.Substring(3).ToLowerInvariant();
-            if (!(stem.StartsWith("j_", StringComparison.Ordinal) ||
-                  stem.StartsWith("s_", StringComparison.Ordinal)))
-                return null;
-            if (stem.IndexOf("dan", StringComparison.Ordinal) >= 0 ||
-                stem.IndexOf("ana", StringComparison.Ordinal) >= 0 ||
-                stem.IndexOf("kokan", StringComparison.Ordinal) >= 0 ||
-                stem.IndexOf("bust", StringComparison.Ordinal) >= 0)
-                return null;
-            return stem;
-        }
-
-        internal static bool IsReversedRootMotionBone(string key)
-        {
-            return key != null &&
-                (key.IndexOf("root", StringComparison.Ordinal) >= 0 ||
-                 key.IndexOf("hips", StringComparison.Ordinal) >= 0 ||
-                 key.IndexOf("kosi", StringComparison.Ordinal) >= 0);
+            if (string.IsNullOrEmpty(name)) return false;
+            bool variant = name.StartsWith("S_", StringComparison.Ordinal) ||
+                name.StartsWith("M_", StringComparison.Ordinal) ||
+                name.StartsWith("L_", StringComparison.Ordinal) ||
+                name.StartsWith("SM_", StringComparison.Ordinal) ||
+                name.StartsWith("ML_", StringComparison.Ordinal);
+            return variant &&
+                (name.IndexOf("_IN_", StringComparison.Ordinal) > 0 ||
+                 name.IndexOf("_OUT_", StringComparison.Ordinal) > 0) &&
+                (name.EndsWith("_Start", StringComparison.Ordinal) ||
+                 name.EndsWith("_Loop", StringComparison.Ordinal) ||
+                 name.EndsWith("_A", StringComparison.Ordinal));
         }
 
         internal static bool IsFemaleInsertionFinishStart(string state)

@@ -1,120 +1,128 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
+using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FemboyMode
 {
-    /// <summary>
-    /// Expose native Houshi motions twice: the original action and an actor-
-    /// reversed version. The donor action remains completely native; the
-    /// second entry swaps the two animated body poses late in the frame.
-    /// Never alter character sex, HFlag.player, voice queues or card data.
-    /// </summary>
+    // Keep the *native* male/female AnimatorControllers, avatar bindings and
+    // facial layers.  Exchange matching motion clips only for the selected
+    // Houshi action.  Never copy raw cf_*/cm_* bone rotations across rigs.
     internal static class FemboyHoushiReverseHooks
     {
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HSprite), nameof(HSprite.Init))]
-        private static void SpriteInitialized(HSprite __instance)
+        private static void OnSpriteInitialized(HSprite __instance)
         {
-            if (__instance == null || __instance.gameObject == null) return;
-            FemboyHoushiReverseController controller =
-                __instance.gameObject.GetComponent<FemboyHoushiReverseController>();
+            if (__instance == null) return;
+            var controller = __instance.GetComponent<FemboyHoushiReverseController>();
             if (controller == null)
                 controller = __instance.gameObject.AddComponent<FemboyHoushiReverseController>();
             controller.Bind(__instance);
         }
 
         [HarmonyPostfix]
+        [HarmonyPatch(typeof(HSprite), nameof(HSprite.CreateActionList))]
+        private static void OnActionListBuilt(HSprite __instance)
+        {
+            if (__instance == null) return;
+            var controller = __instance.GetComponent<FemboyHoushiReverseController>();
+            if (controller != null) controller.MenuRebuilt();
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HSprite), "CreateMotionList")]
+        private static void OnMotionListBuilt(HSprite __instance)
+        {
+            if (__instance == null) return;
+            var controller = __instance.GetComponent<FemboyHoushiReverseController>();
+            if (controller != null) controller.DecorateRows();
+        }
+
+        [HarmonyPrefix]
         [HarmonyPatch(typeof(HSceneProc), "ChangeAnimator")]
-        private static void AnimationChanged(HSceneProc __instance,
+        private static void BeforeChangeAnimator(HSceneProc __instance)
+        {
+            if (__instance == null || __instance.sprite == null) return;
+            var controller = __instance.sprite.GetComponent<FemboyHoushiReverseController>();
+            if (controller != null) controller.BeforeAnimationChanged();
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HSceneProc), "ChangeAnimator")]
+        private static void AfterChangeAnimator(HSceneProc __instance,
             HSceneProc.AnimationListInfo _nextAinmInfo)
         {
             if (__instance == null || __instance.sprite == null) return;
-            FemboyHoushiReverseController controller =
-                __instance.sprite.GetComponent<FemboyHoushiReverseController>();
-            if (controller != null)
-                controller.AnimationChanged(__instance, _nextAinmInfo);
+            var controller = __instance.sprite.GetComponent<FemboyHoushiReverseController>();
+            if (controller != null) controller.AnimationChanged(__instance, _nextAinmInfo);
         }
     }
 
-    // Restore the native poses before the next animation evaluation. A single
-    // late-update script without this step would feed its own swapped bones
-    // back into the next frame and accumulate incorrect transforms.
-    [DefaultExecutionOrder(-9000)]
-    public sealed class FemboyHoushiReverseRestorer : MonoBehaviour
-    {
-        internal FemboyHoushiReverseController Controller;
-
-        private void Update()
-        {
-            if (Controller != null) Controller.RestoreNativePose();
-        }
-    }
-
-    [DefaultExecutionOrder(9000)]
     public sealed class FemboyHoushiReverseController : MonoBehaviour
     {
-        private sealed class BonePair
+        private sealed class InstalledOverride
         {
-            internal Transform Female;
-            internal Transform Male;
-            internal Quaternion FemaleRotation;
-            internal Quaternion MaleRotation;
-            internal Vector3 FemalePosition;
-            internal Vector3 MalePosition;
-            internal bool SwapPosition;
+            internal Animator Animator;
+            internal RuntimeAnimatorController Original;
+            internal AnimatorOverrideController Override;
         }
 
-        private static readonly MethodInfo MemberwiseCloneMethod =
-            typeof(object).GetMethod("MemberwiseClone",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly List<BonePair> pairs = new List<BonePair>();
+        private static readonly MethodInfo CloneMethod = typeof(object).GetMethod(
+            "MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
+        private readonly Dictionary<HSceneProc.AnimationListInfo,
+            HSceneProc.AnimationListInfo> clones =
+            new Dictionary<HSceneProc.AnimationListInfo, HSceneProc.AnimationListInfo>();
         private readonly HashSet<HSceneProc.AnimationListInfo> reversed =
             new HashSet<HSceneProc.AnimationListInfo>();
         private HSprite sprite;
         private HSceneProc scene;
-        private ChaControl female;
-        private ChaControl male;
-        private bool injected;
+        private InstalledOverride femaleOverride;
+        private InstalledOverride maleOverride;
+        private int nextScanFrame;
+        private int nextLabelFrame;
+        private bool rebuilding;
+        private bool alreadyReported;
         private bool active;
-        private bool applied;
-        private int nextAttemptFrame;
-        private bool warnedInsufficientRig;
-        private FemboyHoushiReverseRestorer restorer;
 
         internal void Bind(HSprite sceneSprite)
         {
             sprite = sceneSprite;
-            if (restorer == null)
-            {
-                restorer = gameObject.GetComponent<FemboyHoushiReverseRestorer>();
-                if (restorer == null)
-                    restorer = gameObject.AddComponent<FemboyHoushiReverseRestorer>();
-                restorer.Controller = this;
-            }
-            nextAttemptFrame = Time.frameCount;
+            nextScanFrame = Time.frameCount;
         }
 
-        private bool GetMarkedActors(out ChaControl targetFemale,
-            out ChaControl targetMale)
+        internal void MenuRebuilt()
         {
-            targetFemale = null;
-            targetMale = null;
-            if (scene == null || scene.flags == null || !scene.flags.isFreeH ||
-                scene.lstFemale == null || scene.lstFemale.Count != 1 ||
-                scene.male == null ||
-                FemboyModePlugin.EnableReverseHoushi == null ||
-                !FemboyModePlugin.EnableReverseHoushi.Value)
-                return false;
+            if (rebuilding) return;
+            nextScanFrame = Time.frameCount + 1;
+            nextLabelFrame = Time.frameCount + 1;
+        }
 
-            targetFemale = scene.lstFemale[0];
-            targetMale = scene.male;
-            return targetFemale != null &&
-                FemboyModePlugin.IsFemboy(targetFemale) &&
-                targetFemale.objBodyBone != null &&
-                targetMale.objBodyBone != null;
+        private void Update()
+        {
+            if (sprite == null) return;
+            if (Time.frameCount >= nextScanFrame)
+            {
+                nextScanFrame = Time.frameCount + 45;
+                RefreshMenu();
+            }
+            if (Time.frameCount >= nextLabelFrame)
+            {
+                nextLabelFrame = Time.frameCount + 30;
+                DecorateRows();
+            }
+            if (active && (scene == null || scene.flags == null ||
+                scene.flags.mode != HFlag.EMode.houshi ||
+                FemboyModePlugin.EnableReverseHoushi == null ||
+                !FemboyModePlugin.EnableReverseHoushi.Value))
+            {
+                RestoreControllers();
+                active = false;
+            }
         }
 
         private void FindScene()
@@ -129,218 +137,305 @@ namespace FemboyMode
             }
         }
 
-        private void LateUpdate()
+        private bool GetMarkedActors(out Animator heroineAnimator,
+            out Animator partnerAnimator)
         {
-            if (sprite == null) return;
-            if (!injected && Time.frameCount >= nextAttemptFrame)
-            {
-                nextAttemptFrame = Time.frameCount + 45;
-                TryInject();
-            }
-            if (!active) return;
-
-            ChaControl currentFemale, currentMale;
-            if (!GetMarkedActors(out currentFemale, out currentMale) ||
-                scene.flags.mode != HFlag.EMode.houshi)
-            {
-                RestoreNativePose();
-                active = false;
-                return;
-            }
-
-            if (!ReferenceEquals(currentFemale, female) ||
-                !ReferenceEquals(currentMale, male))
-            {
-                RestoreNativePose();
-                if (!CacheMatchedBones(currentFemale, currentMale))
-                {
-                    active = false;
-                    return;
-                }
-            }
-
-            // The animator has just evaluated the normal native action for
-            // both participants. Save both poses before writing either one.
-            for (int i = 0; i < pairs.Count; i++)
-            {
-                BonePair pair = pairs[i];
-                pair.FemaleRotation = pair.Female.localRotation;
-                pair.MaleRotation = pair.Male.localRotation;
-                if (!pair.SwapPosition) continue;
-                pair.FemalePosition = pair.Female.localPosition;
-                pair.MalePosition = pair.Male.localPosition;
-            }
-            for (int i = 0; i < pairs.Count; i++)
-            {
-                BonePair pair = pairs[i];
-                pair.Female.localRotation = pair.MaleRotation;
-                pair.Male.localRotation = pair.FemaleRotation;
-                if (!pair.SwapPosition) continue;
-                pair.Female.localPosition = pair.MalePosition;
-                pair.Male.localPosition = pair.FemalePosition;
-            }
-            applied = true;
-        }
-
-        internal void RestoreNativePose()
-        {
-            if (!applied) return;
-            for (int i = 0; i < pairs.Count; i++)
-            {
-                BonePair pair = pairs[i];
-                if (pair.Female == null || pair.Male == null) continue;
-                pair.Female.localRotation = pair.FemaleRotation;
-                pair.Male.localRotation = pair.MaleRotation;
-                if (!pair.SwapPosition) continue;
-                pair.Female.localPosition = pair.FemalePosition;
-                pair.Male.localPosition = pair.MalePosition;
-            }
-            applied = false;
-        }
-
-        private bool CacheMatchedBones(ChaControl targetFemale,
-            ChaControl targetMale)
-        {
-            RestoreNativePose();
-            pairs.Clear();
-            female = targetFemale;
-            male = targetMale;
-            if (female == null || male == null ||
-                female.objBodyBone == null || male.objBodyBone == null)
+            heroineAnimator = null;
+            partnerAnimator = null;
+            if (scene == null || scene.flags == null || !scene.flags.isFreeH ||
+                scene.lstFemale == null || scene.lstFemale.Count != 1 ||
+                scene.male == null ||
+                FemboyModePlugin.EnableReverseHoushi == null ||
+                !FemboyModePlugin.EnableReverseHoushi.Value)
                 return false;
 
-            var maleBones = new Dictionary<string, Transform>();
-            foreach (Transform t in male.objBodyBone.GetComponentsInChildren<Transform>(true))
-            {
-                string key = FemboyRules.ReversedBodyBoneKey(t.name);
-                if (key != null && !maleBones.ContainsKey(key))
-                    maleBones.Add(key, t);
-            }
-            var femaleSeen = new HashSet<string>();
-            foreach (Transform t in female.objBodyBone.GetComponentsInChildren<Transform>(true))
-            {
-                string key = FemboyRules.ReversedBodyBoneKey(t.name);
-                if (key == null || !femaleSeen.Add(key)) continue;
-                Transform other;
-                if (!maleBones.TryGetValue(key, out other) || other == t) continue;
-                pairs.Add(new BonePair
-                {
-                    Female = t,
-                    Male = other,
-                    SwapPosition = FemboyRules.IsReversedRootMotionBone(key)
-                });
-            }
-            if (pairs.Count >= 20)
-            {
-                if (FemboyModePlugin.VerboseLogging != null &&
-                    FemboyModePlugin.VerboseLogging.Value)
-                    FemboyModePlugin.LogOptionalIntegrationProblem(
-                        "Reversed Houshi mapped " + pairs.Count +
-                        " shared body bones (female/male roles).");
-                warnedInsufficientRig = false;
-                return true;
-            }
-
-            if (!warnedInsufficientRig)
-            {
-                warnedInsufficientRig = true;
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Reversed Houshi disabled: only " + pairs.Count +
-                    " compatible body bones were found. Native roles remain unchanged.");
-            }
-            pairs.Clear();
-            return false;
+            ChaControl heroine = scene.lstFemale[0];
+            if (heroine == null || !FemboyModePlugin.IsFemboy(heroine) ||
+                heroine.animBody == null || scene.male.animBody == null)
+                return false;
+            heroineAnimator = heroine.animBody;
+            partnerAnimator = scene.male.animBody;
+            return true;
         }
 
-        private void TryInject()
+        private static void AppendUnique(List<HSceneProc.AnimationListInfo> list,
+            HashSet<HSceneProc.AnimationListInfo> seen,
+            HSceneProc.AnimationListInfo candidate)
+        {
+            if (candidate == null || candidate.mode != HFlag.EMode.houshi ||
+                FemboyRules.IsReversedHoushiName(candidate.nameAnimation) ||
+                !seen.Add(candidate))
+                return;
+            list.Add(candidate);
+        }
+
+        private static int CategoryFor(HSceneProc.AnimationListInfo donor,
+            List<HSceneProc.AnimationListInfo>[] submenus)
+        {
+            for (int i = 0; i < 3; i++)
+                if (submenus[i] != null && submenus[i].Contains(donor)) return i;
+            string name = donor.nameAnimation ?? string.Empty;
+            if (name.IndexOf("口", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("舌", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("blow", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("suck", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("oral", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 1;
+            if (name.IndexOf("胸", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("乳交", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("breast", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.IndexOf("titjob", StringComparison.OrdinalIgnoreCase) >= 0)
+                return 2;
+            return donor.kindHoushi >= 0 && donor.kindHoushi <= 2
+                ? donor.kindHoushi : 0;
+        }
+
+        private void RefreshMenu()
         {
             FindScene();
-            ChaControl currentFemale, currentMale;
-            if (!GetMarkedActors(out currentFemale, out currentMale) ||
+            Animator heroine, partner;
+            if (!GetMarkedActors(out heroine, out partner) ||
                 scene.lstUseAnimInfo == null || sprite.lstUseAnimInfo == null ||
-                MemberwiseCloneMethod == null)
+                CloneMethod == null || rebuilding)
                 return;
-
             int index = (int)HFlag.EMode.houshi;
-            if (index < 0 || index >= scene.lstUseAnimInfo.Length ||
+            if (index >= scene.lstUseAnimInfo.Length ||
                 index >= sprite.lstUseAnimInfo.Length)
                 return;
-
-            List<HSceneProc.AnimationListInfo> original =
-                scene.lstUseAnimInfo[index];
-            List<HSceneProc.AnimationListInfo> visible =
-                sprite.lstUseAnimInfo[index];
-            if (original == null || visible == null || original.Count == 0 ||
-                !CacheMatchedBones(currentFemale, currentMale))
-                return;
-
-            // HSprite.Init has already partitioned Houshi into hand/mouth/
-            // breast submenus, just as MultiTeamH observes. Rebuild both
-            // those caches and the visible source list without altering a
-            // donor's id, asset paths or native animation/controller data.
-            List<HSceneProc.AnimationListInfo>[] submenus = null;
+            List<HSceneProc.AnimationListInfo> source = scene.lstUseAnimInfo[index];
+            List<HSceneProc.AnimationListInfo> visible = sprite.lstUseAnimInfo[index];
+            if (source == null || visible == null) return;
+            List<HSceneProc.AnimationListInfo>[] submenus;
             try
             {
                 submenus = Traverse.Create(sprite).Field("lstHoushiAnimInfo")
                     .GetValue<List<HSceneProc.AnimationListInfo>[]>();
             }
-            catch (Exception ex)
-            {
-                FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Reversed Houshi submenu lookup failed: " + ex.Message);
-            }
-            if (submenus == null || submenus.Length < 3)
-                return;
+            catch (Exception) { return; }
+            if (submenus == null || submenus.Length < 3) return;
 
-            HSceneProc.AnimationListInfo[] donors = original.ToArray();
-            int added = 0;
-            for (int i = 0; i < donors.Length; i++)
+            // Native and kPlug/AnimationLoader can install entries into
+            // *different* live collections. Use their union, including all
+            // three Houshi submenus, and revisit when those lists are rebuilt.
+            var donors = new List<HSceneProc.AnimationListInfo>();
+            var seen = new HashSet<HSceneProc.AnimationListInfo>();
+            for (int i = 0; i < source.Count; i++)
+                AppendUnique(donors, seen, source[i]);
+            if (!ReferenceEquals(source, visible))
+                for (int i = 0; i < visible.Count; i++)
+                    AppendUnique(donors, seen, visible[i]);
+            for (int k = 0; k < 3; k++)
+                if (submenus[k] != null)
+                    for (int i = 0; i < submenus[k].Count; i++)
+                        AppendUnique(donors, seen, submenus[k][i]);
+
+            // Animation Loader keeps its imported kPlug-compatible motions
+            // in the same map that MultiTeamH uses. Only entries belonging
+            // to Houshi are eligible; the donor must provide a full 1F1M rig.
+            Type loader = AccessTools.TypeByName("AnimationLoader.SwapAnim");
+            FieldInfo field = loader == null ? null :
+                AccessTools.Field(loader, "swapAnimationMapping");
+            IDictionary mapping = field == null ? null : field.GetValue(null) as IDictionary;
+            if (mapping != null)
+                foreach (DictionaryEntry entry in mapping)
+                    AppendUnique(donors, seen, entry.Key as HSceneProc.AnimationListInfo);
+
+            int newCount = 0;
+            for (int i = 0; i < donors.Count; i++)
             {
                 HSceneProc.AnimationListInfo donor = donors[i];
-                if (donor == null || donor.mode != HFlag.EMode.houshi ||
-                    string.IsNullOrEmpty(donor.nameAnimation) ||
-                    FemboyRules.IsReversedHoushiName(donor.nameAnimation))
+                if (string.IsNullOrEmpty(donor.nameAnimation) ||
+                    donor.paramFemale == null || donor.paramMale == null ||
+                    (donor.pathFemaleBase1 != null &&
+                     (!string.IsNullOrEmpty(donor.pathFemaleBase1.assetpath) ||
+                      !string.IsNullOrEmpty(donor.pathFemaleBase1.file))))
                     continue;
-                HSceneProc.AnimationListInfo clone =
-                    MemberwiseCloneMethod.Invoke(donor, null)
+
+                HSceneProc.AnimationListInfo clone;
+                if (!clones.TryGetValue(donor, out clone))
+                {
+                    clone = CloneMethod.Invoke(donor, null)
                         as HSceneProc.AnimationListInfo;
-                if (clone == null) continue;
-                clone.nameAnimation = "[Reversed] " + donor.nameAnimation;
-                reversed.Add(clone);
-                original.Add(clone);
-                if (!ReferenceEquals(original, visible)) visible.Add(clone);
-                int kind = Math.Max(0, Math.Min(2, clone.kindHoushi));
-                if (submenus[kind] == null)
-                    submenus[kind] = new List<HSceneProc.AnimationListInfo>();
-                submenus[kind].Add(clone);
-                added++;
+                    if (clone == null) continue;
+                    clone.nameAnimation = "[Reversed] " + donor.nameAnimation;
+                    clones.Add(donor, clone);
+                    reversed.Add(clone);
+                }
+                int category = CategoryFor(donor, submenus);
+                clone.kindHoushi = category;
+                bool justAdded = false;
+                if (!source.Contains(clone)) { source.Add(clone); justAdded = true; }
+                if (!ReferenceEquals(source, visible) && !visible.Contains(clone))
+                { visible.Add(clone); justAdded = true; }
+                if (submenus[category] == null)
+                    submenus[category] = new List<HSceneProc.AnimationListInfo>();
+                if (!submenus[category].Contains(clone))
+                { submenus[category].Add(clone); justAdded = true; }
+                if (justAdded) newCount++;
             }
-            if (added == 0) return;
-            injected = true;
-            sprite.CreateActionList();
-            FemboyModePlugin.LogOptionalIntegrationProblem(
-                "Added " + added + " native Houshi [Reversed] actions; " +
-                "shared-body animation pose swap is enabled for marked actors.");
+            if (newCount > 0)
+            {
+                rebuilding = true;
+                try { sprite.CreateActionList(); }
+                finally { rebuilding = false; }
+                DecorateRows();
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi [Reversed] catalog synchronized: newly added=" +
+                    newCount + " total=" + reversed.Count +
+                    " (native + kPlug/AnimationLoader). In-game labels localized.");
+                alreadyReported = true;
+            }
+            else if (!alreadyReported && donors.Count > 0)
+            {
+                alreadyReported = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi [Reversed] catalog already synchronized: " +
+                    reversed.Count + " actions.");
+            }
+        }
+
+        internal void DecorateRows()
+        {
+            if (sprite == null || reversed.Count == 0) return;
+            HSprite.AnimationInfoComponent[] entries =
+                sprite.GetComponentsInChildren<HSprite.AnimationInfoComponent>(true);
+            for (int i = 0; i < entries.Length; i++)
+            {
+                var entry = entries[i];
+                if (entry == null || entry.info == null ||
+                    (!reversed.Contains(entry.info) &&
+                     !FemboyRules.IsReversedHoushiName(entry.info.nameAnimation)))
+                    continue;
+                string text = FemboyHoushiLocalizer.LocalizeReversed(
+                    entry.info.nameAnimation);
+                TMP_Text tmp = entry.GetComponentInChildren<TMP_Text>(true);
+                if (tmp != null && tmp.text != text) tmp.text = text;
+                Text ui = entry.GetComponentInChildren<Text>(true);
+                if (ui != null && ui.text != text) ui.text = text;
+            }
+        }
+
+        internal void BeforeAnimationChanged()
+        {
+            RestoreControllers();
+            active = false;
         }
 
         internal void AnimationChanged(HSceneProc proc,
             HSceneProc.AnimationListInfo next)
         {
-            if (!ReferenceEquals(scene, proc)) return;
-            RestoreNativePose();
-            active = next != null &&
-                (reversed.Contains(next) ||
-                 (next.mode == HFlag.EMode.houshi &&
-                  FemboyRules.IsReversedHoushiName(next.nameAnimation))) &&
-                proc.flags != null && proc.flags.isFreeH;
+            if (proc == null || next == null) return;
+            if (scene == null) scene = proc;
+            if (scene != proc) return;
+            if (next.mode != HFlag.EMode.houshi ||
+                (!reversed.Contains(next) &&
+                 !FemboyRules.IsReversedHoushiName(next.nameAnimation)))
+                return;
+
+            Animator heroine, partner;
+            if (!GetMarkedActors(out heroine, out partner)) return;
+            InstallControllers(heroine, partner);
+        }
+
+        private void InstallControllers(Animator heroine, Animator partner)
+        {
+            if (heroine == null || partner == null ||
+                heroine.runtimeAnimatorController == null ||
+                partner.runtimeAnimatorController == null)
+                return;
+            RuntimeAnimatorController originalFemale = heroine.runtimeAnimatorController;
+            RuntimeAnimatorController originalMale = partner.runtimeAnimatorController;
+            if (originalFemale is AnimatorOverrideController ||
+                originalMale is AnimatorOverrideController)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi reversal skipped: another plugin already controls " +
+                    "the actor's AnimatorOverrideController. Native rigs preserved.");
+                return;
+            }
+
+            var femaleClips = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+            var maleClips = new Dictionary<string, AnimationClip>(StringComparer.Ordinal);
+            foreach (AnimationClip clip in originalFemale.animationClips)
+                if (clip != null && FemboyRules.IsHoushiBodyMotionClip(clip.name) &&
+                    !femaleClips.ContainsKey(clip.name))
+                    femaleClips.Add(clip.name, clip);
+            foreach (AnimationClip clip in originalMale.animationClips)
+                if (clip != null && FemboyRules.IsHoushiBodyMotionClip(clip.name) &&
+                    !maleClips.ContainsKey(clip.name))
+                    maleClips.Add(clip.name, clip);
+
+            int matched = 0;
+            foreach (var pair in femaleClips)
+                if (maleClips.ContainsKey(pair.Key)) matched++;
+            // Missing body clips means there is no compatible native role
+            // pair for this imported action. Never fall back to 278 raw bones.
+            if (matched < 3)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi [Reversed] skipped: no compatible paired motion " +
+                    "clips for this native/kPlug action (matched=" + matched + ").");
+                return;
+            }
+
+            AnimatorOverrideController forFemale = null;
+            AnimatorOverrideController forMale = null;
+            try
+            {
+                forFemale = new AnimatorOverrideController(originalFemale);
+                forMale = new AnimatorOverrideController(originalMale);
+                foreach (var pair in femaleClips)
+                {
+                    AnimationClip other;
+                    if (!maleClips.TryGetValue(pair.Key, out other)) continue;
+                    forFemale[pair.Key] = other;
+                    forMale[pair.Key] = pair.Value;
+                }
+                femaleOverride = new InstalledOverride
+                { Animator = heroine, Original = originalFemale, Override = forFemale };
+                maleOverride = new InstalledOverride
+                { Animator = partner, Original = originalMale, Override = forMale };
+                heroine.runtimeAnimatorController = forFemale;
+                partner.runtimeAnimatorController = forMale;
+                active = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi [Reversed] installed matched motion-clip overrides=" +
+                    matched + "; both native AnimatorControllers/avatars retained; " +
+                    "no cross-rig bone or facial transform writes.");
+            }
+            catch (Exception ex)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi [Reversed] native clip retarget failed safely: " +
+                    ex.GetType().Name + ": " + ex.Message);
+                RestoreControllers();
+            }
+        }
+
+        private static void RestoreOne(InstalledOverride value)
+        {
+            if (value == null) return;
+            if (value.Animator != null &&
+                ReferenceEquals(value.Animator.runtimeAnimatorController, value.Override))
+                value.Animator.runtimeAnimatorController = value.Original;
+            if (value.Override != null)
+                UnityEngine.Object.Destroy(value.Override);
+        }
+
+        private void RestoreControllers()
+        {
+            RestoreOne(femaleOverride);
+            RestoreOne(maleOverride);
+            femaleOverride = null;
+            maleOverride = null;
+            active = false;
         }
 
         private void OnDestroy()
         {
-            RestoreNativePose();
-            if (restorer != null) restorer.Controller = null;
+            RestoreControllers();
+            clones.Clear();
             reversed.Clear();
-            pairs.Clear();
         }
     }
 }

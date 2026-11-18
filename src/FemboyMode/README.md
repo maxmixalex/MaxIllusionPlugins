@@ -407,3 +407,11 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 - Reversal requires at least 20 compatible shared body bones. If the installed
   rig lacks them, the action injection is skipped instead of showing broken
   controls. The in-game Free H poses and IK alignment still need validation.
+
+## v0.4.6 — recovered Sonyu climax and native-clip Houshi reversal
+
+- Real RX18 0.4.5 log: a second `A_SF_IN_Start` can immediately follow `A_SS_IN_A`, without observing ordinary `*_M_IN_Loop`. The Sonyu gate now re-arms on **recovery -> new Start** as well as ordinary insertion movement, while still suppressing multiple callbacks inside the same climax.
+- The v0.4.5 raw rotation/position exchange between 278 male/female body bones has been **completely removed**. Reversed Houshi now creates per-actor `AnimatorOverrideController` instances and exchanges only **matching native Houshi motion clips**, retaining each actor's original controller, avatar and separate facial states. A pose without at least three paired clips is explicitly skipped (not silently forced into a deformed rig). Switching to a normal pose or exiting restores the exact original controller.
+- The Houshi menu is synchronized from its live use-list, UI list, all three categorized native submenus and the Animation Loader import mapping (the same import mapping inspected by MultiTeamH), capturing late kPlug-compatible additions. Each original action remains untouched; generated duplicates have stable internal `[Reversed]` names.
+- Visible motion-row labels are localized like MultiTeamH: KK_Chinese `GetText` first, XUnity AutoTranslator fallback; Chinese UI displays **[反转]**. Rebuilding the native menu reapplies the labels to pooled UI rows.
+- **Runtime validation required:** motion-clips may still have authored poses and contact/IK/camera targets specific to the original actors, so evaluate actual Houshi actions (including kPlug) before considering this feature finished. CI validates compile and rules, not on-screen alignment.
