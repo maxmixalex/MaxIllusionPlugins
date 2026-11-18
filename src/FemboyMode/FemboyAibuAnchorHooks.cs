@@ -251,7 +251,7 @@ namespace FemboyMode
         [HarmonyPrefix]
         [HarmonyPatch(typeof(HandCtrl), "SetIconTexture")]
         private static void BeforeKokanWheel(
-            HandCtrl __instance, HandCtrl.AibuColliderKind _kindTouch)
+            HandCtrl __instance, ref HandCtrl.AibuColliderKind _kindTouch)
         {
             if (__instance == null ||
                 _kindTouch != HandCtrl.AibuColliderKind.kokan ||
@@ -413,6 +413,9 @@ namespace FemboyMode
                 FemboyModePlugin.KokanRotationX.Value,
                 FemboyModePlugin.KokanRotationY.Value,
                 FemboyModePlugin.KokanRotationZ.Value);
+            if (FemboyModePlugin.KokanWorldHeightCorrection != null)
+                transform.position += Vector3.up *
+                    FemboyModePlugin.KokanWorldHeightCorrection.Value;
 
             SphereCollider hit = GetComponent<SphereCollider>();
             if (hit == null) return;
