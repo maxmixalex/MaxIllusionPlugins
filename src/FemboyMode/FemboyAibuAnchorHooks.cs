@@ -22,6 +22,16 @@ namespace FemboyMode
             "areaItem", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, GameObject> OwnedAnchors =
             new Dictionary<int, GameObject>();
+        private sealed class HandParentBinding
+        {
+            internal HandCtrl.LayerInfo Layer;
+            internal int Index;
+            internal Transform Original;
+            internal GameObject Proxy;
+        }
+
+        private static readonly Dictionary<int, List<HandParentBinding>> HandParents =
+            new Dictionary<int, List<HandParentBinding>>();
         private static readonly Dictionary<int, int> LastToyScanFrame =
             new Dictionary<int, int>();
 
@@ -91,7 +101,7 @@ namespace FemboyMode
                 // that was parented below it by vanilla HandCtrl.SetItem().
                 if (existing.transform.IsChildOf(_female.objBodyBone.transform))
                 {
-                    BindKokanItemParents(layers[2], existing.transform);
+                    BindKokanItemParents(__instance, layers[2], existing.transform);
                     FemboyAnchorUpdater oldUpdater =
                         existing.GetComponent<FemboyAnchorUpdater>();
                     if (oldUpdater != null)
@@ -134,7 +144,7 @@ namespace FemboyMode
                 FemboyRigResolver.FindBone(_female.objBodyBone.transform,
                     FemboyModePlugin.KokanTipBone.Value));
 
-            int changed = BindKokanItemParents(layers[2], anchor.transform);
+            int changed = BindKokanItemParents(__instance, layers[2], anchor.transform);
 
             if (changed == 0)
             {
@@ -256,30 +266,142 @@ namespace FemboyMode
                 TryRemovePhallusToy(__instance, layers[2]);
         }
 
+        /// <summary>
+        /// Keep the exact vanilla parent rotation, rig hierarchy and local
+        /// hand animation coordinate system. The old implementation set
+        /// transParents directly to the penile bone and caused the entire
+        /// hand model to float far away (RX18 screenshot). A translating
+        /// proxy UNDER each original parent retains all animation offsets.
+        /// </summary>
         private static int BindKokanItemParents(
-            Dictionary<int, HandCtrl.LayerInfo> layers, Transform anchor)
+            HandCtrl hand, Dictionary<int, HandCtrl.LayerInfo> layers,
+            Transform contactAnchor)
         {
-            int changed = 0;
-            if (layers == null || anchor == null)
+            if (hand == null || layers == null || contactAnchor == null)
                 return 0;
 
+            int handId = hand.GetInstanceID();
+            List<HandParentBinding> old;
+            if (HandParents.TryGetValue(handId, out old))
+            {
+                bool reusable = true;
+                foreach (HandParentBinding binding in old)
+                {
+                    if (binding.Proxy == null || binding.Original == null ||
+                        binding.Proxy.transform.parent != binding.Original)
+                    {
+                        reusable = false;
+                        break;
+                    }
+                }
+                if (reusable && old.Count > 0)
+                {
+                    Transform native = FindOriginalKokanContact(hand);
+                    foreach (HandParentBinding binding in old)
+                    {
+                        if (binding.Layer != null &&
+                            binding.Layer.transParents != null &&
+                            binding.Index < binding.Layer.transParents.Length)
+                            binding.Layer.transParents[binding.Index] =
+                                binding.Proxy.transform;
+
+                        FemboyKokanHandProxy updater =
+                            binding.Proxy.GetComponent<FemboyKokanHandProxy>();
+                        if (updater != null)
+                            updater.Configure(binding.Original, native,
+                                contactAnchor);
+                    }
+                    return old.Count;
+                }
+                RestoreHandParents(handId);
+            }
+
+            Transform originalContact = FindOriginalKokanContact(hand);
+            if (originalContact == null)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Original HandCtrl Kokan reference missing; hand parents " +
+                    "left in native positions to avoid detached models.");
+                return 0;
+            }
+
+            var bindings = new List<HandParentBinding>();
             foreach (HandCtrl.LayerInfo layer in layers.Values)
             {
-                if (layer == null || layer.transParents == null)
-                    continue;
-
+                if (layer == null || layer.transParents == null) continue;
                 for (int i = 0; i < layer.transParents.Length; i++)
                 {
-                    // Preserve unsupported placements. Existing rebindings
-                    // to this same anchor are idempotent.
-                    if (layer.transParents[i] == null ||
-                        layer.transParents[i] == anchor)
-                        continue;
-                    layer.transParents[i] = anchor;
-                    changed++;
+                    Transform original = layer.transParents[i];
+                    if (original == null) continue;
+
+                    GameObject proxy = new GameObject(
+                        "FemboyMode_KokanHandOffset_" + i);
+                    proxy.transform.SetParent(original, false);
+                    var updater = proxy.AddComponent<FemboyKokanHandProxy>();
+                    updater.Configure(original, originalContact, contactAnchor);
+
+                    layer.transParents[i] = proxy.transform;
+                    bindings.Add(new HandParentBinding
+                    {
+                        Layer = layer,
+                        Index = i,
+                        Original = original,
+                        Proxy = proxy
+                    });
                 }
             }
-            return changed;
+
+            if (bindings.Count > 0)
+                HandParents[handId] = bindings;
+            return bindings.Count;
+        }
+
+        private static Transform FindOriginalKokanContact(HandCtrl hand)
+        {
+            // HandCtrl.Init explicitly creates cf_d_kokan_REF at index 2
+            // and applies the vanilla 270/180 degree reference rotation.
+            // Its position is the appropriate native touch source.
+            if (hand.objReferences != null &&
+                hand.objReferences.Length > 2 &&
+                hand.objReferences[2] != null)
+                return hand.objReferences[2].transform;
+
+            ChaControl female = FemaleField == null ? null :
+                FemaleField.GetValue(hand) as ChaControl;
+            return female == null || female.objBodyBone == null ? null :
+                FemboyRigResolver.FindBone(female.objBodyBone.transform,
+                    "cf_d_kokan");
+        }
+
+        private static void RestoreHandParents(int handId)
+        {
+            List<HandParentBinding> bindings;
+            if (!HandParents.TryGetValue(handId, out bindings))
+                return;
+            HandParents.Remove(handId);
+
+            foreach (HandParentBinding binding in bindings)
+            {
+                if (binding.Layer != null &&
+                    binding.Layer.transParents != null &&
+                    binding.Index < binding.Layer.transParents.Length &&
+                    binding.Proxy != null &&
+                    binding.Layer.transParents[binding.Index] ==
+                        binding.Proxy.transform)
+                    binding.Layer.transParents[binding.Index] = binding.Original;
+
+                if (binding.Proxy == null) continue;
+                Transform parent = binding.Original;
+                // HandCtrl.SetItem parents live GameObjects here. Move them
+                // back first so destroying the proxy cannot delete items
+                // owned by vanilla HandCtrl or another plugin.
+                while (binding.Proxy.transform.childCount > 0)
+                {
+                    Transform child = binding.Proxy.transform.GetChild(0);
+                    child.SetParent(parent, false);
+                }
+                UnityEngine.Object.Destroy(binding.Proxy);
+            }
         }
 
         // The old female model hit capsule can be closer to the camera than
@@ -338,6 +460,7 @@ namespace FemboyMode
 
             int id = __instance.GetInstanceID();
             LastToyScanFrame.Remove(id);
+            RestoreHandParents(id);
             GameObject anchor;
             if (!OwnedAnchors.TryGetValue(id, out anchor))
                 return;
