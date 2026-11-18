@@ -30,15 +30,14 @@ resources.
   correction` (-0.012 Unity units by default) applied after scaled bone
   root-to-tip interpolation. The offset can be calibrated in Configuration
   Manager without editing the saved card's shape scale.
-- **Post-vibrator toy still selectable:** the original five-item
-  `aibulayer_02` ends with `p_item_vibe`. Instead of marking the hand
-  "filtered" prematurely, the plugin now checks again before
-  `HandCtrl.SetIconTexture` (the actual item wheel read), even if another
-  H-control mod adds an extra row later. A successful removal is
-  idempotent; the vibrator and earlier items are preserved. The
-  Ctrl+Shift+F10 diagnostics now list the **actual runtime** Kokan wheel,
-  including icon and object IDs, to distinguish items inserted by mods
-  outside this vanilla list.
+- **Fake phallus still selectable:** corrected the original resource
+  identification. The base game's fifth Kokan item `p_item_vibe`
+  (icon 25, IDs 7/8) **is the unwanted fake phallus**; the fourth item
+  `p_item_denma_L/R` (IDs 5/6) is the vibrator to preserve.
+  The earlier patch mistakenly kept the unwanted fifth item while
+  searching for a nonexistent sixth item. The fixed code filters the
+  exact IDs 7/8 and checks the runtime wheel again if another H-control
+  mod reconstructs its list. Ctrl+Shift+F10 logs the actual Kokan rows.
 - **Sonyu climax animation truncated:** fixed the critical voice-lifetime
   issue. Older releases discarded the heroine's climax speech command by
   setting `playVoices[_main] = -1`; `HSonyu` then saw
@@ -83,15 +82,13 @@ without modifying the real male participant's HFlag.finish.
    `0.50`. Both bone world positions already include model scaling, and
    the configured hit radius stays constant in world units. The existing
    local X/Y/Z offsets still allow fine calibration for custom meshes.
-3. **Remove only the Kokan item AFTER the vibrator.** The
-   `aibulayer_02` base entry 4 / icon 25 / `p_item_vibe`
-   (object IDs 7/8) is the vibrator and is **always retained**.
-   For modded lists with an additional phallus-shaped item after it,
-   the first following row is removed only for marked Free H characters.
-   The earlier electric-massager `denma`, vibrator and other tools
-   remain available. In the unmodified five-entry base list nothing
-   is removed. The remaining wheel entries are reindexed to prevent
-   a missing-key exception; unmarked characters remain unchanged.
+3. **Remove the fifth Kokan phallus toy.** The base game's
+   `aibulayer_02` final row 4 / icon 25 / `p_item_vibe`
+   (IDs 7/8) is the unwanted fake phallus. It is removed for
+   marked heroines only, preserving the preceding `denma` vibrator
+   (IDs 5/6), as well as hand/finger/tongue items.
+   The remaining wheel entries stay contiguous. Normal heroines
+   retain all native items.
 4. **Free H character marker.** The currently selected marked heroine
    displays an upper-left **⚥ FEMBOY** marker; it is hidden for
    ordinary characters, in other game modes and when disabled via config.
