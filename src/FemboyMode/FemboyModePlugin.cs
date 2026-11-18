@@ -145,6 +145,7 @@ namespace FemboyMode
         private void OnDestroy()
         {
             if (harmony != null) harmony.UnpatchSelf();
+            FemboyMaleAnimationHooks.ResetAll();
             Log = null;
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
