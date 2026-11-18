@@ -5,7 +5,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$GameRoot,
-    [string]$OutputZip = (Join-Path (Get-Location).Path 'Koikatsu-debug-binaries.zip'),
+    [string]$OutputZip = 'Koikatsu-debug-binaries.zip',
     [switch]$IncludeExecutables,
     [switch]$IncludeDiagnostics,
     [switch]$IncludeAssetInventory,
@@ -20,7 +20,14 @@ $ErrorActionPreference = 'Stop'
 $script:Root = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $GameRoot).Path)
 $script:Root = $script:Root.TrimEnd([char[]]@('\', '/'))
 if ($script:Root.Length -eq 2 -and $script:Root[1] -eq ':') { $script:Root += [IO.Path]::DirectorySeparatorChar }
-$destination = [IO.Path]::GetFullPath($OutputZip)
+# Resolve ZIP paths against the script's directory (not the terminal's CWD).
+# This keeps the result beside Collect-KoikatsuBinaries.ps1 even when invoked
+# with -File from a PowerShell prompt in ~ (HOME).
+if ([IO.Path]::IsPathRooted($OutputZip)) {
+    $destination = [IO.Path]::GetFullPath($OutputZip)
+} else {
+    $destination = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $OutputZip))
+}
 $staging = Join-Path ([IO.Path]::GetTempPath()) ('kk-inspect-' + [guid]::NewGuid().ToString('N'))
 $script:Staging = $staging
 $script:Seen = @{}
