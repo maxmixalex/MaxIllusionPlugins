@@ -324,13 +324,37 @@ internal static class Program
         Check(!FemboyRules.IsHoushiBodyMotionClip("M_Kiss_A"),
             "unrelated face and kiss states are not overridden");
 
+        Check(FemboyRules.IsSonyuFluidEmissionPhase("A_SS_IN_Start"),
+            "combined climax Start can emit without another recovery phase");
+        Check(FemboyRules.IsSonyuFluidEmissionPhase("A_SS_IN_Loop"),
+            "a deferred combined climax voice may arrive in its Loop");
+        Check(!FemboyRules.IsSonyuFluidEmissionPhase("A_SS_IN_A"),
+            "recovery climax-coded voice never spawns a second discharge");
+        Check(FemboyRules.IsFemaleInsertionFinishStart("M_A_SS_IN_Start"),
+            "speed-variant female initiative state is recognized");
+        var combined = new FemboySonyuCycleGate();
+        combined.NoteNativeOrgasm(15, "A_WF_IN_Start");
+        Check(combined.CanFire(15, "A_WF_IN_Start", 20f),
+            "first registered native orgasm can emit");
+        combined.MarkFired(15, "A_WF_IN_Start");
+        Check(!combined.CanFire(15, "A_WS_IN_Loop", 0.5f),
+            "one native orgasm cannot be emitted twice in its loops");
+        combined.NoteNativeOrgasm(15, "A_SS_IN_Start");
+        Check(!combined.CanFire(15, "A_SS_IN_Start", 0.2f),
+            "counter changes during same finish cannot cause immediate duplicate");
+        Check(combined.CanFire(15, "A_SS_IN_Start", 3f),
+            "a subsequent combined climax registered by HFlag re-arms even with no recovery");
+        combined.MarkFired(15, "A_SS_IN_Start");
+        Check(!combined.CanFire(15, "A_SS_IN_Start", 8f),
+            "same start code repeated without a new native counter stays deduplicated");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 138 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 148 FemboyMode rules assertions passed.");
         return 0;
     }
 }

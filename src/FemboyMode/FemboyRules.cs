@@ -101,6 +101,14 @@ namespace FemboyMode
 
         // Unlike *_WF/WS/SF/SS_IN_Loop, the ordinary *_M_IN_Loop
         // represents a new insertion cycle. Do not arm again in *_IN_A.
+        internal static bool IsSonyuFluidEmissionPhase(string state)
+        {
+            return IsSonyuFinishPhase(state) &&
+                !IsSonyuFinishRecovery(state) &&
+                (state.EndsWith("_Start", StringComparison.Ordinal) ||
+                 state.EndsWith("_Loop", StringComparison.Ordinal));
+        }
+
         internal static bool IsSonyuFinishRecovery(string state)
         {
             if (!IsSonyuFinishPhase(state)) return false;
@@ -141,12 +149,11 @@ namespace FemboyMode
 
         internal static bool IsFemaleInsertionFinishStart(string state)
         {
-            if (string.IsNullOrEmpty(state))
-                return false;
-            if (state.StartsWith("A_", StringComparison.Ordinal))
-                state = state.Substring(2);
-            return state == "WF_IN_Start" || state == "WS_IN_Start" ||
-                   state == "SF_IN_Start" || state == "SS_IN_Start";
+            if (string.IsNullOrEmpty(state)) return false;
+            return state.EndsWith("WF_IN_Start", StringComparison.Ordinal) ||
+                   state.EndsWith("WS_IN_Start", StringComparison.Ordinal) ||
+                   state.EndsWith("SF_IN_Start", StringComparison.Ordinal) ||
+                   state.EndsWith("SS_IN_Start", StringComparison.Ordinal);
         }
 
         internal static float SafeShaftFraction(float value)
@@ -297,10 +304,39 @@ namespace FemboyMode
         private bool sawRecovery;
         private string previousState;
         private int cycle;
+        private int nativeOrgasmSignals;
+        private int signalsAtLastEmission;
+
+        // HFlag.AddSonyuOrg/AddSonyuAnalOrg are game-owned orgasm counters.
+        // Record them as cycle evidence, NEVER emit here: those counters can
+        // advance while the preceding recovery A state is still active.
+        internal void NoteNativeOrgasm(int poseId, string state)
+        {
+            Observe(poseId, state);
+            nativeOrgasmSignals++;
+        }
 
         internal bool CanFire(int poseId, string state)
         {
+            return CanFire(poseId, state, float.PositiveInfinity);
+        }
+
+        internal bool CanFire(int poseId, string state, float secondsSinceLastShot)
+        {
             Observe(poseId, state);
+            // Native counters identify a new simultaneous/combined climax
+            // even when SS/WS/SF transitions skip the usual recovery state.
+            // A short refractory interval blocks duplicate hooks for a single
+            // native event; the state must still be an emission phase.
+            if (fired && nativeOrgasmSignals > signalsAtLastEmission &&
+                FemboyRules.IsSonyuFluidEmissionPhase(state) &&
+                secondsSinceLastShot >= 0.9f)
+            {
+                fired = false;
+                sawRecovery = false;
+                sawFinishPhase = false;
+                cycle++;
+            }
             return !fired;
         }
 
@@ -308,6 +344,7 @@ namespace FemboyMode
         {
             Observe(poseId, state);
             fired = true;
+            signalsAtLastEmission = nativeOrgasmSignals;
             if (FemboyRules.IsSonyuFinishPhase(state)) sawFinishPhase = true;
         }
 
@@ -321,6 +358,8 @@ namespace FemboyMode
                 sawRecovery = false;
                 previousState = null;
                 cycle = 0;
+                nativeOrgasmSignals = 0;
+                signalsAtLastEmission = 0;
             }
 
             // RX18 can transition directly from the climax recovery A
@@ -350,7 +389,9 @@ namespace FemboyMode
         {
             get { return "pose=" + pose + " fired=" + fired +
                 " sawFinish=" + sawFinishPhase +
-                " sawRecovery=" + sawRecovery + " cycle=" + cycle; }
+                " sawRecovery=" + sawRecovery + " cycle=" + cycle +
+                " nativeOrg=" + nativeOrgasmSignals +
+                " shotOrg=" + signalsAtLastEmission; }
         }
     }
 }

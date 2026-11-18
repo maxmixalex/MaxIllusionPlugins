@@ -40,13 +40,10 @@ namespace FemboyMode
                 return;
             }
 
-            // Sonyu calls AddSonyuOrg/AddSonyuAnalOrg *before* the actual
-            // WF/WS/SF/SS start state. Other Harmony patches may intercept
-            // those counters. Catch the real state transition as a fallback.
-            if (__instance is HSonyu && flags != null &&
-                (int)flags.finish >= 3 && (int)flags.finish <= 6 &&
-                FemboyRules.IsFemaleInsertionFinishStart(_nextAnimation))
-                Trigger(flags);
+            // Do not fire on Sonyu SetPlay. Multi-callback / simultaneous
+            // finish actions can enter SetPlay before the native voice Start;
+            // firing there marks the NEXT actual climax as already emitted.
+            // Sonyu emission is synchronized to consumed native VoiceProc.
         }
 
         private struct SonyuVoiceState
@@ -133,7 +130,7 @@ namespace FemboyMode
             // voice or climax state machine.
             try
             {
-                Trigger(__state.Flags);
+                Trigger(__state.Flags, true);
             }
             catch (Exception ex)
             {
@@ -147,17 +144,40 @@ namespace FemboyMode
         [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuOrg))]
         private static void OnSonyuClimax(HFlag __instance)
         {
-            Trigger(__instance);
+            NoteNativeOrgasm(__instance);
         }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(HFlag), nameof(HFlag.AddSonyuAnalOrg))]
         private static void OnSonyuAnalClimax(HFlag __instance)
         {
-            Trigger(__instance);
+            NoteNativeOrgasm(__instance);
         }
 
-        private static void Trigger(HFlag flags)
+        private static void NoteNativeOrgasm(HFlag flags)
+        {
+            if (flags == null || !flags.isFreeH ||
+                flags.mode != HFlag.EMode.sonyu)
+                return;
+            var heroine = flags.GetLeadingHeroine();
+            if (heroine == null || heroine.chaCtrl == null ||
+                !FemboyModePlugin.IsFemboy(heroine.chaCtrl))
+                return;
+            HSceneProc[] scenes = UnityEngine.Object.FindObjectsOfType<HSceneProc>();
+            for (int i = 0; i < scenes.Length; i++)
+            {
+                HSceneProc scene = scenes[i];
+                if (scene == null || !ReferenceEquals(scene.flags, flags)) continue;
+                FemboyPhysicalFluidEmitter emitter = heroine.chaCtrl.gameObject
+                    .GetComponent<FemboyPhysicalFluidEmitter>();
+                if (emitter == null)
+                    emitter = heroine.chaCtrl.gameObject.AddComponent<FemboyPhysicalFluidEmitter>();
+                emitter.NoteSonyuOrgasm(scene);
+                return;
+            }
+        }
+
+        private static void Trigger(HFlag flags, bool consumedSonyuVoice = false)
         {
             if (flags == null || !flags.isFreeH ||
                 FemboyModePlugin.EnablePhysicalFluid == null ||
@@ -182,7 +202,7 @@ namespace FemboyMode
                     character.gameObject.GetComponent<FemboyPhysicalFluidEmitter>();
                 if (emitter == null)
                     emitter = character.gameObject.AddComponent<FemboyPhysicalFluidEmitter>();
-                emitter.Fire(scene, character, MetaField);
+                emitter.Fire(scene, character, MetaField, consumedSonyuVoice);
                 return;
             }
 
@@ -314,7 +334,16 @@ namespace FemboyMode
         private int boundPoseId = -1;
         private FemboyFluidAxisFollower trajectory;
 
-        public void Fire(HSceneProc scene, ChaControl target, FieldInfo metaField)
+        internal void NoteSonyuOrgasm(HSceneProc scene)
+        {
+            if (scene == null || scene.flags == null ||
+                scene.flags.nowAnimationInfo == null) return;
+            sonyuCycle.NoteNativeOrgasm(scene.flags.nowAnimationInfo.id,
+                scene.flags.nowAnimStateName);
+        }
+
+        public void Fire(HSceneProc scene, ChaControl target, FieldInfo metaField,
+            bool consumedSonyuVoice)
         {
             if (scene == null || target == null || target.objBodyBone == null ||
                 scene.flags == null)
@@ -323,12 +352,24 @@ namespace FemboyMode
             HFlag.EMode mode = scene.flags.mode;
             int poseId = scene.flags.nowAnimationInfo == null
                 ? -1 : scene.flags.nowAnimationInfo.id;
-            // All native callbacks for a single climax converge here. The
-            // per-actor gate stays closed through *_IN_A recovery and re-arms
-            // only after the real non-climax *_M_IN_Loop transition.
-            if (mode == HFlag.EMode.sonyu &&
-                !sonyuCycle.CanFire(poseId, scene.flags.nowAnimStateName))
-                return;
+            string stateName = scene.flags.nowAnimStateName;
+            if (mode == HFlag.EMode.sonyu)
+            {
+                // Recovery voices 327/329 can carry a climax-code number
+                // while the native state is *_IN_A. Never discharge there.
+                if (!consumedSonyuVoice ||
+                    !FemboyRules.IsSonyuFluidEmissionPhase(stateName)) return;
+                if (!sonyuCycle.CanFire(poseId, stateName,
+                    Time.time - lastFired))
+                {
+                    if (FemboyModePlugin.VerboseLogging != null &&
+                        FemboyModePlugin.VerboseLogging.Value)
+                        FemboyModePlugin.LogOptionalIntegrationProblem(
+                            "Sonyu fluid deferred: state=" + stateName +
+                            " " + sonyuCycle.DiagnosticState);
+                    return;
+                }
+            }
 
             // A second legitimate climax uses a fresh native MetaballShoot.
             // Its interval index and projectile allowance can be exhausted
@@ -382,7 +423,7 @@ namespace FemboyMode
                 trajectory.AlignToModel();
             shooter.ShootMetaBallStart(false);
             if (mode == HFlag.EMode.sonyu)
-                sonyuCycle.MarkFired(poseId, scene.flags.nowAnimStateName);
+                sonyuCycle.MarkFired(poseId, stateName);
             waitingForFirstDroplet = true;
             if ((mode == HFlag.EMode.aibu && !reportedAibu) ||
                 (mode == HFlag.EMode.sonyu && !reportedSonyu))
