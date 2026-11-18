@@ -134,14 +134,14 @@ internal static class Program
         Check(FemboyRules.MaleSegmentBoneName(110) == null,
             "bone copy rejects unrelated 110");
 
-        Check(FemboyRules.IsVibratorLayer(25, 7, 8),
-            "native aibulayer_02 row 4 is the vibrator and MUST be preserved");
-        Check(!FemboyRules.IsVibratorLayer(12, 5, 6),
-            "electric massager row 3 is distinct from the vibrator");
-        Check(!FemboyRules.IsVibratorLayer(11, 4, -1),
-            "tongue item is distinct from the vibrator");
-        Check(!FemboyRules.IsVibratorLayer(25, 7, 6),
-            "partial item ID overlap is not misidentified as vibrator");
+        Check(FemboyRules.IsPhallusToyLayer(25, 7, 8),
+            "native aibulayer_02 final row is p_item_vibe fake phallus to remove");
+        Check(!FemboyRules.IsPhallusToyLayer(12, 5, 6),
+            "native denma vibrator ID5/6 must remain untouched");
+        Check(!FemboyRules.IsPhallusToyLayer(11, 4, -1),
+            "native tongue item must remain untouched");
+        Check(!FemboyRules.IsPhallusToyLayer(25, 7, 6),
+            "partial ID match is never mistaken for the fake phallus");
 
         Check(FemboyRules.SafeShaftFraction(-1f) == 0f,
             "negative shaft interpolation clamps to root");
@@ -167,18 +167,14 @@ internal static class Program
         Check(FemboyRules.CanSwapFullController(true, true),
             "both explicit toggles are necessary for experimental swap");
 
-        Check(FemboyRules.NextLayerKeyAfterVibrator(
-            new[] { 0, 1, 2, 3, 4 }, 4) == -1,
-            "base game ends at vibrator; no toy is removed");
-        Check(FemboyRules.NextLayerKeyAfterVibrator(
-            new[] { 0, 1, 2, 3, 4, 5 }, 4) == 5,
-            "remove only the item immediately following vibrator");
-        Check(FemboyRules.NextLayerKeyAfterVibrator(
-            new[] { 0, 1, 2, 3, 4, 5, 6 }, 4) == 5,
-            "post-vibrator item is correctly selected with extra mod rows");
-        Check(FemboyRules.NextLayerKeyAfterVibrator(
-            new[] { 0, 1, 2, 3, 4, 7 }, 4) == 7,
-            "select next actual key even if IDs have gaps");
+        Check(!FemboyRules.IsPhallusToyLayer(25, 5, 6),
+            "vibrator object pair cannot be removed even with phallus icon");
+        Check(!FemboyRules.IsPhallusToyLayer(12, 7, 8),
+            "wrong icon cannot identify phallus toy");
+        Check(!FemboyRules.IsPhallusToyLayer(25, 8, 7),
+            "left/right IDs are not interchangeable");
+        Check(!FemboyRules.IsPhallusToyLayer(25, -1, -1),
+            "missing entries cannot be falsely identified as toy");
 
         // Physical fluid emitted drop count (first shot + intervals).
         Check(FemboyRules.FluidIntervalCount(9, 1f) == 9,
