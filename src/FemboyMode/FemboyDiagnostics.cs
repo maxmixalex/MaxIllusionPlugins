@@ -93,7 +93,8 @@ namespace FemboyMode
             log.LogInfo("[FemboyMode diagnostics] " + label +
                 ": sex=" + c.sex + " marked=" + FemboyModePlugin.IsFemboy(c) +
                 " objBodyBone=" + (c.objBodyBone != null) +
-                " animBody=" + (c.animBody != null));
+                " animBody=" + (c.animBody != null) +
+                " maleGeometryVisible=" + (c.fileStatus != null && c.fileStatus.visibleSonAlways));
 
             if (c.chaFile != null)
             {
@@ -146,6 +147,10 @@ namespace FemboyMode
                         "Kokan action anchor", FemboyModePlugin.KokanAnchorBone);
                 }
             }
+
+            if (c.animBody != null && c.animBody.runtimeAnimatorController == null)
+                log.LogInfo("[FemboyMode diagnostics] " + label +
+                    " animatorController=(none for current pose)");
 
             if (c.animBody != null && c.animBody.runtimeAnimatorController != null)
             {
