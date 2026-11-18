@@ -316,9 +316,20 @@ namespace FemboyMode
 
         private void Update()
         {
-            if (shooter == null || Time.time > activeUntil)
+            if (shooter == null) return;
+
+            if (owner == null || owner.flags == null ||
+                !owner.flags.isFreeH || character == null ||
+                !FemboyModePlugin.IsFemboy(character) ||
+                FemboyModePlugin.EnablePhysicalFluid == null ||
+                !FemboyModePlugin.EnablePhysicalFluid.Value)
+            {
+                Cleanup();
                 return;
-            shooter.ShootMetaBall();
+            }
+
+            if (Time.time <= activeUntil)
+                shooter.ShootMetaBall();
         }
 
         private void OnDestroy()
