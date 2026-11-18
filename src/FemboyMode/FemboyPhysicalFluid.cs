@@ -364,8 +364,15 @@ namespace FemboyMode
             {
                 // Recovery voices 327/329 can carry a climax-code number
                 // while the native state is *_IN_A. Never discharge there.
+                // A_OLoop is a real HCtrl intermediate state. Observe it
+                // before dismissing its 318/319 voice so the next explicit
+                // simultaneous-climax Start gets a new emission opportunity.
                 if (!consumedSonyuVoice ||
-                    !FemboyRules.IsSonyuFluidEmissionPhase(stateName)) return;
+                    !FemboyRules.IsSonyuFluidEmissionPhase(stateName))
+                {
+                    sonyuCycle.Observe(poseId, stateName);
+                    return;
+                }
                 if (!sonyuCycle.CanFire(poseId, stateName,
                     Time.time - lastFired))
                 {
@@ -383,9 +390,6 @@ namespace FemboyMode
             // after the first shot even when ShootMetaBallStart is invoked.
             bool freshSonyuCycle = mode == HFlag.EMode.sonyu &&
                 lastFired > -900f;
-            if (freshSonyuCycle && Time.time - lastFired < 0.9f)
-                return;
-
             // Original HSceneProc.ChangeAnimator swaps the native Metaball
             // preset and even its host when the scene changes from Aibu to
             // Sonyu or to another pose. Reusing the old Aibu shooter caused
@@ -418,7 +422,10 @@ namespace FemboyMode
                 warnedUnavailable = false;
             }
 
-            if (Time.time - lastFired < 0.9f ||
+            // Sonyu has an explicit per-actor cycle gate. A global 0.9s
+            // cooldown incorrectly suppresses a valid HCtrl pre -> climax
+            // transition if the player clicks the two actions quickly.
+            if ((mode != HFlag.EMode.sonyu && Time.time - lastFired < 0.9f) ||
                 axis == null || shooter == null || shooter.aInterval == null)
                 return;
 

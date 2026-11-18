@@ -128,6 +128,18 @@ namespace FemboyMode
             return state.EndsWith("_A", StringComparison.Ordinal);
         }
 
+        // HCtrl's "before simultaneous climax" state is A_OLoop. It
+        // separates two finish requests without updating native orgasm
+        // counters; firing while here would be premature.
+        internal static bool IsSonyuPreCombinedFinish(string state)
+        {
+            return !string.IsNullOrEmpty(state) &&
+                (state == "OLoop" ||
+                 state.EndsWith("_OLoop", StringComparison.Ordinal) ||
+                 state == "OStart" ||
+                 state.EndsWith("_OStart", StringComparison.Ordinal));
+        }
+
         internal static bool IsSonyuOrdinaryMotionLoop(string state)
         {
             if (string.IsNullOrEmpty(state) || IsSonyuFinishPhase(state))
@@ -316,6 +328,7 @@ namespace FemboyMode
         private bool fired;
         private bool sawFinishPhase;
         private bool sawRecovery;
+        private bool sawPreCombined;
         private string previousState;
         private int cycle;
         private int nativeOrgasmSignals;
@@ -370,6 +383,7 @@ namespace FemboyMode
                 fired = false;
                 sawFinishPhase = false;
                 sawRecovery = false;
+                sawPreCombined = false;
                 previousState = null;
                 cycle = 0;
                 nativeOrgasmSignals = 0;
@@ -380,18 +394,22 @@ namespace FemboyMode
             // into the next climax Start, without ever evaluating *_M_IN_Loop.
             // An observed recovery -> *new* start edge is therefore just as
             // authoritative as returning to ordinary insertion movement.
-            bool followingRecovery = fired && sawRecovery &&
-                FemboyRules.IsFemaleInsertionFinishStart(state) &&
+            bool newFinishStart = FemboyRules.IsFemaleInsertionFinishStart(state) &&
                 !string.Equals(previousState, state, StringComparison.Ordinal);
-            if (fired && sawFinishPhase &&
+            bool followingRecovery = fired && sawRecovery && newFinishStart;
+            bool followingHCtrlPre = fired && sawPreCombined && newFinishStart;
+            if (fired && (sawFinishPhase || sawPreCombined) &&
                 (FemboyRules.IsSonyuOrdinaryMotionLoop(state) ||
-                 followingRecovery))
+                 followingRecovery || followingHCtrlPre))
             {
                 fired = false;
                 sawFinishPhase = false;
                 sawRecovery = false;
+                sawPreCombined = false;
                 cycle++;
             }
+            if (fired && FemboyRules.IsSonyuPreCombinedFinish(state))
+                sawPreCombined = true;
             if (FemboyRules.IsSonyuFinishPhase(state))
                 sawFinishPhase = true;
             if (FemboyRules.IsSonyuFinishRecovery(state))
@@ -403,7 +421,8 @@ namespace FemboyMode
         {
             get { return "pose=" + pose + " fired=" + fired +
                 " sawFinish=" + sawFinishPhase +
-                " sawRecovery=" + sawRecovery + " cycle=" + cycle +
+                " sawRecovery=" + sawRecovery +
+                " sawHCtrlPre=" + sawPreCombined + " cycle=" + cycle +
                 " nativeOrg=" + nativeOrgasmSignals +
                 " shotOrg=" + signalsAtLastEmission; }
         }

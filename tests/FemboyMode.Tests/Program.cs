@@ -365,13 +365,28 @@ internal static class Program
         Check(!FemboyRules.IsSonyuFluidEmissionPhase("A_WS_IN_A"),
             "recovery cue remains ineligible even with a combined voice code");
 
+        Check(FemboyRules.IsSonyuPreCombinedFinish("A_OLoop"),
+            "HCtrl pre-simultaneous-climax A_OLoop is an explicit phase boundary");
+        Check(!FemboyRules.IsSonyuFluidEmissionPhase("A_OLoop"),
+            "HCtrl pre-climax voice alone never causes an early discharge");
+        var hctrl = new FemboySonyuCycleGate();
+        hctrl.MarkFired(15, "A_SF_IN_Start");
+        hctrl.Observe(15, "A_OLoop");
+        Check(hctrl.CanFire(15, "A_SS_IN_Start", 0.1f),
+            "HCtrl pre -> simultaneous climax rearms with no new native count");
+        hctrl.MarkFired(15, "A_SS_IN_Start");
+        Check(!hctrl.CanFire(15, "A_SS_IN_Start", 1.2f),
+            "native voice callbacks in the same simultaneous climax do not rearm");
+        Check(!FemboyRules.IsSonyuPreCombinedFinish("A_WS_IN_A"),
+            "recovery A does not masquerade as HCtrl pre-climax");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 155 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 160 FemboyMode rules assertions passed.");
         return 0;
     }
 }
