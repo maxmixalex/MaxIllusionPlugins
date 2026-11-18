@@ -1,4 +1,4 @@
-# Femboy Mode for Koikatsu — v0.3.3
+# Femboy Mode for Koikatsu — v0.3.4
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
@@ -17,6 +17,14 @@ Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Fr
 
 The inspected RX18 installation contains the actual Unity transform
 `cm_J_dan100_00`, whereas older default config used `cm_j_dan100`.
+
+**Native ending effect uses a different bone.** From the user-supplied
+`abdata/h/list/00_00.unity3d` TextAsset `h_particle`, particle ID 0
+(`LiquidSiru`) belongs to `cm_J_dan109_00`. It is distinct from
+the `cm_J_dan100_00` interaction/geometry root. Version 0.3.4 uses
+its own `Male finish FX / Target bone` setting with the native
+particle parent as default, retaining Kokan and `cf_d_kokan` fallbacks
+for alternate body rigs.
 Before v0.3.3 this strict name mismatch silently disabled the
 model-specific bone scale and forced Aibu / finish FX back to the
 female Kokan fallback.
@@ -49,6 +57,7 @@ The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most 
 | Aibu alignment | Target bone | `cm_j_dan100` |
 | Aibu alignment | Target hit radius | `0.05` |
 | Aibu alignment | Offset X/Y/Z, Rotation X/Y/Z | 0 |
+| Male finish FX | Target bone | `cm_J_dan109_00` |
 | Male finish FX | Offset X/Y/Z, Rotation X/Y/Z | 0 |
 | Debug | Verbose logs | false |
 
@@ -90,6 +99,8 @@ It creates `Koikatsu-debug-binaries.zip` in the current directory, containing
 the original game/Unity assemblies, BepInEx/Harmony DLLs and a *filtered* set
 of relevant plugin DLLs plus a version manifest. By default the collector does
 **not** include character cards, game asset bundles, save files, configs or logs.
+
+**Output path:** The script always places the generated ZIP **beside the `.ps1` file**, not under the terminal's home directory. A relative `-OutputZip` is resolved beside the script; an absolute `-OutputZip` is honored unchanged. CI runs a regression test from a different working directory to verify both the default and explicit relative paths.
 It performs no network requests. Review the archive before sharing it privately.
 
 In either female Maker or a vanilla Free H scene, press **Ctrl + Shift + F10**
