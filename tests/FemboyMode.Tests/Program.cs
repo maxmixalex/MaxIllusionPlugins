@@ -134,14 +134,14 @@ internal static class Program
         Check(FemboyRules.MaleSegmentBoneName(110) == null,
             "bone copy rejects unrelated 110");
 
-        Check(FemboyRules.IsPhallusToyLayer(25, 7, 8),
-            "native aibulayer_02 row 4 after massager is the phallus-shaped item");
-        Check(!FemboyRules.IsPhallusToyLayer(12, 5, 6),
-            "native electric massager row 3 remains enabled");
-        Check(!FemboyRules.IsPhallusToyLayer(11, 4, -1),
-            "tongue item is not removed");
-        Check(!FemboyRules.IsPhallusToyLayer(25, 7, 6),
-            "unrelated custom item with partial ID overlap is preserved");
+        Check(FemboyRules.IsVibratorLayer(25, 7, 8),
+            "native aibulayer_02 row 4 is the vibrator and MUST be preserved");
+        Check(!FemboyRules.IsVibratorLayer(12, 5, 6),
+            "electric massager row 3 is distinct from the vibrator");
+        Check(!FemboyRules.IsVibratorLayer(11, 4, -1),
+            "tongue item is distinct from the vibrator");
+        Check(!FemboyRules.IsVibratorLayer(25, 7, 6),
+            "partial item ID overlap is not misidentified as vibrator");
 
         Check(FemboyRules.SafeShaftFraction(-1f) == 0f,
             "negative shaft interpolation clamps to root");
@@ -167,13 +167,26 @@ internal static class Program
         Check(FemboyRules.CanSwapFullController(true, true),
             "both explicit toggles are necessary for experimental swap");
 
+        Check(FemboyRules.NextLayerKeyAfterVibrator(
+            new[] { 0, 1, 2, 3, 4 }, 4) == -1,
+            "base game ends at vibrator; no toy is removed");
+        Check(FemboyRules.NextLayerKeyAfterVibrator(
+            new[] { 0, 1, 2, 3, 4, 5 }, 4) == 5,
+            "remove only the item immediately following vibrator");
+        Check(FemboyRules.NextLayerKeyAfterVibrator(
+            new[] { 0, 1, 2, 3, 4, 5, 6 }, 4) == 5,
+            "post-vibrator item is correctly selected with extra mod rows");
+        Check(FemboyRules.NextLayerKeyAfterVibrator(
+            new[] { 0, 1, 2, 3, 4, 7 }, 4) == 7,
+            "select next actual key even if IDs have gaps");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 69 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 73 FemboyMode rules assertions passed.");
         return 0;
     }
 }
