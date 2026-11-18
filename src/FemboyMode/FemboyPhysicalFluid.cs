@@ -49,18 +49,33 @@ namespace FemboyMode
                 Trigger(flags);
         }
 
-        // The RX18 log proves Sonyu voice code 326 fired for a marked
-        // heroine in A_SF_IN_Loop, but none of the prior Sonyu fluid
-        // callbacks reached the emitter: its status remained mode=aibu.
-        // HVoiceCtrl.VoiceProc consumes the native 325..330 code exactly
-        // once at climax. Use that verified actor-local event as an
-        // independent fallback, including female-initiative (+38) voices.
-        // This is intentionally BEFORE VoiceProc clears playVoices[].
+        private struct SonyuVoiceState
+        {
+            internal HFlag Flags;
+            internal ChaControl Actor;
+            internal int Channel;
+            internal int Code;
+            internal bool IsClimax;
+        }
+
+        // The RX18 log proves native Sonyu voice code 326 was processed
+        // while the physical fluid emitter was still bound to Aibu.
+        // The previous HFlag/SetPlay callbacks were not sufficient in
+        // this particular installed H-mod combination.
+        //
+        // Capture the pending native voice code BEFORE VoiceProc consumes
+        // it, but trigger AFTER consumption. VoiceProc can wait and return
+        // without consuming a code; a naive prefix would emit on EVERY
+        // waiting frame. The Postfix only emits once the original method
+        // changes the pending code (normally back to -1).
         [HarmonyPrefix]
         [HarmonyPatch(typeof(HVoiceCtrl), "VoiceProc")]
-        private static void OnSonyuClimaxVoice(
-            HVoiceCtrl __instance, ChaControl _female, int _main)
+        private static void CaptureSonyuClimaxVoice(
+            HVoiceCtrl __instance, ChaControl _female, int _main,
+            out SonyuVoiceState __state)
         {
+            __state = new SonyuVoiceState();
+
             if (__instance == null || _female == null ||
                 _main < 0 || _main > 1)
                 return;
@@ -76,30 +91,53 @@ namespace FemboyMode
             if (!FemboyRules.IsSonyuClimaxStartVoice(code))
                 return;
 
-            // For multi-heroines, never apply the selected heroine's
-            // finish to her partner's voice channel.
             var leading = flags.GetLeadingHeroine();
             if (leading == null || !ReferenceEquals(leading.chaCtrl, _female) ||
                 !FemboyModePlugin.IsFemboy(_female))
                 return;
 
+            __state.Flags = flags;
+            __state.Actor = _female;
+            __state.Channel = _main;
+            __state.Code = code;
+            __state.IsClimax = true;
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HVoiceCtrl), "VoiceProc")]
+        private static void AfterSonyuClimaxVoice(
+            SonyuVoiceState __state)
+        {
+            if (!__state.IsClimax || __state.Flags == null ||
+                __state.Actor == null || __state.Flags.voice == null ||
+                __state.Flags.voice.playVoices == null ||
+                __state.Flags.voice.playVoices.Length <= __state.Channel)
+                return;
+
+            // VoiceLinkProc / voice-overwrite deferrals keep the original
+            // pending code unchanged. Fire only after the native event
+            // has truly been accepted or exhausted.
+            if (__state.Flags.voice.playVoices[__state.Channel] == __state.Code ||
+                !FemboyModePlugin.IsFemboy(__state.Actor))
+                return;
+
             if (FemboyModePlugin.VerboseLogging != null &&
                 FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Sonyu climax voice fallback fired for selected actor: " +
-                    "code=" + code + " channel=" + _main +
-                    " state=" + flags.nowAnimStateName);
+                    "Sonyu native climax event consumed: code=" +
+                    __state.Code + " channel=" + __state.Channel +
+                    " state=" + __state.Flags.nowAnimStateName);
 
-            // Never let an optional fluid effect prevent the game's own
-            // heroine voice / climax state from advancing.
+            // Never let an optional fluid emitter break the game's
+            // voice or climax state machine.
             try
             {
-                Trigger(flags);
+                Trigger(__state.Flags);
             }
             catch (Exception ex)
             {
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Sonyu voice fluid fallback failed safely: " +
+                    "Sonyu climax fluid fallback failed safely: " +
                     ex.GetType().Name + ": " + ex.Message);
             }
         }
