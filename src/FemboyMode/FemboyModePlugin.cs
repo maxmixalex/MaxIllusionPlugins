@@ -33,6 +33,7 @@ namespace FemboyMode
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
+        internal static ConfigEntry<bool> AllowExperimentalControllerSwap;
         internal static ConfigEntry<bool> EnableMaleBonePoseFollow;
         internal static ConfigEntry<bool> SuppressFemaleClimaxVoice;
         internal static ConfigEntry<string> MaleFinishBone;
@@ -85,6 +86,8 @@ namespace FemboyMode
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
             EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
                 "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
+            AllowExperimentalControllerSwap = Config.Bind("Free H", "Allow experimental full-controller swap", false,
+                "SAFETY: off by default. Existing full-controller retargeting can truncate the heroine's finish sequence. Leave this disabled until the exact pose transition has been verified; the add-on bone animation works independently.");
             EnableMaleBonePoseFollow = Config.Bind("Free H", "Copy native male geometry climax motion", true,
                 "For Generic rigs or imported male geometry, copy only matching native cm_J_dan100..109 bone rotations from the animated male to the marked actor during heroine climax. Keep the female full-body animation, bone positions/scales and all unmarked characters unchanged.");
             SuppressFemaleClimaxVoice = Config.Bind("Free H", "Suppress female climax voice", true,
