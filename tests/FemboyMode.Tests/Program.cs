@@ -438,13 +438,20 @@ internal static class Program
               "khh_f_60", "male/a", "khh_m_60"),
             "kPlug asset path differences cannot be collapsed with vanilla donors");
 
+        Check(FemboyRules.UseNativeUnderwearContact(false),
+            "underwear still worn: use original cloth-covered Kokan contact");
+        Check(!FemboyRules.UseNativeUnderwearContact(true),
+            "underwear removed: use male geometry for Kokan hand placement");
+        Check(FemboyRules.IsReversedHoushiName("[反转] 单手口交"),
+            "oral reversal uses the marked native Houshi action");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 182 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 185 FemboyMode rules assertions passed.");
         return 0;
     }
 }

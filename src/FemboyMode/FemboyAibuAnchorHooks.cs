@@ -471,7 +471,8 @@ namespace FemboyMode
             // While panties still cover the groin, keep the native clothing
             // hit target and do not select the hidden penile collider.
             ChaControl wearer = GetMarkedHandOwner(__instance);
-            if (wearer != null && !wearer.notShorts) return;
+            if (wearer != null &&
+                FemboyRules.UseNativeUnderwearContact(wearer.notShorts)) return;
 
             SphereCollider collider = anchor.GetComponent<SphereCollider>();
             if (collider == null || !collider.enabled || __instance.nowMES == null ||
@@ -574,7 +575,8 @@ namespace FemboyMode
             // notShorts is Koikatsu's live visual underwear status. When
             // panties are worn, original HandCtrl parents already target
             // the cloth-covered crotch; any penile displacement floats.
-            bool exposed = wearer == null || wearer.notShorts;
+            bool exposed = wearer == null ||
+                !FemboyRules.UseNativeUnderwearContact(wearer.notShorts);
             if (lastExposed != exposed)
             {
                 lastExposed = exposed;
@@ -664,7 +666,8 @@ namespace FemboyMode
 
             hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
                           FemboyModePlugin.EnableKokanAnchor.Value &&
-                          (wearer == null || wearer.notShorts);
+                          (wearer == null ||
+                           !FemboyRules.UseNativeUnderwearContact(wearer.notShorts));
 
             // A SphereCollider's world-space radius is multiplied by the
             // parent transform's largest lossy-scale component. Normalize

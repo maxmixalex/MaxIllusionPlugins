@@ -164,6 +164,14 @@ namespace FemboyMode
                 (maleController ?? "");
         }
 
+        // Koikatsu's ChaControl.notShorts reflects whether the underwear
+        // surface is moved away. HandCtrl should remain on its native cloth
+        // contact while false; only exposed geometry uses the male anchor.
+        internal static bool UseNativeUnderwearContact(bool notShorts)
+        {
+            return !notShorts;
+        }
+
         internal static bool IsReversedHoushiName(string name)
         {
             return !string.IsNullOrEmpty(name) &&
