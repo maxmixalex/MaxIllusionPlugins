@@ -312,6 +312,20 @@ namespace FemboyMode
                             break;
                         }
                     }
+
+                    // Another H-control mod can add item layers after our
+                    // first binding. Do not forget to proxy those additions.
+                    int currentSlots = 0;
+                    foreach (HandCtrl.LayerInfo layer in layers.Values)
+                    {
+                        if (layer == null || layer.transParents == null)
+                            continue;
+                        for (int i = 0; i < layer.transParents.Length; i++)
+                            if (layer.transParents[i] != null)
+                                currentSlots++;
+                    }
+                    if (currentSlots != old.Count)
+                        reusable = false;
                 }
                 if (reusable && old.Count > 0)
                 {
