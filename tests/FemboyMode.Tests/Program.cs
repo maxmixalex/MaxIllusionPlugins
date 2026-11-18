@@ -189,8 +189,10 @@ internal static class Program
             "amount 0.5 halves physical droplet count");
         Check(FemboyRules.FluidIntervalCount(0, 1f) == 1,
             "empty native preset still emits two droplets");
-        Check(FemboyRules.FluidIntervalCount(9, 50f) == 79,
-            "excessive amount cannot create more than 80 droplets");
+        Check(FemboyRules.FluidIntervalCount(9, 50f) == 49,
+            "amount is capped at 5x for ten original droplets");
+        Check(FemboyRules.FluidIntervalCount(30, 5f) == 79,
+            "large presets are capped to at most 80 droplets");
         Check(FemboyRules.FluidIntervalCount(9, float.NaN) == 9,
             "malformed amount returns to 1.0");
         Check(FemboyRules.IsFemaleInsertionFinishStart("A_WS_IN_Start"),
@@ -212,7 +214,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 85 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 86 FemboyMode rules assertions passed.");
         return 0;
     }
 }
