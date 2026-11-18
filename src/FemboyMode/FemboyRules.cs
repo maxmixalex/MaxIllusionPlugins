@@ -105,6 +105,16 @@ namespace FemboyMode
         }
 
         /// <summary>
+        /// Native male appendage rig group. Keep the pose follower scoped to
+        /// these bones: the partner's whole-body motion is not copied.
+        /// </summary>
+        internal static string MaleSegmentBoneName(int index)
+        {
+            return index < 100 || index > 109
+                ? null : "cm_J_dan" + index.ToString() + "_00";
+        }
+
+        /// <summary>
         /// Deduplicate particle FX for the currently active heroine, not
         /// for the shared HFlag instance alone.
         /// </summary>
