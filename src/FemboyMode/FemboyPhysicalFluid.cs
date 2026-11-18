@@ -223,7 +223,8 @@ namespace FemboyMode
             bool changedPose = !ReferenceEquals(owner, scene) ||
                 !ReferenceEquals(character, target) ||
                 shooter == null || axis == null || host == null ||
-                boundMode != mode || boundPoseId != poseId;
+                FemboyRules.NeedsNewFluidPreset((int)boundMode, boundPoseId,
+                    (int)mode, poseId);
             if (changedPose)
             {
                 Cleanup();
