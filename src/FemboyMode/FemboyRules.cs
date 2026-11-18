@@ -74,6 +74,16 @@ namespace FemboyMode
                    (code >= 363 && code <= 368);
         }
 
+        // HVoiceCtrl.VoiceProc can defer a voice for many Update frames.
+        // Avoid fluid emission until the original method has actually
+        // consumed its pending climax cue.
+        internal static bool ShouldEmitFromConsumedSonyuVoice(
+            int codeBefore, int codeAfter)
+        {
+            return IsSonyuClimaxStartVoice(codeBefore) &&
+                   codeAfter != codeBefore;
+        }
+
         internal static bool IsFemaleInsertionFinishStart(string state)
         {
             if (string.IsNullOrEmpty(state))
