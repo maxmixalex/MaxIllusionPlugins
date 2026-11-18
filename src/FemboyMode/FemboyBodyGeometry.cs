@@ -23,6 +23,16 @@ namespace FemboyMode
                 ApplyMaleGeometry();
         }
 
+        // Apply after animation and native body-shape updates. In Free H,
+        // KKABMX/UncensorSelector and pose loading can write bone scale
+        // after the character card's OnReload callback.
+        private void LateUpdate()
+        {
+            if (IsFemboy && FemboyModePlugin.EnableMaleBoneScale != null &&
+                FemboyModePlugin.EnableMaleBoneScale.Value)
+                ApplyMaleGeometry();
+        }
+
         protected override void OnDestroy()
         {
             RestoreMaleGeometry();
@@ -77,10 +87,15 @@ namespace FemboyMode
                     return;
             }
 
-            // Another body-mod plugin may replace this bone's scale after
-            // we write it. Never overwrite that newer external value.
+            // A scene load or KKABMX may replace the base scale each frame.
+            // Rebase onto that *current external scale*, then apply only our
+            // stored per-card multiplier. Never compound our own previous
+            // multiplier; the resulting baseline is restored when disabled.
             if (!SameScale(scaledBone.localScale, lastWrittenScale))
-                return;
+            {
+                originalBoneScale = scaledBone.localScale;
+                appliedX = appliedY = appliedZ = 1f;
+            }
 
             if (Mathf.Approximately(appliedX, geometryScaleX) &&
                 Mathf.Approximately(appliedY, geometryScaleY) &&
