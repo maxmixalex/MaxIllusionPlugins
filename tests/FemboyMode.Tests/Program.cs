@@ -223,13 +223,22 @@ internal static class Program
         Check(FemboyRules.BallisticHorizontalFraction(90f) > 0.49f,
             "elevation above 60 degrees cannot silently become vertical freefall");
 
+        Check(!FemboyRules.NeedsNewFluidPreset(0, 9, 0, 9),
+            "same Aibu scene and pose reuses a physical fluid source");
+        Check(FemboyRules.NeedsNewFluidPreset(0, 9, 2, 9),
+            "switching Aibu to Sonyu rebuilds the native Metaball source");
+        Check(FemboyRules.NeedsNewFluidPreset(2, 9, 2, 14),
+            "switching Sonyu poses rebuilds the native Metaball source");
+        Check(!FemboyRules.NeedsNewFluidPreset(2, 14, 2, 14),
+            "same Sonyu pose keeps active emission without restarting");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 93 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 97 FemboyMode rules assertions passed.");
         return 0;
     }
 }
