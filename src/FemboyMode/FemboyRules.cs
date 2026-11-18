@@ -32,6 +32,36 @@ namespace FemboyMode
         }
 
         /// <summary>
+        /// Resolve a requested bone against actual installed rig names.
+        /// Example: cm_j_dan100 -> cm_J_dan100_00 (observed in RX18).
+        /// Rank: 0 exact, 1 case-insensitive, 2 exact base + _00,
+        /// 3 exact base + other numeric suffix, -1 incompatible.
+        /// Avoid loose prefix matching (100 must not match 101).
+        /// </summary>
+        internal static int BoneMatchRank(string requested, string actual)
+        {
+            if (string.IsNullOrEmpty(requested) || string.IsNullOrEmpty(actual))
+                return -1;
+
+            if (string.Equals(requested, actual, StringComparison.Ordinal))
+                return 0;
+            if (string.Equals(requested, actual, StringComparison.OrdinalIgnoreCase))
+                return 1;
+
+            if (actual.Length <= requested.Length + 1 ||
+                !actual.StartsWith(requested, StringComparison.OrdinalIgnoreCase) ||
+                actual[requested.Length] != '_')
+                return -1;
+
+            string suffix = actual.Substring(requested.Length + 1);
+            for (int i = 0; i < suffix.Length; i++)
+                if (suffix[i] < '0' || suffix[i] > '9')
+                    return -1;
+
+            return suffix == "00" ? 2 : 3;
+        }
+
+        /// <summary>
         /// Deduplicate particle FX for the currently active heroine, not
         /// for the shared HFlag instance alone.
         /// </summary>
