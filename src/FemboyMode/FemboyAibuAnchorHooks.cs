@@ -49,7 +49,12 @@ namespace FemboyMode
             ChaControl _female = FemaleField.GetValue(__instance) as ChaControl;
             if (_female == null || _female.objBodyBone == null ||
                 !FemboyModePlugin.IsFemboy(_female))
+            {
+                // HandCtrl may be reused after switching heroines; restore
+                // original item parents before an ordinary card is shown.
+                ResetHand(__instance.GetInstanceID());
                 return;
+            }
 
             if (AreaLayersField == null)
             {
@@ -296,6 +301,20 @@ namespace FemboyMode
                 }
                 if (reusable && old.Count > 0)
                 {
+                    // Re-check after HSceneProc.ChangeAnimator: HandCtrl.Init
+                    // replaces the LayerInfo parent arrays on pose reload.
+                    var present = new HashSet<HandCtrl.LayerInfo>(layers.Values);
+                    foreach (HandParentBinding binding in old)
+                    {
+                        if (!present.Contains(binding.Layer))
+                        {
+                            reusable = false;
+                            break;
+                        }
+                    }
+                }
+                if (reusable && old.Count > 0)
+                {
                     Transform native = FindOriginalKokanContact(hand);
                     foreach (HandParentBinding binding in old)
                     {
@@ -458,15 +477,30 @@ namespace FemboyMode
         {
             if (__instance == null) return;
 
-            int id = __instance.GetInstanceID();
-            LastToyScanFrame.Remove(id);
-            RestoreHandParents(id);
-            GameObject anchor;
-            if (!OwnedAnchors.TryGetValue(id, out anchor))
-                return;
+            ResetHand(__instance.GetInstanceID());
+        }
 
-            OwnedAnchors.Remove(id);
-            if (anchor != null) UnityEngine.Object.Destroy(anchor);
+        private static void ResetHand(int handId)
+        {
+            LastToyScanFrame.Remove(handId);
+            RestoreHandParents(handId);
+            GameObject anchor;
+            if (!OwnedAnchors.TryGetValue(handId, out anchor))
+                return;
+            OwnedAnchors.Remove(handId);
+            if (anchor != null)
+                UnityEngine.Object.Destroy(anchor);
+        }
+
+        internal static void ResetAll()
+        {
+            var ids = new List<int>(HandParents.Keys);
+            foreach (int id in ids)
+                ResetHand(id);
+            ids = new List<int>(OwnedAnchors.Keys);
+            foreach (int id in ids)
+                ResetHand(id);
+            LastToyScanFrame.Clear();
         }
 
     }
