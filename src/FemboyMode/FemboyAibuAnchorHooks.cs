@@ -24,6 +24,8 @@ namespace FemboyMode
             new Dictionary<int, GameObject>();
         private static readonly HashSet<int> ToyFilterAppliedHands =
             new HashSet<int>();
+        private static readonly Dictionary<int, int> LastToyScanFrame =
+            new Dictionary<int, int>();
 
         // This runs after all body/uncensor objects have been loaded, but
         // before vanilla collects its hit colliders. HandCtrl.Init is too early:
@@ -52,15 +54,10 @@ namespace FemboyMode
             if (layers == null || layers.Length <= 2 || layers[2] == null)
                 return;
 
-            if (FemboyModePlugin.DisablePhallusToy != null &&
-                FemboyModePlugin.DisablePhallusToy.Value)
-            {
-                int handId = __instance.GetInstanceID();
-                // InitHitReactionCollider may be called again after a pose
-                // change. Do not remove a different next item on each call.
-                if (ToyFilterAppliedHands.Add(handId))
-                    RemovePhallusToy(__instance, layers[2]);
-            }
+            // The base game's aibulayer_02 ends with the vibrator.
+            // Some mods append the following toy *after* this setup call.
+            // Only mark filtering complete when a row was actually removed.
+            TryRemovePhallusToy(__instance, layers[2]);
 
             if (FemboyModePlugin.EnableKokanAnchor == null ||
                 !FemboyModePlugin.EnableKokanAnchor.Value)
@@ -152,7 +149,7 @@ namespace FemboyMode
                 FemboyModePlugin.LogAibuBound(boneName + " -> " + bone.name, changed);
         }
 
-        private static void RemovePhallusToy(
+        private static bool RemovePhallusToy(
             HandCtrl hand, Dictionary<int, HandCtrl.LayerInfo> kokanLayers)
         {
             var keys = new List<int>(kokanLayers.Keys);
@@ -180,7 +177,7 @@ namespace FemboyMode
             int skipKey = FemboyRules.NextLayerKeyAfterVibrator(
                 keys.ToArray(), vibratorKey);
             if (skipKey < 0)
-                return; // No extra toy installed: leave all five base rows.
+                return false; // No extra toy installed: check again if a mod adds one.
 
             int[] selected = SelectedItemsField == null ? null :
                 SelectedItemsField.GetValue(hand) as int[];
@@ -220,6 +217,56 @@ namespace FemboyMode
                 FemboyModePlugin.LogOptionalIntegrationProblem(
                     "Removed only the post-vibrator Kokan item " + skipKey +
                     "; vibrator row " + vibratorKey + " retained.");
+            return true;
+        }
+
+        private static void TryRemovePhallusToy(
+            HandCtrl hand, Dictionary<int, HandCtrl.LayerInfo> layers)
+        {
+            if (hand == null || layers == null ||
+                FemboyModePlugin.DisablePhallusToy == null ||
+                !FemboyModePlugin.DisablePhallusToy.Value)
+                return;
+
+            int id = hand.GetInstanceID();
+            if (ToyFilterAppliedHands.Contains(id))
+                return;
+
+            int frame;
+            if (LastToyScanFrame.TryGetValue(id, out frame) &&
+                Time.frameCount - frame < 20)
+                return;
+            LastToyScanFrame[id] = Time.frameCount;
+
+            if (RemovePhallusToy(hand, layers))
+            {
+                ToyFilterAppliedHands.Add(id);
+                LastToyScanFrame.Remove(id);
+            }
+        }
+
+        // A late-loaded H-control mod can append its extra toy after
+        // InitHitReactionCollider. Run again just before the vanilla wheel
+        // reads aibulayer_02, without repeatedly deleting new items.
+        [HarmonyPrefix]
+        [HarmonyPatch(typeof(HandCtrl), "SetIconTexture")]
+        private static void BeforeKokanWheel(
+            HandCtrl __instance, HandCtrl.AibuColliderKind _kindTouch)
+        {
+            if (__instance == null ||
+                _kindTouch != HandCtrl.AibuColliderKind.kokan ||
+                __instance.flags == null || !__instance.flags.isFreeH ||
+                FemaleField == null || AreaLayersField == null)
+                return;
+
+            ChaControl female = FemaleField.GetValue(__instance) as ChaControl;
+            if (female == null || !FemboyModePlugin.IsFemboy(female))
+                return;
+
+            var layers = AreaLayersField.GetValue(__instance)
+                as Dictionary<int, HandCtrl.LayerInfo>[];
+            if (layers != null && layers.Length > 2)
+                TryRemovePhallusToy(__instance, layers[2]);
         }
 
         private static int BindKokanItemParents(
@@ -304,6 +351,7 @@ namespace FemboyMode
 
             int id = __instance.GetInstanceID();
             ToyFilterAppliedHands.Remove(id);
+            LastToyScanFrame.Remove(id);
             GameObject anchor;
             if (!OwnedAnchors.TryGetValue(id, out anchor))
                 return;
