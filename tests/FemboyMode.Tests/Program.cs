@@ -125,13 +125,22 @@ internal static class Program
         Check(!FemboyRules.IsFemaleFinishAnimation(2, 3, "M_IN_Start"),
             "male-only climax does not retarget female actor");
 
+        Check(FemboyRules.MaleSegmentBoneName(100) == "cm_J_dan100_00",
+            "native segment bone 100 name");
+        Check(FemboyRules.MaleSegmentBoneName(109) == "cm_J_dan109_00",
+            "native segment bone 109 name");
+        Check(FemboyRules.MaleSegmentBoneName(99) == null,
+            "bone copy rejects unrelated 99");
+        Check(FemboyRules.MaleSegmentBoneName(110) == null,
+            "bone copy rejects unrelated 110");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 50 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 54 FemboyMode rules assertions passed.");
         return 0;
     }
 }
