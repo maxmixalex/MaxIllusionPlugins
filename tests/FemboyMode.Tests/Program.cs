@@ -77,13 +77,61 @@ internal static class Program
             "cm_J_dan109_00") == 0,
             "indexed male finish bone is an exact match");
 
+        Check(FemboyRules.IsFemaleClimaxVoice(0, 142),
+            "Aibu native climax voice trigger");
+        Check(FemboyRules.IsFemaleClimaxVoice(0, 143),
+            "Aibu native after-climax voice trigger");
+        Check(!FemboyRules.IsFemaleClimaxVoice(0, 141),
+            "Aibu pre-climax voice is not suppressed");
+        Check(!FemboyRules.IsFemaleClimaxVoice(0, 318),
+            "Sonyu voice codes do not apply to Aibu");
+        Check(!FemboyRules.IsFemaleClimaxVoice(0, 0),
+            "ordinary Aibu voice remains");
+        Check(FemboyRules.IsFemaleClimaxVoice(2, 318),
+            "Sonyu heroine finish voice is routed");
+        Check(FemboyRules.IsFemaleClimaxVoice(2, 319),
+            "Sonyu simultaneous finish voice is routed");
+        Check(FemboyRules.IsFemaleClimaxVoice(2, 325),
+            "Sonyu W finish voice is routed");
+        Check(FemboyRules.IsFemaleClimaxVoice(2, 330),
+            "Sonyu S finish ending voice is routed");
+        Check(!FemboyRules.IsFemaleClimaxVoice(2, 320),
+            "male outside/inside cue 320 is untouched");
+        Check(!FemboyRules.IsFemaleClimaxVoice(2, 324),
+            "male outside/inside cue 324 is untouched");
+        Check(!FemboyRules.IsFemaleClimaxVoice(2, 331),
+            "post-finish dialogue is untouched");
+        Check(!FemboyRules.IsFemaleClimaxVoice(2, 142),
+            "Aibu voice codes do not apply to Sonyu");
+        Check(!FemboyRules.IsFemaleClimaxVoice(1, 142),
+            "Houshi voice never suppressed");
+
+        Check(FemboyRules.IsFemaleFinishAnimation(2, 3, "WF_IN_Start"),
+            "Sonyu heroine orgasm W is eligible");
+        Check(FemboyRules.IsFemaleFinishAnimation(2, 6, "A_SS_IN_Start"),
+            "Sonyu simultaneous S is eligible");
+        Check(FemboyRules.IsFemaleFinishAnimation(2, 4, "A_OLoop"),
+            "anal prefixed finish loop is eligible");
+        Check(FemboyRules.IsFemaleFinishAnimation(2, 5, "A_SF_IN_Start"),
+            "anal prefixed solo finish is eligible");
+        Check(!FemboyRules.IsFemaleFinishAnimation(2, 1, "WF_IN_Start"),
+            "actual male inside-only climax never retargets heroine");
+        Check(!FemboyRules.IsFemaleFinishAnimation(0, 3, "WF_IN_Start"),
+            "Aibu has no equivalent male controller");
+        Check(!FemboyRules.IsFemaleFinishAnimation(2, 3, null),
+            "null state never triggers a controller swap");
+        Check(!FemboyRules.IsFemaleFinishAnimation(2, 3, "SLoop"),
+            "ordinary loop remains in native female controller");
+        Check(!FemboyRules.IsFemaleFinishAnimation(2, 3, "M_IN_Start"),
+            "male-only climax does not retarget female actor");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 27 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 50 FemboyMode rules assertions passed.");
         return 0;
     }
 }
