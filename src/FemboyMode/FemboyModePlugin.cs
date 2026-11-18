@@ -25,12 +25,13 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.4.10";
+        public const string Version = "0.4.11";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
         internal static ConfigEntry<bool> ReverseHoushiSwapVisualRoots;
         internal static ConfigEntry<bool> ReverseHoushiSwapMouthExpressions;
+        internal static ConfigEntry<bool> ReverseHoushiRedirectSiru;
         internal static ConfigEntry<bool> ShowFreeHMarker;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
@@ -93,6 +94,9 @@ namespace FemboyMode
             ReverseHoushiSwapMouthExpressions = Config.Bind("Free H",
                 "Reversed Houshi swap mouth expressions", true,
                 "In reversed service actions, move the original heroine's mouth pattern and opening to the male performer, and apply the original male's mouth to the marked heroine. Restores native expression state before the next game update; turn off if a third-party face mod conflicts.");
+            ReverseHoushiRedirectSiru = Config.Bind("Free H",
+                "Reversed Houshi redirect Siru stains", true,
+                "When a marked heroine visually switches into the giver role, transfer new native Siru overlay writes to the original male instead. Keeps native cleanup and ordinary H unchanged.");
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
@@ -193,6 +197,7 @@ namespace FemboyMode
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
             harmony.PatchAll(typeof(FemboyHoushiReverseHooks));
+            harmony.PatchAll(typeof(FemboyReversedSiruHooks));
             harmony.PatchAll(typeof(FemboyHMarkerHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
