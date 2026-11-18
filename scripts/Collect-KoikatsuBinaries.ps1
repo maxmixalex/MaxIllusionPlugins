@@ -8,6 +8,7 @@ param(
     [string]$OutputZip = (Join-Path (Get-Location).Path 'Koikatsu-debug-binaries.zip'),
     [switch]$IncludeExecutables,
     [switch]$IncludeDiagnostics,
+    [switch]$IncludeAssetInventory,
     [string[]]$ExtraRelativeFiles = @(),
     [ValidateRange(1, 2000)] [int]$MaxSingleFileMB = 100,
     [ValidateRange(1, 4000)] [int]$MaxTotalMB = 350
@@ -128,6 +129,34 @@ try {
         Add-RelativeFile $relative
     }
 
+    # Optional filename-only index, useful for identifying precise H/voice
+    # asset bundles before requesting any of the (possibly large) .unity3d files.
+    # These binaries are NOT copied into the archive by this option.
+    if ($IncludeAssetInventory) {
+        $assetRoot = Join-Path $script:Root 'abdata'
+        if (Test-Path -LiteralPath $assetRoot -PathType Container) {
+            $prefix = $script:Root
+            if (-not $prefix.EndsWith([IO.Path]::DirectorySeparatorChar)) {
+                $prefix += [IO.Path]::DirectorySeparatorChar
+            }
+            $assets = New-Object System.Collections.Generic.List[object]
+            foreach ($file in (Get-ChildItem -LiteralPath $assetRoot -Filter '*.unity3d' -Recurse -File)) {
+                if ($file.FullName -notmatch '(?i)[\\/](h|sound|action|animation|anim)[\\/]') {
+                    continue
+                }
+                if ($assets.Count -ge 12000) { break }
+                $assets.Add([pscustomobject]@{
+                    RelativePath = $file.FullName.Substring($prefix.Length)
+                    SizeBytes = $file.Length
+                })
+            }
+            $assets | Sort-Object RelativePath | Export-Csv -LiteralPath (Join-Path $staging '_asset_inventory.csv') -NoTypeInformation -Encoding UTF8
+            Write-Host ("Indexed {0} candidate H/audio bundles (paths only)." -f $assets.Count)
+        } else {
+            Write-Warning 'No abdata directory found; asset inventory skipped.'
+        }
+    }
+
     if ($IncludeDiagnostics) {
         Add-RelativeFile 'BepInEx\config\MaxMixAlex.FemboyMode.cfg'
         $logPath = Join-Path $script:Root 'BepInEx\LogOutput.log'
@@ -149,6 +178,7 @@ try {
         'Koikatsu modding debug archive'
         'Created locally. This script never uploads files.'
         'No game assets, cards, saves, user configurations or logs are included by default.'
+        'IncludeAssetInventory writes only asset paths and file sizes, never bundle bytes.'
         'Review the archive before sharing it privately.'
         ('Collected UTC: ' + [DateTime]::UtcNow.ToString('o'))
         ('Binary count: ' + $script:Manifest.Count)
