@@ -382,6 +382,11 @@ namespace FemboyMode
                     for (int i = 0; i < submenus[k].Count; i++)
                         AppendUnique(donors, seen, submenus[k][i]);
 
+            // Entries already present in native usable lists/submenus are
+            // authoritative even when a mod does not populate lstCategory.
+            // Apply H-point filtering only to imports discovered solely from
+            // AnimationLoader's full catalogue (which spans other rooms).
+            var listedHere = new HashSet<HSceneProc.AnimationListInfo>(seen);
             IDictionary mapping = GetImportMapping();
             var imports = new Dictionary<HSceneProc.AnimationListInfo, object>();
             int seenImports = 0;
@@ -405,7 +410,7 @@ namespace FemboyMode
             {
                 HSceneProc.AnimationListInfo donor = donors[i];
                 if (string.IsNullOrEmpty(donor.nameAnimation) ||
-                    !SceneAllowsImport(donor) ||
+                    (!listedHere.Contains(donor) && !SceneAllowsImport(donor)) ||
                     donor.paramFemale == null || donor.paramMale == null ||
                     (donor.pathFemaleBase1 != null &&
                      (!string.IsNullOrEmpty(donor.pathFemaleBase1.assetpath) ||
