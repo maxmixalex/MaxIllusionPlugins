@@ -101,6 +101,12 @@ namespace FemboyMode
 
         // Unlike *_WF/WS/SF/SS_IN_Loop, the ordinary *_M_IN_Loop
         // represents a new insertion cycle. Do not arm again in *_IN_A.
+        internal static bool IsSonyuFinishRecovery(string state)
+        {
+            if (!IsSonyuFinishPhase(state)) return false;
+            return state.EndsWith("_A", StringComparison.Ordinal);
+        }
+
         internal static bool IsSonyuOrdinaryMotionLoop(string state)
         {
             if (string.IsNullOrEmpty(state) || IsSonyuFinishPhase(state))
@@ -298,6 +304,9 @@ namespace FemboyMode
         private int pose = int.MinValue;
         private bool fired;
         private bool sawFinishPhase;
+        private bool sawRecovery;
+        private string previousState;
+        private int cycle;
 
         internal bool CanFire(int poseId, string state)
         {
@@ -319,23 +328,39 @@ namespace FemboyMode
                 pose = poseId;
                 fired = false;
                 sawFinishPhase = false;
+                sawRecovery = false;
+                previousState = null;
+                cycle = 0;
+            }
+
+            // RX18 can transition directly from the climax recovery A
+            // into the next climax Start, without ever evaluating *_M_IN_Loop.
+            // An observed recovery -> *new* start edge is therefore just as
+            // authoritative as returning to ordinary insertion movement.
+            bool followingRecovery = fired && sawRecovery &&
+                FemboyRules.IsFemaleInsertionFinishStart(state) &&
+                !string.Equals(previousState, state, StringComparison.Ordinal);
+            if (fired && sawFinishPhase &&
+                (FemboyRules.IsSonyuOrdinaryMotionLoop(state) ||
+                 followingRecovery))
+            {
+                fired = false;
+                sawFinishPhase = false;
+                sawRecovery = false;
+                cycle++;
             }
             if (FemboyRules.IsSonyuFinishPhase(state))
                 sawFinishPhase = true;
-            else if (fired && sawFinishPhase &&
-                     FemboyRules.IsSonyuOrdinaryMotionLoop(state))
-            {
-                // A genuine return to ordinary insertion movement is the
-                // re-arm point; post-climax *_IN_A does not re-arm us.
-                fired = false;
-                sawFinishPhase = false;
-            }
+            if (FemboyRules.IsSonyuFinishRecovery(state))
+                sawRecovery = true;
+            previousState = state;
         }
 
         internal string DiagnosticState
         {
             get { return "pose=" + pose + " fired=" + fired +
-                " sawFinish=" + sawFinishPhase; }
+                " sawFinish=" + sawFinishPhase +
+                " sawRecovery=" + sawRecovery + " cycle=" + cycle; }
         }
     }
 }

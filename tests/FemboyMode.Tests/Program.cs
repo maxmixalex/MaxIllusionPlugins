@@ -288,6 +288,20 @@ internal static class Program
             "second cycle recovery remains suppressed");
         Check(cycle.CanFire(10, "SF_IN_Start"),
             "a genuine pose change starts independent fluid state");
+        var directRestart = new FemboySonyuCycleGate();
+        directRestart.MarkFired(12, "A_SF_IN_Start");
+        directRestart.Observe(12, "A_SS_IN_A");
+        Check(FemboyRules.IsSonyuFinishRecovery("A_SS_IN_A"),
+            "RX18 observed A_SS_IN_A is a native recovery state");
+        Check(!directRestart.CanFire(12, "A_SS_IN_A"),
+            "recovery voice 329 cannot trigger a duplicate emission");
+        Check(directRestart.CanFire(12, "A_SF_IN_Start"),
+            "RX18 next climax Start rearms directly after recovery A");
+        directRestart.MarkFired(12, "A_SF_IN_Start");
+        Check(!directRestart.CanFire(12, "A_SF_IN_Start"),
+            "multiple native events for second climax Start stay deduplicated");
+        Check(!FemboyRules.IsSonyuFinishRecovery("A_SF_IN_Start"),
+            "climax Start is not mistaken for completed recovery");
 
         Check(FemboyRules.IsReversedHoushiName("[Reversed] Test"),
             "injected role-swapped service entry is detectable");
@@ -312,7 +326,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 131 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 136 FemboyMode rules assertions passed.");
         return 0;
     }
 }
