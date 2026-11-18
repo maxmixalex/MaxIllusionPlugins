@@ -69,9 +69,15 @@ namespace FemboyMode
                 follower.Configure(flags, male, female);
             }
 
+            // A live RX18 report showed the full controller replacement
+            // interrupting the native heroine climax sequence. Explicitly
+            // opt in with a NEW config key so old v0.4.0 settings cannot
+            // accidentally re-enable the broken transition.
             bool retarget = femaleFinish &&
                 FemboyModePlugin.EnableMaleFinishAnimation != null &&
-                FemboyModePlugin.EnableMaleFinishAnimation.Value;
+                FemboyModePlugin.EnableMaleFinishAnimation.Value &&
+                FemboyModePlugin.AllowExperimentalControllerSwap != null &&
+                FemboyModePlugin.AllowExperimentalControllerSwap.Value;
 
             if (!retarget)
             {
