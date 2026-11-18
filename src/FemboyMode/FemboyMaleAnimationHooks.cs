@@ -75,9 +75,10 @@ namespace FemboyMode
             // accidentally re-enable the broken transition.
             bool retarget = femaleFinish &&
                 FemboyModePlugin.EnableMaleFinishAnimation != null &&
-                FemboyModePlugin.EnableMaleFinishAnimation.Value &&
                 FemboyModePlugin.AllowExperimentalControllerSwap != null &&
-                FemboyModePlugin.AllowExperimentalControllerSwap.Value;
+                FemboyRules.CanSwapFullController(
+                    FemboyModePlugin.EnableMaleFinishAnimation.Value,
+                    FemboyModePlugin.AllowExperimentalControllerSwap.Value);
 
             if (!retarget)
             {
