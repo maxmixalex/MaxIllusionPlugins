@@ -131,39 +131,51 @@ namespace FemboyMode
         public void AlignToModel()
         {
             if (shaftTip == null || actor == null ||
-                FemboyModePlugin.FluidElevation == null)
+                FemboyModePlugin.FluidLocalPitch == null)
                 return;
 
-            Vector3 forward = shaftRoot != null
+            // Follow the actual shaft in 3D, including the vertical
+            // component. Never project onto the world's horizontal plane:
+            // a reclining or upside-down character must launch along the
+            // same direction relative to their own animated anatomy.
+            Vector3 direction = shaftRoot != null
                 ? shaftTip.position - shaftRoot.position
                 : shaftTip.forward;
-            Vector3 horizontal = Vector3.ProjectOnPlane(forward, Vector3.up);
-            if (horizontal.sqrMagnitude < 0.000001f)
-                horizontal = Vector3.ProjectOnPlane(shaftTip.forward, Vector3.up);
-            if (horizontal.sqrMagnitude < 0.000001f)
-                horizontal = Vector3.ProjectOnPlane(actor.transform.forward, Vector3.up);
-            if (horizontal.sqrMagnitude < 0.000001f)
-            {
-                if (!warned)
-                {
-                    warned = true;
-                    FemboyModePlugin.LogOptionalIntegrationProblem(
-                        "No horizontal fluid direction was found; keeping native bone forward.");
-                }
+            if (direction.sqrMagnitude < 0.000001f)
+                direction = shaftTip.forward;
+            if (direction.sqrMagnitude < 0.000001f)
                 return;
-            }
+            direction.Normalize();
 
-            float elevation = FemboyModePlugin.FluidElevation.Value;
-            Vector3 direction =
-                horizontal.normalized *
-                    FemboyRules.BallisticHorizontalFraction(elevation) +
-                Vector3.up * FemboyRules.BallisticVerticalFraction(elevation);
-            if (direction.sqrMagnitude < 0.001f) return;
+            // Use the root bone's rotated anatomical up to construct a
+            // stable frame around the shaft. The pitch therefore follows
+            // pelvic roll and character rotation; Unity's global up axis
+            // is used ONLY as a last resort if model bones are degenerate.
+            Vector3 anatomicalUp = shaftRoot != null
+                ? shaftRoot.up : shaftTip.up;
+            anatomicalUp = Vector3.ProjectOnPlane(anatomicalUp, direction);
+            if (anatomicalUp.sqrMagnitude < 0.000001f)
+                anatomicalUp = Vector3.ProjectOnPlane(
+                    shaftRoot != null ? shaftRoot.right : shaftTip.right,
+                    direction);
+            if (anatomicalUp.sqrMagnitude < 0.000001f)
+                anatomicalUp = Vector3.ProjectOnPlane(actor.transform.up, direction);
+            if (anatomicalUp.sqrMagnitude < 0.000001f)
+                anatomicalUp = Vector3.ProjectOnPlane(Vector3.up, direction);
+            if (anatomicalUp.sqrMagnitude < 0.000001f)
+                anatomicalUp = Vector3.ProjectOnPlane(Vector3.right, direction);
+            if (anatomicalUp.sqrMagnitude < 0.000001f)
+                return;
 
-            transform.rotation = Quaternion.LookRotation(direction.normalized,
-                Vector3.up);
-            // An optional per-body manual angle correction continues to
-            // work without affecting the automatic root-to-tip trajectory.
+            Quaternion boneFrame = Quaternion.LookRotation(
+                direction, anatomicalUp.normalized);
+            float localPitch = Mathf.Clamp(
+                FemboyModePlugin.FluidLocalPitch.Value, -30f, 30f);
+            transform.rotation = boneFrame * Quaternion.Euler(
+                -localPitch, 0f, 0f);
+
+            // Existing model-specific manual correction is expressed in
+            // this local shaft frame, never in world Euler angles.
             transform.rotation *= Quaternion.Euler(
                 FemboyModePlugin.ClimaxFXRotationX.Value,
                 FemboyModePlugin.ClimaxFXRotationY.Value,
@@ -534,7 +546,7 @@ namespace FemboyMode
                 return;
 
             float speed = Mathf.Clamp(FemboyModePlugin.FluidLaunchSpeed.Value,
-                0.2f, 8f);
+                0.2f, 4f);
             float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value,
                 0f, 30f);
             // Native MetaballShoot.SetRigidForce uses ShootAxis.forward,
