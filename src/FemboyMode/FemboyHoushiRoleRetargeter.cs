@@ -245,8 +245,8 @@ namespace FemboyMode
                 j.LastFemale = j.FemaleNeutral * femaleMotion;
                 j.LastMale = j.MaleNeutral * maleMotion;
                 maxVisualDelta = Mathf.Max(maxVisualDelta,
-                    Quaternion.Angle(j.NativeFemale, j.LastFemale),
-                    Quaternion.Angle(j.NativeMale, j.LastMale));
+                    Mathf.Max(Quaternion.Angle(j.NativeFemale, j.LastFemale),
+                        Quaternion.Angle(j.NativeMale, j.LastMale)));
                 j.Female.localRotation = j.LastFemale;
                 j.Male.localRotation = j.LastMale;
             }
