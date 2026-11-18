@@ -117,7 +117,8 @@ namespace FemboyMode
             // VoiceLinkProc / voice-overwrite deferrals keep the original
             // pending code unchanged. Fire only after the native event
             // has truly been accepted or exhausted.
-            if (__state.Flags.voice.playVoices[__state.Channel] == __state.Code ||
+            if (!FemboyRules.ShouldEmitFromConsumedSonyuVoice(
+                    __state.Code, __state.Flags.voice.playVoices[__state.Channel]) ||
                 !FemboyModePlugin.IsFemboy(__state.Actor))
                 return;
 
