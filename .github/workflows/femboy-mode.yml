@@ -94,7 +94,21 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $extract 'abdata/h/list/demo.unity3d')) {
             throw 'Collector leaked asset bundle bytes into default archive'
           }
-          Write-Output 'Collector mock archive and metadata inventory verified.'
+          # The next incremental request must include only the selected bundle,
+          # not a repeat of all previously submitted game/Unity DLLs.
+          $incrementalZip = Join-Path $env:RUNNER_TEMP 'koikatsu-lists-only.zip'
+          ./scripts/Collect-KoikatsuBinaries.ps1 -GameRoot $root `
+            -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d') `
+            -OutputZip $incrementalZip
+          $incrementalOut = Join-Path $env:RUNNER_TEMP 'kk-lists-only-extracted'
+          Expand-Archive -LiteralPath $incrementalZip -DestinationPath $incrementalOut -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $incrementalOut 'abdata/h/list/demo.unity3d'))) {
+            throw 'Incremental collector failed to include the requested asset'
+          }
+          if (Test-Path -LiteralPath (Join-Path $incrementalOut 'Koikatu_Data/Managed/Assembly-CSharp.dll')) {
+            throw 'Incremental collector unexpectedly included the default game DLLs'
+          }
+          Write-Output 'Collector mock archive and incremental only-extra mode verified.'
 
       - name: Package plugin
         if: success()
