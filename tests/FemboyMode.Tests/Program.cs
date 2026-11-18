@@ -134,13 +134,46 @@ internal static class Program
         Check(FemboyRules.MaleSegmentBoneName(110) == null,
             "bone copy rejects unrelated 110");
 
+        Check(FemboyRules.IsPhallusToyLayer(25, 7, 8),
+            "native aibulayer_02 row 4 after massager is the phallus-shaped item");
+        Check(!FemboyRules.IsPhallusToyLayer(12, 5, 6),
+            "native electric massager row 3 remains enabled");
+        Check(!FemboyRules.IsPhallusToyLayer(11, 4, -1),
+            "tongue item is not removed");
+        Check(!FemboyRules.IsPhallusToyLayer(25, 7, 6),
+            "unrelated custom item with partial ID overlap is preserved");
+
+        Check(FemboyRules.SafeShaftFraction(-1f) == 0f,
+            "negative shaft interpolation clamps to root");
+        Check(FemboyRules.SafeShaftFraction(0f) == 0f,
+            "zero fraction aims at root");
+        Check(FemboyRules.SafeShaftFraction(0.5f) == 0.5f,
+            "half fraction aims at scaled shaft midpoint");
+        Check(FemboyRules.SafeShaftFraction(1f) == 1f,
+            "fraction one aims at tip");
+        Check(FemboyRules.SafeShaftFraction(4f) == 1f,
+            "oversized fraction clamps at tip");
+        Check(FemboyRules.SafeShaftFraction(float.NaN) == 0.5f,
+            "malformed shaft fraction uses safe midpoint");
+        Check(FemboyRules.SafeShaftFraction(float.PositiveInfinity) == 0.5f,
+            "infinite shaft fraction uses safe midpoint");
+
+        Check(!FemboyRules.CanSwapFullController(false, false),
+            "native controller remains when both toggles off");
+        Check(!FemboyRules.CanSwapFullController(true, false),
+            "old existing true setting cannot accidentally reenable truncation");
+        Check(!FemboyRules.CanSwapFullController(false, true),
+            "experimental opt-in alone cannot swap controller");
+        Check(FemboyRules.CanSwapFullController(true, true),
+            "both explicit toggles are necessary for experimental swap");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 54 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 69 FemboyMode rules assertions passed.");
         return 0;
     }
 }
