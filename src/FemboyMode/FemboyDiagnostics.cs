@@ -96,6 +96,13 @@ namespace FemboyMode
                 " animBody=" + (c.animBody != null) +
                 " maleGeometryVisible=" + (c.fileStatus != null && c.fileStatus.visibleSonAlways));
 
+            FemboyCharacterController mode = FemboyModePlugin.GetController(c);
+            if (mode != null)
+                log.LogInfo("[FemboyMode diagnostics] " + label +
+                    " persisted scale multipliers: X=" + mode.GeometryScaleX +
+                    " Y=" + mode.GeometryScaleY + " Z=" + mode.GeometryScaleZ +
+                    " scaleApplied=" + mode.HasAppliedMaleGeometryScale);
+
             if (c.chaFile != null)
             {
                 PluginData selector = ExtendedSave.GetExtendedDataById(
