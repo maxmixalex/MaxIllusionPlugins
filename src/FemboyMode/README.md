@@ -388,3 +388,22 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 8. Confirm that female climax dialogue is suppressed only for the marked actor; pre-climax and unrelated voice events still play. For a Humanoid replacement model, test controller switching and immediate return to normal pose; for non-Humanoid models the controller is not swapped.
 
 **Remaining functional gap / runtime validation:** v0.4.4 now contains actual actor-local animation and voice routing, but **full male-controller retargeting works only for verified compatible Humanoid rigs**. Generic rigs use limited add-on bone motion, not full-body or full-pose replacement. The actor-specific voice behavior silences the audio signal for female climax lines without discarding their native playback/finish timing; it does not replace them with a new male voice sample (the vanilla male actor does not have an equivalent voice table). These features and the alternative male-style FX must be tested in the installed game, including poses with no matching bone or animation state, UncensorSelector replacements, and interactions with BetterSquirt/KKABMX/MultiTeamH. The shared `HFlag.finish` of the actual male participant is never modified. This repository does not bundle proprietary game assets or replacement models.
+
+## v0.4.5 — Sonyu cycle deduplication and reversed Houshi actions
+
+- Sonyu native HFlag, SetPlay and consumed voice callbacks now share one
+  per-character, per-pose climax gate. Recovery voice codes do not create a
+  second physical emission; the gate re-arms on an ordinary insertion loop.
+- Each genuinely new Sonyu climax gets a fresh MetaballShoot state instead of
+  reusing a depleted projectile controller. Old private droplets are cleared
+  when the next native shooter is initialized.
+- In marked-character Free H, the native Houshi menu receives an additional
+  `[Reversed] ` entry for each existing service animation. The original motion
+  and its identifiers/assets remain unchanged. Selecting the reversed entry
+  exchanges the male and marked heroine's compatible body-joint poses at the
+  end of animation evaluation; an early-frame restorer prevents feedback.
+  Only the rendered body poses are reversed: the game's character sex, card
+  metadata, H voice queues, and underlying gameplay counters are not swapped.
+- Reversal requires at least 20 compatible shared body bones. If the installed
+  rig lacks them, the action injection is skipped instead of showing broken
+  controls. The in-game Free H poses and IK alignment still need validation.

@@ -289,13 +289,30 @@ internal static class Program
         Check(cycle.CanFire(10, "SF_IN_Start"),
             "a genuine pose change starts independent fluid state");
 
+        Check(FemboyRules.IsReversedHoushiName("[Reversed] Test"),
+            "injected role-swapped service entry is detectable");
+        Check(!FemboyRules.IsReversedHoushiName("Test"),
+            "ordinary donor action remains untouched");
+        Check(FemboyRules.ReversedBodyBoneKey("cf_J_Arm00") == "j_arm00",
+            "female native upper-body bone maps to common animation key");
+        Check(FemboyRules.ReversedBodyBoneKey("cm_J_Arm00") == "j_arm00",
+            "male native upper-body bone uses the same key");
+        Check(FemboyRules.ReversedBodyBoneKey("cm_J_dan109_00") == null,
+            "male geometry is never applied to another actor's joints");
+        Check(FemboyRules.ReversedBodyBoneKey("cf_j_ana") == null,
+            "anatomical collision targets are not reversed");
+        Check(FemboyRules.IsReversedRootMotionBone("j_root"),
+            "root translation is exchanged with rotation");
+        Check(!FemboyRules.IsReversedRootMotionBone("j_arm00"),
+            "limb proportions are not overwritten");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 123 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 131 FemboyMode rules assertions passed.");
         return 0;
     }
 }

@@ -25,9 +25,10 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.4.4";
+        public const string Version = "0.4.5";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
+        internal static ConfigEntry<bool> EnableReverseHoushi;
         internal static ConfigEntry<bool> ShowFreeHMarker;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
@@ -82,6 +83,8 @@ namespace FemboyMode
             Log = Logger;
             EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
                 "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
+            EnableReverseHoushi = Config.Bind("Free H", "Add reversed Houshi actions", true,
+                "Clone native service actions as [Reversed] for marked female characters and exchange their animated body poses with the male partner. Generic rigs are supported when enough body bones match; vanilla actions remain unchanged.");
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
@@ -181,6 +184,7 @@ namespace FemboyMode
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
+            harmony.PatchAll(typeof(FemboyHoushiReverseHooks));
             harmony.PatchAll(typeof(FemboyHMarkerHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
