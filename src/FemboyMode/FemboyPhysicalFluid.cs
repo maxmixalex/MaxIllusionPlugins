@@ -113,41 +113,59 @@ namespace FemboyMode
         private float activeUntil;
         private float[] nativeIntervals;
         private bool warnedUnavailable;
+        private HFlag.EMode boundMode = HFlag.EMode.none;
+        private int boundPoseId = -1;
+        private FemboyFluidAxisFollower trajectory;
 
         public void Fire(HSceneProc scene, ChaControl target, FieldInfo metaField)
         {
-            if (scene == null || target == null || target.objBodyBone == null)
-                return;
-            if (Time.time - lastFired < 1f)
+            if (scene == null || target == null || target.objBodyBone == null ||
+                scene.flags == null)
                 return;
 
-            if (!ReferenceEquals(owner, scene) ||
-                !ReferenceEquals(character, target) || shooter == null)
+            HFlag.EMode mode = scene.flags.mode;
+            int poseId = scene.flags.nowAnimationInfo == null
+                ? -1 : scene.flags.nowAnimationInfo.id;
+            // Original HSceneProc.ChangeAnimator swaps the native Metaball
+            // preset and even its host when the scene changes from Aibu to
+            // Sonyu or to another pose. Reusing the old Aibu shooter caused
+            // the user's insertion scene to appear to emit nothing.
+            bool changedPose = !ReferenceEquals(owner, scene) ||
+                !ReferenceEquals(character, target) ||
+                shooter == null || axis == null || host == null ||
+                boundMode != mode || boundPoseId != poseId;
+            if (changedPose)
             {
                 Cleanup();
                 owner = scene;
                 character = target;
+                boundMode = mode;
+                boundPoseId = poseId;
                 if (!Initialize(metaField))
                 {
                     if (!warnedUnavailable)
                     {
                         warnedUnavailable = true;
                         FemboyModePlugin.LogOptionalIntegrationProblem(
-                            "Native liquid fluid setup unavailable: no UpdateMeta source, " +
-                            "metaball projectile or compatible target bone. " +
-                            "Vanilla visual particle retained.");
+                            "Native physical fluid unavailable for mode=" +
+                            mode + " pose=" + poseId +
+                            ": no compatible native projectile/seed/target bone.");
                     }
                     return;
                 }
                 warnedUnavailable = false;
             }
 
-            if (axis == null || shooter == null || shooter.aInterval == null)
+            if (Time.time - lastFired < 0.9f ||
+                axis == null || shooter == null || shooter.aInterval == null)
                 return;
 
             // Scale the *number of physical droplets* rather than visual
             // particle alpha. Never mutate the real male's source preset.
             ApplyFluidAmount();
+            ApplyLaunchPhysics();
+            if (trajectory != null)
+                trajectory.AlignToModel();
             shooter.ShootMetaBallStart(false);
             float duration = 0f;
             for (int i = 0; i < shooter.aInterval.Length; i++)
@@ -157,7 +175,11 @@ namespace FemboyMode
             if (FemboyModePlugin.VerboseLogging != null &&
                 FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Started native physical liquid for marked actor.");
+                    "Started native physical liquid in " + mode +
+                    " pose=" + poseId + " anal=" +
+                    scene.flags.isAnalPlay + " shotCount=" +
+                    (shooter.aInterval.Length + 1) +
+                    " launchDirection=" + axis.transform.forward);
         }
 
         private bool Initialize(FieldInfo metaField)
@@ -250,6 +272,10 @@ namespace FemboyMode
                 FemboyModePlugin.ClimaxFXRotationX.Value,
                 FemboyModePlugin.ClimaxFXRotationY.Value,
                 FemboyModePlugin.ClimaxFXRotationZ.Value);
+            trajectory = axis.AddComponent<FemboyFluidAxisFollower>();
+            Transform baseBone = FemboyRigResolver.FindBone(
+                body.transform, FemboyModePlugin.MaleGeometryBone.Value);
+            trajectory.Configure(character, baseBone, bone);
             shooter.ShootAxis = axis;
             shooter.chaCustom = character;
             shooter.isEnable = true;
@@ -399,6 +425,31 @@ namespace FemboyMode
                         owner.flags != null && owner.flags.isAnalPlay));
         }
 
+        private void ApplyLaunchPhysics()
+        {
+            if (shooter == null || FemboyModePlugin.FluidLaunchSpeed == null)
+                return;
+
+            float speed = Mathf.Clamp(FemboyModePlugin.FluidLaunchSpeed.Value,
+                0.2f, 8f);
+            float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value,
+                0f, 30f);
+            // Native MetaballShoot.SetRigidForce uses ShootAxis.forward,
+            // then applies a relative force. Its original ForceMode.Force
+            // is too weak with some modded Rigidbody masses. VelocityChange
+            // supplies a true initial velocity independent of mass, after
+            // which Unity gravity naturally draws a ballistic parabola.
+            shooter.shootForce = ForceMode.VelocityChange;
+            shooter.speedSMin = shooter.speedMMin = shooter.speedLMin =
+                speed * 0.9f;
+            shooter.speedSMax = shooter.speedMMax = shooter.speedLMax =
+                speed * 1.1f;
+            Vector2 dispersion = new Vector2(spread, spread);
+            shooter.randomRotationS = dispersion;
+            shooter.randomRotationM = dispersion;
+            shooter.randomRotationL = dispersion;
+        }
+
         private void Update()
         {
             if (shooter == null) return;
@@ -436,7 +487,10 @@ namespace FemboyMode
             nativeIntervals = null;
             host = null;
             axis = null;
+            trajectory = null;
             privateSourceRoot = null;
+            boundMode = HFlag.EMode.none;
+            boundPoseId = -1;
         }
     }
 }
