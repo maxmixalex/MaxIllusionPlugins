@@ -12,6 +12,7 @@ using KKAPI.Chara;
 using KKAPI.Maker;
 using KKAPI.Maker.UI;
 using UniRx;
+using UnityEngine;
 
 namespace FemboyMode
 {
@@ -35,6 +36,7 @@ namespace FemboyMode
         internal static ConfigEntry<float> ClimaxFXOffsetX, ClimaxFXOffsetY, ClimaxFXOffsetZ;
         internal static ConfigEntry<float> ClimaxFXRotationX, ClimaxFXRotationY, ClimaxFXRotationZ;
         internal static ConfigEntry<bool> VerboseLogging;
+        internal static ConfigEntry<KeyboardShortcut> DumpRigHotkey;
         internal static ConfigEntry<bool> EnableKokanAnchor;
         internal static ConfigEntry<string> KokanAnchorBone;
         internal static ConfigEntry<bool> EnableKokanHitCollider;
@@ -72,6 +74,9 @@ namespace FemboyMode
                 "Bone for optional X/Y/Z body shape sliders; independent of Aibu target bone.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
+            DumpRigHotkey = Config.Bind("Diagnostics", "Dump rig and animation names",
+                new KeyboardShortcut(KeyCode.F10, KeyCode.LeftControl, KeyCode.LeftShift),
+                "Explicitly log the current Maker/Free H character rig, finish clip names and installed body GUIDs. Does not log cards or personal names.");
             EnableMaleClimaxFX = Config.Bind("Free H", "Use male-style finish FX", true,
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
             SuppressOriginalFemaleFX = Config.Bind("Free H", "Suppress female Aibu squirt FX", true,
@@ -114,6 +119,12 @@ namespace FemboyMode
             harmony.PatchAll(typeof(FemboyClimaxHooks));
             UncensorSelectorCompat.TryPatch(harmony);
             Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
+        }
+
+        private void Update()
+        {
+            if (DumpRigHotkey != null && DumpRigHotkey.Value.IsDown())
+                FemboyDiagnostics.DumpCurrent();
         }
 
         private void OnDestroy()
