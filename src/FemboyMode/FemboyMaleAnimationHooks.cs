@@ -164,29 +164,42 @@ namespace FemboyMode
                     keys.Add(entry.Key);
 
             foreach (int key in keys)
-            {
-                ControllerSwap swap;
-                if (!Swaps.TryGetValue(key, out swap))
-                    continue;
-                Restore(swap.Actor);
-            }
+                RestoreKey(key);
         }
 
         private static void Restore(Animator actor)
         {
-            if (actor == null) return;
+            if (actor != null)
+                RestoreKey(actor.GetInstanceID());
+        }
 
-            int key = actor.GetInstanceID();
+        private static void RestoreKey(int id)
+        {
             ControllerSwap swap;
-            if (!Swaps.TryGetValue(key, out swap))
+            if (!Swaps.TryGetValue(id, out swap))
                 return;
-            Swaps.Remove(key);
+            Swaps.Remove(id);
 
             // A third-party mod may have changed the controller after us.
             // Only undo the exact controller we installed.
             if (swap.Actor != null &&
                 ReferenceEquals(swap.Actor.runtimeAnimatorController, swap.Installed))
                 swap.Actor.runtimeAnimatorController = swap.Original;
+        }
+
+        internal static void ResetAll()
+        {
+            // Also clear destroyed Animator references: Unity's overloaded
+            // null operator would otherwise leave stale dictionary entries.
+            var keys = new List<int>(Swaps.Keys);
+            foreach (int key in keys)
+                RestoreKey(key);
+
+            FemboyMalePoseFollower[] followers =
+                UnityEngine.Object.FindObjectsOfType<FemboyMalePoseFollower>();
+            for (int i = 0; i < followers.Length; i++)
+                if (followers[i] != null)
+                    UnityEngine.Object.Destroy(followers[i]);
         }
     }
 }
