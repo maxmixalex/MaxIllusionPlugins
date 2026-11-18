@@ -111,6 +111,7 @@ namespace FemboyMode
         private GameObject privateSourceRoot;
         private float lastFired = -999f;
         private float activeUntil;
+        private float[] nativeIntervals;
         private bool warnedUnavailable;
 
         public void Fire(HSceneProc scene, ChaControl target, FieldInfo metaField)
@@ -144,10 +145,14 @@ namespace FemboyMode
             if (axis == null || shooter == null || shooter.aInterval == null)
                 return;
 
-            // This drives the original MetaballShoot physics and seed mesh,
-            // rather than playing a copied particle prefab.
+            // Scale the *number of physical droplets* rather than visual
+            // particle alpha. Never mutate the real male's source preset.
+            ApplyFluidAmount();
             shooter.ShootMetaBallStart(false);
-            activeUntil = Time.time + 8f;
+            float duration = 0f;
+            for (int i = 0; i < shooter.aInterval.Length; i++)
+                duration += Mathf.Max(0f, shooter.aInterval[i]);
+            activeUntil = Time.time + Mathf.Clamp(duration + 3f, 8f, 60f);
             lastFired = Time.time;
             if (FemboyModePlugin.VerboseLogging != null &&
                 FemboyModePlugin.VerboseLogging.Value)
@@ -230,6 +235,7 @@ namespace FemboyMode
                 shooter = null;
                 return false;
             }
+            nativeIntervals = (float[])shooter.aInterval.Clone();
 
             axis = new GameObject("FemboyMode_PhysicalFluidAxis");
             axis.transform.SetParent(bone, false);
@@ -355,6 +361,36 @@ namespace FemboyMode
             return null;
         }
 
+        private void ApplyFluidAmount()
+        {
+            if (shooter == null || nativeIntervals == null)
+                return;
+
+            float amount = FemboyModePlugin.PhysicalFluidAmount == null
+                ? 1f : FemboyModePlugin.PhysicalFluidAmount.Value;
+            int intervals = FemboyRules.FluidIntervalCount(
+                nativeIntervals.Length, amount);
+            float[] resized = new float[intervals];
+            for (int i = 0; i < resized.Length; i++)
+            {
+                float native = nativeIntervals[Mathf.Min(
+                    i, nativeIntervals.Length - 1)];
+                resized[i] = float.IsNaN(native) || float.IsInfinity(native)
+                    ? 0.08f : Mathf.Max(0.01f, native);
+            }
+
+            shooter.aInterval = resized;
+            shooter.maxMetaball = Mathf.Max(shooter.maxMetaball,
+                Mathf.Min(80, intervals + 1));
+            if (FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Physical fluid amount=" + amount +
+                    " effective droplets=" + (intervals + 1) +
+                    " currentPoseAnal=" + (owner != null &&
+                        owner.flags != null && owner.flags.isAnalPlay));
+        }
+
         private void Update()
         {
             if (shooter == null) return;
@@ -389,6 +425,7 @@ namespace FemboyMode
             if (privateSourceRoot != null)
                 UnityEngine.Object.Destroy(privateSourceRoot);
             shooter = null;
+            nativeIntervals = null;
             host = null;
             axis = null;
             privateSourceRoot = null;
