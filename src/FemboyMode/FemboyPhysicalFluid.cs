@@ -153,11 +153,11 @@ namespace FemboyMode
                 return;
             }
 
-            float elevation = Mathf.Clamp(FemboyModePlugin.FluidElevation.Value,
-                -10f, 60f) * Mathf.Deg2Rad;
+            float elevation = FemboyModePlugin.FluidElevation.Value;
             Vector3 direction =
-                horizontal.normalized * Mathf.Cos(elevation) +
-                Vector3.up * Mathf.Sin(elevation);
+                horizontal.normalized *
+                    FemboyRules.BallisticHorizontalFraction(elevation) +
+                Vector3.up * FemboyRules.BallisticVerticalFraction(elevation);
             if (direction.sqrMagnitude < 0.001f) return;
 
             transform.rotation = Quaternion.LookRotation(direction.normalized,
