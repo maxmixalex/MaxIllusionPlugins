@@ -183,6 +183,26 @@ namespace FemboyMode
         private float activeUntil;
         private float[] nativeIntervals;
         private bool warnedUnavailable;
+        private bool waitingForFirstDroplet;
+        private bool reportedAibu;
+        private bool reportedSonyu;
+
+        internal string DiagnosticStatus
+        {
+            get
+            {
+                return "mode=" + boundMode + " pose=" + boundPoseId +
+                    " configured=" + (shooter != null) +
+                    " host=" + (host != null) +
+                    " seed=" + (host != null && host.metaseed != null) +
+                    " latestSourceChildren=" +
+                    (privateSourceRoot == null ? -1 :
+                        privateSourceRoot.transform.childCount) +
+                    " launchDirection=" +
+                    (axis == null ? "(missing)" : axis.transform.forward.ToString()) +
+                    " firedAt=" + lastFired;
+            }
+        }
         private HFlag.EMode boundMode = HFlag.EMode.none;
         private int boundPoseId = -1;
         private FemboyFluidAxisFollower trajectory;
@@ -237,6 +257,18 @@ namespace FemboyMode
             if (trajectory != null)
                 trajectory.AlignToModel();
             shooter.ShootMetaBallStart(false);
+            waitingForFirstDroplet = true;
+            if ((mode == HFlag.EMode.aibu && !reportedAibu) ||
+                (mode == HFlag.EMode.sonyu && !reportedSonyu))
+            {
+                if (mode == HFlag.EMode.aibu) reportedAibu = true;
+                if (mode == HFlag.EMode.sonyu) reportedSonyu = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Physical fluid started mode=" + mode + " pose=" +
+                    poseId + " anal=" + scene.flags.isAnalPlay +
+                    " count=" + (shooter.aInterval.Length + 1) +
+                    " direction=" + axis.transform.forward);
+            }
             float duration = 0f;
             for (int i = 0; i < shooter.aInterval.Length; i++)
                 duration += Mathf.Max(0f, shooter.aInterval[i]);
@@ -535,7 +567,32 @@ namespace FemboyMode
             }
 
             if (Time.time <= activeUntil)
+            {
+                int before = privateSourceRoot == null ? -1 :
+                    privateSourceRoot.transform.childCount;
                 shooter.ShootMetaBall();
+                int after = privateSourceRoot == null ? -1 :
+                    privateSourceRoot.transform.childCount;
+
+                if (waitingForFirstDroplet && after > before)
+                {
+                    waitingForFirstDroplet = false;
+                    if (FemboyModePlugin.VerboseLogging != null &&
+                        FemboyModePlugin.VerboseLogging.Value)
+                        FemboyModePlugin.LogOptionalIntegrationProblem(
+                            "First physical droplet spawned on " + boundMode +
+                            ", source children=" + after);
+                }
+            }
+
+            if (waitingForFirstDroplet && Time.time - lastFired > 1.5f)
+            {
+                waitingForFirstDroplet = false;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Physical fluid was armed, but native Metaball projectile " +
+                    "objects did not appear under the source root. " +
+                    "Check current-pose ShootObj and Rigidbody prefab.");
+            }
         }
 
         private void OnDestroy()
@@ -555,6 +612,7 @@ namespace FemboyMode
                 UnityEngine.Object.Destroy(privateSourceRoot);
             shooter = null;
             nativeIntervals = null;
+            waitingForFirstDroplet = false;
             host = null;
             axis = null;
             trajectory = null;
