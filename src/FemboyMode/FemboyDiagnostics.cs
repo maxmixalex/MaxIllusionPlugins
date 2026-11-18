@@ -174,7 +174,8 @@ namespace FemboyMode
                     " finishCandidates=[" + selected + "]" +
                     (kept == 45 ? " (truncated)" : ""));
             }
- 
+        }
+
         private static void LogBoneResolution(
             ManualLogSource log, string label, Transform root, string purpose,
             BepInEx.Configuration.ConfigEntry<string> nameSetting)
@@ -194,7 +195,6 @@ namespace FemboyMode
                 " parent=" + (parent == null ? "(none)" : parent.name) +
                 " localPosition=" + resolved.localPosition +
                 " localScale=" + resolved.localScale);
-        }
         }
     }
 }
