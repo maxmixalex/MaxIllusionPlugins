@@ -34,6 +34,7 @@ namespace FemboyMode
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> EnablePhysicalFluid;
+        internal static ConfigEntry<float> PhysicalFluidAmount;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
         internal static ConfigEntry<bool> AllowExperimentalControllerSwap;
         internal static ConfigEntry<bool> EnableMaleBonePoseFollow;
@@ -53,6 +54,7 @@ namespace FemboyMode
         internal static ConfigEntry<string> KokanTipBone;
         internal static ConfigEntry<float> KokanOffsetX;
         internal static ConfigEntry<float> KokanOffsetY;
+        internal static ConfigEntry<float> KokanWorldHeightCorrection;
         internal static ConfigEntry<float> KokanOffsetZ;
         internal static ConfigEntry<float> KokanRotationX;
         internal static ConfigEntry<float> KokanRotationY;
@@ -93,6 +95,10 @@ namespace FemboyMode
                 "On a marked female character's climax, clone the native male outside-finish particle at her model's target bone; original actor flags are preserved.");
             EnablePhysicalFluid = Config.Bind("Free H", "Generate native physical male fluid", true,
                 "For a marked character's Aibu/Sonyu climax, trigger the game's real MetaballShoot physics and UpdateMeta mesh instead of only the LiquidSiru particle. Respects the game's SemenType=off setting; no effect if required assets are unavailable.");
+            PhysicalFluidAmount = Config.Bind("Male fluid", "Amount multiplier", 1f,
+                new ConfigDescription(
+                    "Multiplier for native physical fluid droplets in Aibu and insertion. 1.0 uses the original preset count; 2.0 doubles it (maximum 80 droplets). Affects real MetaballShoot objects, not just visual particles.",
+                    new AcceptableValueRange<float>(0.25f, 5f)));
             EnableMaleFinishAnimation = Config.Bind("Free H", "Retarget compatible male climax animation", true,
                 "During the marked heroine's climax, use the native male controller only if both avatars are Humanoid and the male controller contains the exact state. Generic/unsupported rigs keep vanilla animation.");
             AllowExperimentalControllerSwap = Config.Bind("Free H", "Allow experimental full-controller swap", false,
@@ -131,6 +137,8 @@ namespace FemboyMode
                 "Local X offset relative to the target bone (Unity units).");
             KokanOffsetY = Config.Bind("Aibu alignment", "Offset Y", 0f,
                 "Local Y offset relative to the target bone (Unity units).");
+            KokanWorldHeightCorrection = Config.Bind("Aibu alignment", "World Y correction", -0.012f,
+                "Extra vertical adjustment in world units, independent of shaft orientation. Default lowers the Free H Kokan touch marker by 0.012 units; adjust in ConfigurationManager for different models.");
             KokanOffsetZ = Config.Bind("Aibu alignment", "Offset Z", 0f,
                 "Local Z offset relative to the target bone (Unity units).");
             KokanRotationX = Config.Bind("Aibu alignment", "Rotation X", 0f,
