@@ -204,7 +204,9 @@ namespace FemboyMode
                 UpdateMeta candidate = hosts[i];
                 if (candidate == null || candidate.lstShoot == null)
                     continue;
-                if (native != null && candidate.lstShoot.Contains(native))
+                if (native != null && candidate.lstShoot.Contains(native) &&
+                    candidate.metaseed != null &&
+                    candidate.metaseed.sourceRoot != null)
                 {
                     host = candidate;
                     break;
@@ -215,7 +217,8 @@ namespace FemboyMode
                 for (int i = 0; i < hosts.Length; i++)
                 {
                     if (hosts[i] != null && hosts[i].lstShoot != null &&
-                        hosts[i].metaseed != null)
+                        hosts[i].metaseed != null &&
+                        hosts[i].metaseed.sourceRoot != null)
                     {
                         host = hosts[i];
                         break;
@@ -261,9 +264,7 @@ namespace FemboyMode
             // StaticMetaballSeed recursively enumerates MetaballNode objects
             // BELOW its sourceRoot. Parent our isolated object there, or the
             // physical blobs would not contribute to the game's mesh.
-            Transform seedRoot = host.metaseed != null &&
-                host.metaseed.sourceRoot != null
-                ? host.metaseed.sourceRoot.transform : host.transform;
+            Transform seedRoot = host.metaseed.sourceRoot.transform;
             privateSourceRoot.transform.SetParent(seedRoot, false);
             shooter.objSourceRoot = privateSourceRoot;
 
