@@ -417,7 +417,10 @@ namespace FemboyMode
                 while (binding.Proxy.transform.childCount > 0)
                 {
                     Transform child = binding.Proxy.transform.GetChild(0);
-                    child.SetParent(parent, false);
+                    if (parent != null)
+                        child.SetParent(parent, false);
+                    else
+                        child.SetParent(null, true);
                 }
                 UnityEngine.Object.Destroy(binding.Proxy);
             }
