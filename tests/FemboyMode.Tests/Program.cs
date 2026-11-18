@@ -48,13 +48,36 @@ internal static class Program
         Check(sceneA != FemboyRules.EffectKey(124, 0),
             "separate scenes have separate effect keys");
 
+        // Real-world RX18 rig uses indexed and case-varied male bones:
+        // configured cm_j_dan100 must resolve cm_J_dan100_00.
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_j_dan100") == 0,
+            "literal bone name is preferred");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan100") == 1,
+            "case-insensitive bone match");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan100_00") == 2,
+            "RX18 numbered bone resolves to configured base");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan100_01") == 3,
+            "other indexed suffix remains eligible");
+        Check(FemboyRules.BoneMatchRank("cm_J_dan100_00", "cm_J_dan100_00") == 0,
+            "explicit fully qualified indexed bone wins");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan101_00") == -1,
+            "neighboring bone family never matches");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan1000_00") == -1,
+            "numeric prefix is not enough");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "cm_J_dan100_XX") == -1,
+            "non-numeric suffix is rejected");
+        Check(FemboyRules.BoneMatchRank("", "cm_J_dan100_00") == -1,
+            "empty requested name is rejected");
+        Check(FemboyRules.BoneMatchRank("cm_j_dan100", "") == -1,
+            "empty actual name is rejected");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 15 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 25 FemboyMode rules assertions passed.");
         return 0;
     }
 }
