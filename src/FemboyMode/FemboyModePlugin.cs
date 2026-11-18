@@ -36,7 +36,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnablePhysicalFluid;
         internal static ConfigEntry<float> PhysicalFluidAmount;
         internal static ConfigEntry<float> FluidLaunchSpeed;
-        internal static ConfigEntry<float> FluidElevation;
+        internal static ConfigEntry<float> FluidLocalPitch;
         internal static ConfigEntry<float> FluidSpread;
         internal static ConfigEntry<bool> EnableMaleFinishAnimation;
         internal static ConfigEntry<bool> AllowExperimentalControllerSwap;
@@ -103,14 +103,20 @@ namespace FemboyMode
                 new ConfigDescription(
                     "Multiplier for native physical fluid droplets in Aibu and insertion. 1.0 uses the original preset count; 2.0 doubles it (maximum 80 droplets). Affects real MetaballShoot objects, not just visual particles.",
                     new AcceptableValueRange<float>(0.25f, 5f)));
-            FluidLaunchSpeed = Config.Bind("Male fluid", "Launch speed", 2.5f,
+            // New key names deliberately do not inherit the 0.4.3
+            // absolute-world configuration saved in the user's BepInEx cfg.
+            // Old 2.5 speed + 18 degree world elevation overshot the target
+            // and failed to rotate with reclining poses.
+            FluidLaunchSpeed = Config.Bind("Male fluid", "Model-relative launch speed",
+                FemboyRules.DefaultFluidLaunchSpeed,
                 new ConfigDescription(
-                    "Initial physical fluid velocity in Unity units per second. Uses ForceMode.VelocityChange so projectile mass cannot turn the stream into vertical free-fall.",
-                    new AcceptableValueRange<float>(0.2f, 8f)));
-            FluidElevation = Config.Bind("Male fluid", "Launch elevation degrees", 18f,
+                    "Initial native Metaball projectile velocity along the character's actual shaft direction (not global horizontal). 0.85 is the conservative RX18 default; larger values increase range.",
+                    new AcceptableValueRange<float>(0.2f, 4f)));
+            FluidLocalPitch = Config.Bind("Male fluid", "Local pitch relative to shaft degrees",
+                FemboyRules.DefaultFluidLocalPitch,
                 new ConfigDescription(
-                    "Angle above the horizontal for the fluid stream, measured along the character's actual root-to-tip direction. Gravity then produces a parabolic arc.",
-                    new AcceptableValueRange<float>(-10f, 60f)));
+                    "Additional pitch in the shaft bone's LOCAL frame, following the character when reclining, rotating, or turning. 0 follows the actual root-to-tip direction.",
+                    new AcceptableValueRange<float>(-30f, 30f)));
             FluidSpread = Config.Bind("Male fluid", "Launch spread degrees", 6f,
                 new ConfigDescription(
                     "Maximum random launch-axis deviation. Applied to native MetaballShoot rotations.",
