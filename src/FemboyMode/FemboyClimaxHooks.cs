@@ -217,10 +217,10 @@ namespace FemboyMode
                 return;
             }
 
-            Transform bone = FindBone(character.objBodyBone.transform,
+            Transform bone = FemboyRigResolver.FindBone(character.objBodyBone.transform,
                 FemboyModePlugin.KokanAnchorBone.Value);
             if (bone == null)
-                bone = FindBone(character.objBodyBone.transform, "cf_d_kokan");
+                bone = FemboyRigResolver.FindBone(character.objBodyBone.transform, "cf_d_kokan");
             if (bone == null)
             {
                 if (!warnedMissingBone)
@@ -307,18 +307,5 @@ namespace FemboyMode
             return result;
         }
 
-        private static Transform FindBone(Transform root, string boneName)
-        {
-            if (root == null || string.IsNullOrEmpty(boneName))
-                return null;
-
-            Transform[] all = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < all.Length; i++)
-            {
-                if (string.Equals(all[i].name, boneName, StringComparison.Ordinal))
-                    return all[i];
-            }
-            return null;
-        }
     }
 }
