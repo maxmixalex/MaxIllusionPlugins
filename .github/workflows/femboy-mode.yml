@@ -109,6 +109,31 @@ jobs:
             throw 'Incremental collector unexpectedly included the default game DLLs'
           }
           Write-Output 'Collector mock archive and incremental only-extra mode verified.'
+          # Regression: running from HOME must still write beside the script.
+          $scriptFile = Join-Path $env:GITHUB_WORKSPACE 'scripts/Collect-KoikatsuBinaries.ps1'
+          $expectedRelative = Join-Path $env:GITHUB_WORKSPACE 'scripts/kk-relative-output-test.zip'
+          $wrongRelative = Join-Path $env:RUNNER_TEMP 'kk-relative-output-test.zip'
+          $defaultOut = Join-Path $env:GITHUB_WORKSPACE 'scripts/Koikatsu-debug-binaries.zip'
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $scriptFile -GameRoot $root -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d') -OutputZip './kk-relative-output-test.zip'
+            if (-not (Test-Path -LiteralPath $expectedRelative)) {
+              throw 'Relative output did not resolve beside the script'
+            }
+            if (Test-Path -LiteralPath $wrongRelative) {
+              throw 'Relative output unexpectedly appeared in current shell directory'
+            }
+            & $scriptFile -GameRoot $root -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d')
+            if (-not (Test-Path -LiteralPath $defaultOut)) {
+              throw 'Default output did not resolve beside the script'
+            }
+          }
+          finally {
+            Pop-Location
+            Remove-Item -LiteralPath $expectedRelative,$defaultOut -Force -ErrorAction SilentlyContinue
+          }
+          Write-Output 'Collector relative/default output locations verified.'
+
 
       - name: Package plugin
         if: success()
