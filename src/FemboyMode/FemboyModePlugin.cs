@@ -43,6 +43,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> VerboseLogging;
         internal static ConfigEntry<KeyboardShortcut> DumpRigHotkey;
         internal static ConfigEntry<bool> EnableKokanAnchor;
+        internal static ConfigEntry<bool> DisablePhallusToy;
         internal static ConfigEntry<string> KokanAnchorBone;
         internal static ConfigEntry<bool> EnableKokanHitCollider;
         internal static ConfigEntry<float> KokanHitRadius;
@@ -108,6 +109,8 @@ namespace FemboyMode
 
             EnableKokanAnchor = Config.Bind("Aibu alignment", "Enable Kokan action anchor", true,
                 "For a marked female character, place Kokan hand items at a named male-geometry bone in Free H.");
+            DisablePhallusToy = Config.Bind("Aibu alignment", "Hide phallus toy after massager", true,
+                "Remove only native Kokan aibulayer_02 entry 4 / icon25 / p_item_vibe IDs 7,8 for marked Free H characters; ordinary characters remain untouched.");
             KokanAnchorBone = Config.Bind("Aibu alignment", "Target bone", "cm_j_dan100",
                 "Exact transform name to attach the Kokan action item to. Does nothing if this bone is absent.");
             EnableKokanHitCollider = Config.Bind("Aibu alignment", "Enable target hit collider", true,
