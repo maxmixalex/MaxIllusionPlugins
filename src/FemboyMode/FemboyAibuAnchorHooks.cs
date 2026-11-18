@@ -22,8 +22,6 @@ namespace FemboyMode
             "areaItem", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, GameObject> OwnedAnchors =
             new Dictionary<int, GameObject>();
-        private static readonly HashSet<int> ToyFilterAppliedHands =
-            new HashSet<int>();
         private static readonly Dictionary<int, int> LastToyScanFrame =
             new Dictionary<int, int>();
 
@@ -224,8 +222,6 @@ namespace FemboyMode
                 return;
 
             int id = hand.GetInstanceID();
-            if (ToyFilterAppliedHands.Contains(id))
-                return;
 
             int frame;
             if (LastToyScanFrame.TryGetValue(id, out frame) &&
@@ -233,11 +229,7 @@ namespace FemboyMode
                 return;
             LastToyScanFrame[id] = Time.frameCount;
 
-            if (RemovePhallusToy(hand, layers))
-            {
-                ToyFilterAppliedHands.Add(id);
-                LastToyScanFrame.Remove(id);
-            }
+            RemovePhallusToy(hand, layers);
         }
 
         // A late-loaded H-control mod can recreate the unwanted toy after
@@ -345,7 +337,6 @@ namespace FemboyMode
             if (__instance == null) return;
 
             int id = __instance.GetInstanceID();
-            ToyFilterAppliedHands.Remove(id);
             LastToyScanFrame.Remove(id);
             GameObject anchor;
             if (!OwnedAnchors.TryGetValue(id, out anchor))
