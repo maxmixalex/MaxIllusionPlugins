@@ -89,7 +89,19 @@ namespace FemboyMode
                     "Sonyu climax voice fallback fired for selected actor: " +
                     "code=" + code + " channel=" + _main +
                     " state=" + flags.nowAnimStateName);
-            Trigger(flags);
+
+            // Never let an optional fluid effect prevent the game's own
+            // heroine voice / climax state from advancing.
+            try
+            {
+                Trigger(flags);
+            }
+            catch (Exception ex)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Sonyu voice fluid fallback failed safely: " +
+                    ex.GetType().Name + ": " + ex.Message);
+            }
         }
 
         [HarmonyPostfix]
