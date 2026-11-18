@@ -22,6 +22,20 @@ namespace FemboyMode
             return icon == 25 && leftItemId == 7 && rightItemId == 8;
         }
 
+        internal static float SafeShaftFraction(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                return 0.50f;
+            if (value < 0f) return 0f;
+            if (value > 1f) return 1f;
+            return value;
+        }
+
+        internal static bool CanSwapFullController(bool enabled, bool explicitOptIn)
+        {
+            return enabled && explicitOptIn;
+        }
+
         /// <summary>
         /// Sonyu Start has two pages of seven actions, selected by
         /// HSceneProc.AnimationListInfo.isFemaleInitiative.
