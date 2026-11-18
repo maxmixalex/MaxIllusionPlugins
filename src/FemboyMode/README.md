@@ -1,4 +1,4 @@
-# Femboy Mode for Koikatsu — v0.4.2
+# Femboy Mode for Koikatsu — v0.4.3
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
@@ -15,6 +15,63 @@ Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Fr
 - **Actor-local climax voice routing (v0.4.0):** `HVoiceCtrl.VoiceProc` is guarded only for the marked female channel and native Aibu/Sonyu female climax voice codes (`142/143`, `318/319`, `325–330`). The game does not provide a separate corresponding male voice channel, so it suppresses these female-exclusive speech events instead of fabricating male voice assets. Normal dialogue and the partner's voice remain unchanged.
 - **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The original Aibu squirt particle **and its associated sound** are suppressed only if the replacement effect was successfully started; otherwise vanilla effects remain. The original `HAibu.randSio` instance is captured once at construction and released when the scene closes, avoiding Unity scene scans during unrelated random calls. Effects are selected using the leading heroine's scene particle controller (never the first arbitrary HParticleCtrl in the scene). This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
 
+## RX18 screenshot + H scene log fixes (v0.4.3)
+
+The user reported a hand hovering far away from a SoS model, the native-UI
+symbol still invisible, no physical fluid in Sonyu after Aibu, and fluid
+droplets falling vertically. These four issues have separate root causes:
+
+1. **Preserve native hand animation coordinates.** Previously every
+   `HandCtrl.LayerInfo.transParents` was assigned to
+   `cm_J_dan100_00`. That changes not just the contact position, but
+   the hand animation's parent **rotation and coordinate space**, causing
+   the detached hand visible in the screenshot. Now each original hand
+   action parent gets a lightweight offset proxy *under the original
+   parent*. It maintains the original scale/orientation and translates
+   by `new Kokan contact point - vanilla cf_d_kokan_REF` in world space.
+   Each proxy is restored safely on scene exit, heroine switch or
+   plugin unload. Configurable `Hand correction world X/Y/Z` is an
+   additional fine-tune; the defaults are zero.
+2. **Marker stays within the native UI, outside clipping masks.** The
+   previous Unity Text was parented under the gauge fill's masked
+   hierarchy, which can hide it completely. The updated marker is a
+   Unity UI Text element in the **outermost native H Canvas**, drawn
+   next to the current heroine's gauge using its screen-space corners.
+   It follows the native UI scale and visibility, uses the existing
+   gauge color plus a small native `Outline` for contrast, and never
+   draws via IMGUI. The first successful binding is logged.
+3. **Aibu -> Sonyu physical fluid emitter reload.** The old emitter
+   cached an Aibu `MetaballShoot` and could continue using that
+   obsolete projectile/source after `HSceneProc.ChangeAnimator`
+   switched modes or poses. It now invalidates on **either mode or
+   animation ID change** and builds a new current-pose shooter/seed.
+   This retains the anal/regular index distinction and actor-specific
+   cleanup. Ctrl+Shift+F10 now prints mode, pose, source child count
+   and launch direction. The log also distinguishes an emitter being
+   armed from an actual physics droplet appearing in the source.
+4. **Ballistic, nonvertical launch.** Native `MetaballShoot` applies
+   force along `ShootAxis.transform.forward`. The old axis simply
+   inherited the genital bone rotation; on this rig that caused a
+   nearly vertical path. The updated axis follows the real base-to-tip
+   direction projected horizontally, with configurable upward
+   elevation (default 18 degrees), speed (2.5 Unity units/second) and
+   dispersion (6 degrees). Its own `MetaballShoot` uses
+   `ForceMode.VelocityChange`, so Rigidbody mass cannot eliminate
+   initial forward speed. Gravity and drag then create the natural
+   parabolic trajectory. The projectile settings are *not* changed
+   globally for the real male partner.
+
+**New configuration:** `Male fluid / Launch speed` (0.2–8.0),
+`Launch elevation degrees` (-10–60) and
+`Launch spread degrees` (0–30), alongside the existing
+`Amount multiplier` (0.25–5). The hand controls are
+`Aibu alignment / Hand correction world X/Y/Z`.
+
+These fixes compile and have deterministic rule tests, but the actual
+hand alignment, Canvas position and Rigidbody motion must be checked in
+RX18 before claiming live correctness. Preserve `LogOutput.log` if
+there is a remaining mismatch.
+
 ## RX18 follow-up fixes (v0.4.2)
 
 This release targets the **five specific follow-up observations** from the
@@ -22,10 +79,11 @@ RX18 test, using the supplied `LogOutput.log` and the game DLL/Unity list
 resources.
 
 - **Marker integrated into the original game HUD:** replaced the standalone
-  IMGUI rectangle with a Unity `Text` object parented directly under the
-  female `HSprite.gauge[0].imgBar` UI. It inherits the H-scene Canvas,
-  scaling and native font/color, has no raycast target, and only appears for
-  the selected marked heroine. There is no `OnGUI` overlay.
+  IMGUI rectangle with a Unity `Text` object following the female
+  `HSprite.gauge[0].imgBar` position. In v0.4.3 the element is parented
+  under the outer H Canvas instead of the gauge's masked inner hierarchy,
+  so it cannot be clipped away. It has no raycast target and only
+  appears for the selected marked heroine. There is no `OnGUI` overlay.
 - **Kokan slightly too high:** added a separate `Aibu alignment / World Y
   correction` (-0.012 Unity units by default) applied after scaled bone
   root-to-tip interpolation. The offset can be calibrated in Configuration
@@ -159,6 +217,9 @@ The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most 
 | Free H | Use male-style finish FX | true |
 | Free H | Generate native physical male fluid | true |
 | Male fluid | Amount multiplier | 1.0 (0.25–5.0) |
+| Male fluid | Launch speed | 2.5 (0.2–8.0) |
+| Male fluid | Launch elevation degrees | 18 (-10–60) |
+| Male fluid | Launch spread degrees | 6 (0–30) |
 | Free H | Suppress female Aibu squirt FX | true |
 | Aibu alignment | Enable Kokan action anchor | true |
 | Aibu alignment | Enable target hit collider | true |
@@ -167,6 +228,7 @@ The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most 
 | Aibu alignment | Shaft tip bone | `cm_J_dan109_00` |
 | Aibu alignment | Aim along shaft (0 root, 1 tip) | `0.50` |
 | Aibu alignment | World Y correction | `-0.012` |
+| Aibu alignment | Hand correction world X/Y/Z | 0 |
 | Aibu alignment | Target hit radius | `0.05` |
 | Aibu alignment | Offset X/Y/Z, Rotation X/Y/Z | 0 |
 | Male finish FX | Target bone | `cm_J_dan109_00` |
@@ -270,4 +332,4 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 7. In a Sonyu finish sequence, verify the marked actor's Generic male-geometry bones move, and that removing the marker or leaving the finish returns their rotations to the previous pose without affecting the actual male actor.
 8. Confirm that female climax dialogue is suppressed only for the marked actor; pre-climax and unrelated voice events still play. For a Humanoid replacement model, test controller switching and immediate return to normal pose; for non-Humanoid models the controller is not swapped.
 
-**Remaining functional gap / runtime validation:** v0.4.2 now contains actual actor-local animation and voice routing, but **full male-controller retargeting works only for verified compatible Humanoid rigs**. Generic rigs use limited add-on bone motion, not full-body or full-pose replacement. The actor-specific voice behavior silences the audio signal for female climax lines without discarding their native playback/finish timing; it does not replace them with a new male voice sample (the vanilla male actor does not have an equivalent voice table). These features and the alternative male-style FX must be tested in the installed game, including poses with no matching bone or animation state, UncensorSelector replacements, and interactions with BetterSquirt/KKABMX/MultiTeamH. The shared `HFlag.finish` of the actual male participant is never modified. This repository does not bundle proprietary game assets or replacement models.
+**Remaining functional gap / runtime validation:** v0.4.3 now contains actual actor-local animation and voice routing, but **full male-controller retargeting works only for verified compatible Humanoid rigs**. Generic rigs use limited add-on bone motion, not full-body or full-pose replacement. The actor-specific voice behavior silences the audio signal for female climax lines without discarding their native playback/finish timing; it does not replace them with a new male voice sample (the vanilla male actor does not have an equivalent voice table). These features and the alternative male-style FX must be tested in the installed game, including poses with no matching bone or animation state, UncensorSelector replacements, and interactions with BetterSquirt/KKABMX/MultiTeamH. The shared `HFlag.finish` of the actual male participant is never modified. This repository does not bundle proprietary game assets or replacement models.
