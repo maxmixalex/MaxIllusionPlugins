@@ -1,4 +1,4 @@
-# Femboy Mode for Koikatsu — v0.4.0
+# Femboy Mode for Koikatsu — v0.4.1
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
@@ -14,6 +14,53 @@ Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Fr
 - **Actor-local climax animation (v0.4.0):** in native two-person Free H Sonyu, only the marked heroine's finish states are intercepted. If the source male and target female both use Unity Humanoid avatars and the matching state exists, her Animator can temporarily use the male controller, restoring the original controller on the next non-finish state or scene/pose change. On Generic rigs, the fallback uses the animated male actor's `cm_J_dan100_00` to `cm_J_dan109_00` local-rotation *deltas* to move only matching male appendage bones on the marked heroine. It does **not** transfer the partner's entire skeleton, vertex shapes, voice clips, or object positions. If no matching geometry exists, it leaves native animation untouched. Both integrations have independent configuration switches; this is functional code but not yet gameplay-tested.
 - **Actor-local climax voice routing (v0.4.0):** `HVoiceCtrl.VoiceProc` is guarded only for the marked female channel and native Aibu/Sonyu female climax voice codes (`142/143`, `318/319`, `325–330`). The game does not provide a separate corresponding male voice channel, so it suppresses these female-exclusive speech events instead of fabricating male voice assets. Normal dialogue and the partner's voice remain unchanged.
 - **Male-style finishing visual:** on a marked heroine's climax in Free H, the native male outside-finish particle (`HParticleCtrl` particle ID 0, also used in `MetaballCtrl.Proc`) is cloned at her chosen body bone. The original Aibu squirt particle **and its associated sound** are suppressed only if the replacement effect was successfully started; otherwise vanilla effects remain. The original `HAibu.randSio` instance is captured once at construction and released when the scene closes, avoiding Unity scene scans during unrelated random calls. Effects are selected using the leading heroine's scene particle controller (never the first arbitrary HParticleCtrl in the scene). This **does not yet replace female animation/voice clips or the vanilla climax counters**; it only adds the correctly targeted male-style *visual effect*.
+
+## RX18 Free H user-feedback fixes (v0.4.1)
+
+These changes address the six specific gameplay issues reported after v0.4.0,
+without modifying the real male participant's HFlag.finish.
+
+1. **Saved geometry scale in Free H.** The KKAPI card-local X/Y/Z
+   multipliers are reapplied in LateUpdate after animation and third-party
+   body updates. If KKABMX or a scene reload changes the baseline scale,
+   the modifier rebases to that new baseline instead of silently giving up
+   (and restores only its own last-written value). Ctrl+Shift+F10 now
+   prints the stored X/Y/Z values and whether scaling is currently applied.
+2. **Scale-aware Kokan position.** The contact anchor aims between the
+   actual bone root and shaft tip. Defaults: base `cm_j_dan100`
+   (resolves `cm_J_dan100_00`), tip `cm_J_dan109_00`, interpolation
+   `0.50`. Both bone world positions already include model scaling, and
+   the configured hit radius stays constant in world units. The existing
+   local X/Y/Z offsets still allow fine calibration for custom meshes.
+3. **Remove the last Kokan phallus toy.** The original
+   `aibulayer_02` entry 4 / icon 25 / `p_item_vibe` object IDs 7/8
+   is removed **only for marked Free H characters**. The preceding
+   electric-massager `denma` entry 3 (object IDs 5/6) stays available.
+   Normal characters' item lists remain unchanged.
+4. **Free H character marker.** The currently selected marked heroine
+   displays an upper-left **⚥ FEMBOY** marker; it is hidden for
+   ordinary characters, in other game modes and when disabled via config.
+5. **Do not truncate Sonyu climax.** A live report showed that
+   swapping the marked heroine's whole AnimatorController can interrupt
+   the original climax state machine. That experimental swap is now
+   **OFF by default**, controlled by a *new* explicit opt-in key even
+   if the old v0.4.0 key was already enabled. The marked male
+   appendage's per-bone motion follower remains independently available;
+   the original female full-body climax animation stays in control.
+6. **Actual native liquid physics in Aibu/Sonyu.** The marked actor's
+   climax now attempts to start a separate `MetaballShoot` emitter
+   backed by the game's own `UpdateMeta` / `StaticMetaballSeed`
+   mesh renderer and outside-fluid projectile. Aibu can load the native
+   `siru_khs_00` projectile preset if no male Sonyu emitter is active.
+   Its source root is isolated from the real male actor, so scene
+   cleanup cannot delete the other participant's fluid objects.
+   If these assets are absent or the game has disabled semen effects,
+   the original particle is preserved.
+
+**Status:** the source changes above compile, but they require a fresh
+RX18 gameplay run before their visual outcomes can be certified.
+In particular, a custom UncensorSelector body may have no
+`cm_J_dan109_00` tip bone or the desired physics projectile.
 
 ## RX18 rig compatibility (verified from local installation inventory)
 
@@ -52,14 +99,20 @@ The file `BepInEx/config/MaxMixAlex.FemboyMode.cfg` is created by BepInEx. Most 
 | Maker | Enable male geometry bone scaling | true |
 | Maker | Male geometry bone | `cm_j_dan100` |
 | Free H | Restrict front insertion | true |
-| Free H | Retarget compatible male climax animation | true (Humanoid only) |
+| Free H | Show top-left Femboy marker | true |
+| Free H | Retarget compatible male climax animation | true (legacy feature switch) |
+| Free H | Allow experimental full-controller swap | **false** (safety gate) |
 | Free H | Copy native male geometry climax motion | true (Generic bone fallback) |
 | Free H | Suppress female climax voice | true |
 | Free H | Use male-style finish FX | true |
+| Free H | Generate native physical male fluid | true |
 | Free H | Suppress female Aibu squirt FX | true |
 | Aibu alignment | Enable Kokan action anchor | true |
 | Aibu alignment | Enable target hit collider | true |
+| Aibu alignment | Hide phallus toy after massager | true |
 | Aibu alignment | Target bone | `cm_j_dan100` |
+| Aibu alignment | Shaft tip bone | `cm_J_dan109_00` |
+| Aibu alignment | Aim along shaft (0 root, 1 tip) | `0.50` |
 | Aibu alignment | Target hit radius | `0.05` |
 | Aibu alignment | Offset X/Y/Z, Rotation X/Y/Z | 0 |
 | Male finish FX | Target bone | `cm_J_dan109_00` |
@@ -163,4 +216,4 @@ Passing CI proves **C# compilation only**, not the actual motion or visual resul
 7. In a Sonyu finish sequence, verify the marked actor's Generic male-geometry bones move, and that removing the marker or leaving the finish returns their rotations to the previous pose without affecting the actual male actor.
 8. Confirm that female climax dialogue is suppressed only for the marked actor; pre-climax and unrelated voice events still play. For a Humanoid replacement model, test controller switching and immediate return to normal pose; for non-Humanoid models the controller is not swapped.
 
-**Remaining functional gap / runtime validation:** v0.4.0 now contains actual actor-local animation and voice routing, but **full male-controller retargeting works only for verified compatible Humanoid rigs**. Generic rigs use limited add-on bone motion, not full-body or full-pose replacement. The actor-specific voice behavior suppresses female climax voice events; it does not replace them with a new male voice sample (the vanilla male actor does not have an equivalent voice table). These features and the alternative male-style FX must be tested in the installed game, including poses with no matching bone or animation state, UncensorSelector replacements, and interactions with BetterSquirt/KKABMX/MultiTeamH. The shared `HFlag.finish` of the actual male participant is never modified. This repository does not bundle proprietary game assets or replacement models.
+**Remaining functional gap / runtime validation:** v0.4.1 now contains actual actor-local animation and voice routing, but **full male-controller retargeting works only for verified compatible Humanoid rigs**. Generic rigs use limited add-on bone motion, not full-body or full-pose replacement. The actor-specific voice behavior suppresses female climax voice events; it does not replace them with a new male voice sample (the vanilla male actor does not have an equivalent voice table). These features and the alternative male-style FX must be tested in the installed game, including poses with no matching bone or animation state, UncensorSelector replacements, and interactions with BetterSquirt/KKABMX/MultiTeamH. The shared `HFlag.finish` of the actual male participant is never modified. This repository does not bundle proprietary game assets or replacement models.
