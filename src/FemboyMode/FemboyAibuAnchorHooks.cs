@@ -112,7 +112,7 @@ namespace FemboyMode
                     if (oldUpdater != null)
                         oldUpdater.Configure(bone,
                             FemboyRigResolver.FindBone(_female.objBodyBone.transform,
-                                FemboyModePlugin.KokanTipBone.Value));
+                                FemboyModePlugin.KokanTipBone.Value), _female);
                     return;
                 }
 
@@ -147,7 +147,7 @@ namespace FemboyMode
             FemboyAnchorUpdater updater = anchor.AddComponent<FemboyAnchorUpdater>();
             updater.Configure(bone,
                 FemboyRigResolver.FindBone(_female.objBodyBone.transform,
-                    FemboyModePlugin.KokanTipBone.Value));
+                    FemboyModePlugin.KokanTipBone.Value), _female);
 
             int changed = BindKokanItemParents(__instance, layers[2], anchor.transform);
 
@@ -342,7 +342,7 @@ namespace FemboyMode
                             binding.Proxy.GetComponent<FemboyKokanHandProxy>();
                         if (updater != null)
                             updater.Configure(binding.Original, native,
-                                contactAnchor);
+                                contactAnchor, GetMarkedHandOwner(hand));
                     }
                     return old.Count;
                 }
@@ -371,7 +371,8 @@ namespace FemboyMode
                         "FemboyMode_KokanHandOffset_" + i);
                     proxy.transform.SetParent(original, false);
                     var updater = proxy.AddComponent<FemboyKokanHandProxy>();
-                    updater.Configure(original, originalContact, contactAnchor);
+                    updater.Configure(original, originalContact, contactAnchor,
+                        GetMarkedHandOwner(hand));
 
                     layer.transParents[i] = proxy.transform;
                     bindings.Add(new HandParentBinding
@@ -387,6 +388,12 @@ namespace FemboyMode
             if (bindings.Count > 0)
                 HandParents[handId] = bindings;
             return bindings.Count;
+        }
+
+        private static ChaControl GetMarkedHandOwner(HandCtrl hand)
+        {
+            return hand == null || FemaleField == null ? null :
+                FemaleField.GetValue(hand) as ChaControl;
         }
 
         private static Transform FindOriginalKokanContact(HandCtrl hand)
@@ -461,6 +468,11 @@ namespace FemboyMode
                 anchor == null)
                 return;
 
+            // While panties still cover the groin, keep the native clothing
+            // hit target and do not select the hidden penile collider.
+            ChaControl wearer = GetMarkedHandOwner(__instance);
+            if (wearer != null && !wearer.notShorts) return;
+
             SphereCollider collider = anchor.GetComponent<SphereCollider>();
             if (collider == null || !collider.enabled || __instance.nowMES == null ||
                 __instance.nowMES.isTouchAreas == null ||
@@ -533,13 +545,16 @@ namespace FemboyMode
         private Transform original;
         private Transform nativeContact;
         private Transform targetContact;
+        private ChaControl wearer;
+        private bool? lastExposed;
 
         public void Configure(Transform sourceParent, Transform nativeTouch,
-            Transform targetTouch)
+            Transform targetTouch, ChaControl markedActor)
         {
             original = sourceParent;
             nativeContact = nativeTouch;
             targetContact = targetTouch;
+            wearer = markedActor;
             Align();
         }
 
@@ -556,7 +571,20 @@ namespace FemboyMode
             // Disabled integration should not detach an item whose native
             // parent is currently this proxy.
             Vector3 shift = Vector3.zero;
-            if (targetContact != null &&
+            // notShorts is Koikatsu's live visual underwear status. When
+            // panties are worn, original HandCtrl parents already target
+            // the cloth-covered crotch; any penile displacement floats.
+            bool exposed = wearer == null || wearer.notShorts;
+            if (lastExposed != exposed)
+            {
+                lastExposed = exposed;
+                if (FemboyModePlugin.VerboseLogging != null &&
+                    FemboyModePlugin.VerboseLogging.Value)
+                    FemboyModePlugin.LogOptionalIntegrationProblem(
+                        "Kokan hand target switched to " +
+                        (exposed ? "exposed male geometry" : "native underwear surface"));
+            }
+            if (exposed && targetContact != null &&
                 FemboyModePlugin.EnableKokanAnchor != null &&
                 FemboyModePlugin.EnableKokanAnchor.Value)
             {
@@ -582,10 +610,12 @@ namespace FemboyMode
     {
         private Transform shaftRoot;
         private Transform shaftTip;
+        private ChaControl wearer;
 
-        public void Configure(Transform root, Transform tip)
+        public void Configure(Transform root, Transform tip, ChaControl markedActor)
         {
             shaftRoot = root;
+            wearer = markedActor;
             // Prefer a tip within the same attached male-bone chain.
             // Never interpolate to an unrelated limb in a replacement rig.
             shaftTip = tip != null && root != null &&
@@ -633,7 +663,8 @@ namespace FemboyMode
             if (hit == null) return;
 
             hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
-                          FemboyModePlugin.EnableKokanAnchor.Value;
+                          FemboyModePlugin.EnableKokanAnchor.Value &&
+                          (wearer == null || wearer.notShorts);
 
             // A SphereCollider's world-space radius is multiplied by the
             // parent transform's largest lossy-scale component. Normalize
