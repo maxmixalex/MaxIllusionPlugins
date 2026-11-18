@@ -438,10 +438,16 @@ internal static class Program
               "khh_f_60", "male/a", "khh_m_60"),
             "kPlug asset path differences cannot be collapsed with vanilla donors");
 
-        Check(FemboyRules.UseNativeUnderwearContact(false),
-            "underwear still worn: use original cloth-covered Kokan contact");
-        Check(!FemboyRules.UseNativeUnderwearContact(true),
-            "underwear removed: use male geometry for Kokan hand placement");
+        Check(FemboyRules.UseNativeUnderwearContact(false, 0),
+            "worn underwear (state 0) retains native cloth contact");
+        Check(!FemboyRules.UseNativeUnderwearContact(false, 1),
+            "shifted underwear (state 1) rebinds the live male Kokan contact");
+        Check(!FemboyRules.UseNativeUnderwearContact(false, 2),
+            "hung underwear (state 2) rebinds the male Kokan contact");
+        Check(!FemboyRules.UseNativeUnderwearContact(false, 3),
+            "removed underwear (state 3) rebinds the male Kokan contact");
+        Check(!FemboyRules.UseNativeUnderwearContact(true, 0),
+            "no underwear object at all does not block male Kokan contact");
         Check(FemboyRules.IsReversedHoushiName("[反转] 单手口交"),
             "oral reversal uses the marked native Houshi action");
 
@@ -451,7 +457,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 185 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 188 FemboyMode rules assertions passed.");
         return 0;
     }
 }

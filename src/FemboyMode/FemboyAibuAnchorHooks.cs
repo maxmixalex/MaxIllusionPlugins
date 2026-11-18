@@ -390,6 +390,22 @@ namespace FemboyMode
             return bindings.Count;
         }
 
+        internal static bool IsKokanExposedForHand(ChaControl wearer)
+        {
+            return HasExposedKokan(wearer);
+        }
+
+        private static bool HasExposedKokan(ChaControl wearer)
+        {
+            if (wearer == null) return false;
+            int state = 0;
+            if (wearer.fileStatus != null &&
+                wearer.fileStatus.clothesState != null &&
+                wearer.fileStatus.clothesState.Length > 3)
+                state = wearer.fileStatus.clothesState[3];
+            return FemboyRules.IsKokanExposed(wearer.notShorts, state);
+        }
+
         private static ChaControl GetMarkedHandOwner(HandCtrl hand)
         {
             return hand == null || FemaleField == null ? null :
@@ -471,8 +487,7 @@ namespace FemboyMode
             // While panties still cover the groin, keep the native clothing
             // hit target and do not select the hidden penile collider.
             ChaControl wearer = GetMarkedHandOwner(__instance);
-            if (wearer != null &&
-                FemboyRules.UseNativeUnderwearContact(wearer.notShorts)) return;
+            if (wearer != null && !HasExposedKokan(wearer)) return;
 
             SphereCollider collider = anchor.GetComponent<SphereCollider>();
             if (collider == null || !collider.enabled || __instance.nowMES == null ||
@@ -576,7 +591,7 @@ namespace FemboyMode
             // panties are worn, original HandCtrl parents already target
             // the cloth-covered crotch; any penile displacement floats.
             bool exposed = wearer == null ||
-                !FemboyRules.UseNativeUnderwearContact(wearer.notShorts);
+                FemboyAibuAnchorHooks.IsKokanExposedForHand(wearer);
             if (lastExposed != exposed)
             {
                 lastExposed = exposed;
@@ -584,7 +599,12 @@ namespace FemboyMode
                     FemboyModePlugin.VerboseLogging.Value)
                     FemboyModePlugin.LogOptionalIntegrationProblem(
                         "Kokan hand target switched to " +
-                        (exposed ? "exposed male geometry" : "native underwear surface"));
+                        (exposed ? "exposed male geometry" : "native underwear surface") +
+                        " notShorts=" + (wearer == null ? "unknown" : wearer.notShorts.ToString()) +
+                        " shortsState=" + (wearer == null || wearer.fileStatus == null ||
+                           wearer.fileStatus.clothesState == null ||
+                           wearer.fileStatus.clothesState.Length <= 3 ? "-1" :
+                           wearer.fileStatus.clothesState[3].ToString()));
             }
             if (exposed && targetContact != null &&
                 FemboyModePlugin.EnableKokanAnchor != null &&
@@ -667,7 +687,7 @@ namespace FemboyMode
             hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
                           FemboyModePlugin.EnableKokanAnchor.Value &&
                           (wearer == null ||
-                           !FemboyRules.UseNativeUnderwearContact(wearer.notShorts));
+                           FemboyAibuAnchorHooks.IsKokanExposedForHand(wearer));
 
             // A SphereCollider's world-space radius is multiplied by the
             // parent transform's largest lossy-scale component. Normalize

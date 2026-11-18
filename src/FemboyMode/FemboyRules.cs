@@ -167,9 +167,18 @@ namespace FemboyMode
         // Koikatsu's ChaControl.notShorts reflects whether the underwear
         // surface is moved away. HandCtrl should remain on its native cloth
         // contact while false; only exposed geometry uses the male anchor.
-        internal static bool UseNativeUnderwearContact(bool notShorts)
+        // notShorts describes the availability of the shorts mesh, not
+        // which live cloth state the user selected. In H scenes the state
+        // transitions On(0) -> Shift(1) -> Hang(2) -> Off(3).
+        internal static bool IsKokanExposed(bool noShorts, int liveShortsState)
         {
-            return !notShorts;
+            return noShorts || liveShortsState > 0;
+        }
+
+        internal static bool UseNativeUnderwearContact(bool noShorts,
+            int liveShortsState)
+        {
+            return !IsKokanExposed(noShorts, liveShortsState);
         }
 
         internal static bool IsReversedHoushiName(string name)
