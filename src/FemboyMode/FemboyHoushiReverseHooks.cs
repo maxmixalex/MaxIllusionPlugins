@@ -43,6 +43,22 @@ namespace FemboyMode
             if (controller != null) controller.DecorateRows();
         }
 
+        // The original OnChangePlaySelect discards actions whose id equals
+        // the current donor pose. Cloned reversals intentionally retain the
+        // donor's ids and asset information: handle the selected object by
+        // exact action reference and request one native ChangeAnimator.
+        [HarmonyPrefix]
+        [HarmonyPriority(Priority.First)]
+        [HarmonyPatch(typeof(HSprite), nameof(HSprite.OnChangePlaySelect))]
+        private static bool BeforeSelect(HSprite __instance, object[] __args)
+        {
+            if (__instance == null || __args == null || __args.Length == 0)
+                return true;
+            var controller = __instance.GetComponent<FemboyHoushiReverseController>();
+            return controller == null || !controller.TrySelectReversed(
+                __args[0] as GameObject);
+        }
+
         [HarmonyPrefix]
         [HarmonyPatch(typeof(HSceneProc), "ChangeAnimator")]
         private static void BeforeChangeAnimator(HSceneProc __instance)
@@ -53,6 +69,7 @@ namespace FemboyMode
         }
 
         [HarmonyPostfix]
+        [HarmonyPriority(Priority.Last)]
         [HarmonyPatch(typeof(HSceneProc), "ChangeAnimator")]
         private static void AfterChangeAnimator(HSceneProc __instance,
             HSceneProc.AnimationListInfo _nextAinmInfo)
@@ -74,9 +91,11 @@ namespace FemboyMode
 
         private static readonly MethodInfo CloneMethod = typeof(object).GetMethod(
             "MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
-        private readonly Dictionary<HSceneProc.AnimationListInfo,
-            HSceneProc.AnimationListInfo> clones =
-            new Dictionary<HSceneProc.AnimationListInfo, HSceneProc.AnimationListInfo>();
+        // A donor can be copied by kPlug/AnimationLoader and by HSprite list
+        // rebuilding. Key by the actual underlying animation, never by the
+        // temporary AnimationListInfo reference.
+        private readonly Dictionary<string, HSceneProc.AnimationListInfo> clones =
+            new Dictionary<string, HSceneProc.AnimationListInfo>(StringComparer.Ordinal);
         private readonly HashSet<HSceneProc.AnimationListInfo> reversed =
             new HashSet<HSceneProc.AnimationListInfo>();
         private HSprite sprite;
@@ -86,6 +105,8 @@ namespace FemboyMode
         private int nextScanFrame;
         private int nextLabelFrame;
         private bool rebuilding;
+        private bool inDirectSelection;
+        private int missingMappingWarned;
         private bool alreadyReported;
         private bool active;
         private int repairAttempts;
@@ -148,6 +169,134 @@ namespace FemboyMode
                     InstallControllers(currentHeroine, currentPartner);
                 }
             }
+        }
+
+        internal bool TrySelectReversed(GameObject clicked)
+        {
+            if (clicked == null || inDirectSelection) return false;
+            HSprite.AnimationInfoComponent component =
+                clicked.GetComponent<HSprite.AnimationInfoComponent>();
+            HSceneProc.AnimationListInfo selected =
+                component == null ? null : component.info;
+            if (selected == null || !reversed.Contains(selected))
+                return false;
+
+            FindScene();
+            Animator heroine, partner;
+            if (!GetMarkedActors(out heroine, out partner) || scene == null)
+                return false;
+            inDirectSelection = true;
+            try
+            {
+                // Do not run OnChangePlaySelect, which compares the duplicate's
+                // donor id and can silently ignore an otherwise valid click.
+                scene.flags.selectAnimationListInfo = null;
+                scene.ChangeAnimator(selected, true);
+                scene.flags.selectAnimationListInfo = null;
+                scene.flags.voiceWait = false;
+                Toggle toggled = clicked.GetComponent<Toggle>();
+                if (toggled != null) toggled.isOn = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi reversed action selected directly: id=" +
+                    selected.id + " kind=" + selected.kindHoushi +
+                    " name=" + selected.nameAnimation);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Houshi reversed native selection failed safely: " +
+                    ex.GetType().Name + ": " + ex.Message);
+                return true;
+            }
+            finally { inDirectSelection = false; }
+        }
+
+        private static IDictionary GetImportMapping()
+        {
+            Type loader = AccessTools.TypeByName("AnimationLoader.SwapAnim");
+            if (loader == null) return null;
+            PropertyInfo property = AccessTools.Property(loader, "SwapAnimationMapping");
+            object map = property == null ? null : property.GetValue(null, null);
+            if (map == null)
+            {
+                FieldInfo field = AccessTools.Field(loader, "swapAnimationMapping");
+                map = field == null ? null : field.GetValue(null);
+            }
+            return map as IDictionary;
+        }
+
+        private static string ReadImportString(object metadata, string field)
+        {
+            if (metadata == null) return "";
+            FieldInfo info = AccessTools.Field(metadata.GetType(), field);
+            if (info != null) return info.GetValue(metadata) as string ?? "";
+            PropertyInfo property = AccessTools.Property(metadata.GetType(), field);
+            return property == null ? "" :
+                property.GetValue(metadata, null) as string ?? "";
+        }
+
+        private static string ImportSourceKey(object metadata)
+        {
+            if (metadata == null) return null;
+            string name = ReadImportString(metadata, "AnimationName");
+            string female = ReadImportString(metadata, "PathFemale");
+            string male = ReadImportString(metadata, "PathMale");
+            string femaleClip = ReadImportString(metadata, "ControllerFemale");
+            string maleClip = ReadImportString(metadata, "ControllerMale");
+            string guid = ReadImportString(metadata, "Guid");
+            return "import:" + guid + "|" + name + "|" + female + "|" +
+                femaleClip + "|" + male + "|" + maleClip;
+        }
+
+        // AnimationLoader's two Harmony hooks read the SAME mapping:
+        // LoadMotionList uses AnimationName for its UI, while ChangeAnimator
+        // resolves imported female/male controllers from its path fields.
+        // Register the clone with a copied metadata object or the button
+        // displays the donor's label and plays the donor without imports.
+        private bool BindImportedClone(IDictionary mapping,
+            HSceneProc.AnimationListInfo original,
+            HSceneProc.AnimationListInfo clone, object metadata,
+            string localizedLabel)
+        {
+            if (mapping == null || metadata == null) return true;
+            try
+            {
+                object replacement = CloneMethod.Invoke(metadata, null);
+                FieldInfo label = AccessTools.Field(replacement.GetType(), "AnimationName");
+                if (label == null || label.FieldType != typeof(string))
+                    return false;
+                label.SetValue(replacement, localizedLabel);
+                mapping[clone] = replacement;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (missingMappingWarned++ < 3)
+                    FemboyModePlugin.LogOptionalIntegrationProblem(
+                        "Houshi clone could not retain AnimationLoader mapping: " +
+                        ex.GetType().Name + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private bool SceneAllowsImport(HSceneProc.AnimationListInfo donor)
+        {
+            if (donor == null || donor.lstCategory == null ||
+                donor.lstCategory.Count == 0) return true;
+            List<int> current = null;
+            try
+            {
+                current = Traverse.Create(scene).Field("categorys")
+                    .GetValue<List<int>>();
+            }
+            catch (Exception) { }
+            if (current == null || current.Count == 0) return true;
+            for (int i = 0; i < donor.lstCategory.Count; i++)
+                if (donor.lstCategory[i] != null &&
+                    current.Contains(donor.lstCategory[i].category))
+                    return true;
+            return false;
         }
 
         private void FindScene()
@@ -239,9 +388,10 @@ namespace FemboyMode
             catch (Exception) { return; }
             if (submenus == null || submenus.Length < 3) return;
 
-            // Native and kPlug/AnimationLoader can install entries into
-            // *different* live collections. Use their union, including all
-            // three Houshi submenus, and revisit when those lists are rebuilt.
+            // Scan only CURRENTLY usable native actions and imported actions
+            // that the current H-point category actually permits. Appending
+            // every imported and donor pose unconditionally was producing
+            // hundreds of duplicate-looking buttons.
             var donors = new List<HSceneProc.AnimationListInfo>();
             var seen = new HashSet<HSceneProc.AnimationListInfo>();
             for (int i = 0; i < source.Count; i++)
@@ -254,18 +404,25 @@ namespace FemboyMode
                     for (int i = 0; i < submenus[k].Count; i++)
                         AppendUnique(donors, seen, submenus[k][i]);
 
-            // Animation Loader keeps its imported kPlug-compatible motions
-            // in the same map that MultiTeamH uses. Only entries belonging
-            // to Houshi are eligible; the donor must provide a full 1F1M rig.
-            Type loader = AccessTools.TypeByName("AnimationLoader.SwapAnim");
-            FieldInfo field = loader == null ? null :
-                AccessTools.Field(loader, "swapAnimationMapping");
-            IDictionary mapping = field == null ? null : field.GetValue(null) as IDictionary;
+            IDictionary mapping = GetImportMapping();
+            var imports = new Dictionary<HSceneProc.AnimationListInfo, object>();
+            int seenImports = 0;
             if (mapping != null)
+            {
                 foreach (DictionaryEntry entry in mapping)
-                    AppendUnique(donors, seen, entry.Key as HSceneProc.AnimationListInfo);
+                {
+                    HSceneProc.AnimationListInfo key =
+                        entry.Key as HSceneProc.AnimationListInfo;
+                    if (key == null || key.mode != HFlag.EMode.houshi ||
+                        !SceneAllowsImport(key)) continue;
+                    imports[key] = entry.Value;
+                    AppendUnique(donors, seen, key);
+                    seenImports++;
+                }
+            }
 
-            int newCount = 0;
+            int newCount = 0, nativeCreated = 0, importedCreated = 0;
+            var uniqueThisPass = new HashSet<string>(StringComparer.Ordinal);
             for (int i = 0; i < donors.Count; i++)
             {
                 HSceneProc.AnimationListInfo donor = donors[i];
@@ -276,19 +433,48 @@ namespace FemboyMode
                       !string.IsNullOrEmpty(donor.pathFemaleBase1.file))))
                     continue;
 
+                object metadata;
+                imports.TryGetValue(donor, out metadata);
+                if (metadata == null && mapping != null && mapping.Contains(donor))
+                    metadata = mapping[donor];
+                string importedKey = ImportSourceKey(metadata);
+                string key = importedKey ??
+                    ("native:" + donor.id + "|" + donor.kindHoushi +
+                     "|" + donor.nameAnimation);
+                if (!uniqueThisPass.Add(key)) continue;
+
+                string name = metadata == null ? donor.nameAnimation :
+                    ReadImportString(metadata, "AnimationName");
+                if (string.IsNullOrEmpty(name)) name = donor.nameAnimation;
+                string label = FemboyHoushiLocalizer.LocalizeReversed(
+                    "[Reversed] " + name);
+
                 HSceneProc.AnimationListInfo clone;
-                if (!clones.TryGetValue(donor, out clone))
+                if (!clones.TryGetValue(key, out clone))
                 {
                     clone = CloneMethod.Invoke(donor, null)
                         as HSceneProc.AnimationListInfo;
                     if (clone == null) continue;
-                    // Native labels must be correct even before pooled UI
-                    // rows have been decorated.
-                    clone.nameAnimation = FemboyHoushiLocalizer.LocalizeReversed(
-                        "[Reversed] " + donor.nameAnimation);
-                    clones.Add(donor, clone);
+                    clone.nameAnimation = label;
+                    if (!BindImportedClone(mapping, donor, clone, metadata, label))
+                        continue;
+                    clones.Add(key, clone);
                     reversed.Add(clone);
+                    if (metadata == null) nativeCreated++;
+                    else importedCreated++;
                 }
+                else
+                {
+                    // AnimationLoader resets its map when a new catalogue is
+                    // created. Repair the existing clone mapping, not another
+                    // menu row, if this happens inside the same Free H session.
+                    if (metadata != null && mapping != null &&
+                        !mapping.Contains(clone))
+                        if (!BindImportedClone(mapping, donor, clone, metadata, label))
+                            continue;
+                    clone.nameAnimation = label;
+                }
+
                 int category = CategoryFor(donor, submenus);
                 clone.kindHoushi = category;
                 bool justAdded = false;
@@ -310,7 +496,11 @@ namespace FemboyMode
                 FemboyModePlugin.LogOptionalIntegrationProblem(
                     "Houshi [Reversed] catalog synchronized: newly added=" +
                     newCount + " total=" + reversed.Count +
-                    " (native + kPlug/AnimationLoader). In-game labels localized.");
+                    " sourceNative=" + nativeCreated +
+                    " sourceImported=" + importedCreated +
+                    " importedEligible=" + seenImports +
+                    " mappingAvailable=" + (mapping != null) +
+                    ". Native/kPlug labels and controller bindings preserved.");
                 alreadyReported = true;
             }
             else if (!alreadyReported && donors.Count > 0)
