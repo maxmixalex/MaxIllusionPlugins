@@ -180,13 +180,39 @@ internal static class Program
             new[] { 0, 1, 2, 3, 4, 7 }, 4) == 7,
             "select next actual key even if IDs have gaps");
 
+        // Physical fluid emitted drop count (first shot + intervals).
+        Check(FemboyRules.FluidIntervalCount(9, 1f) == 9,
+            "amount 1.0 preserves native ten-shot preset");
+        Check(FemboyRules.FluidIntervalCount(9, 2f) == 19,
+            "amount 2.0 doubles native projectile count");
+        Check(FemboyRules.FluidIntervalCount(9, 0.5f) == 4,
+            "amount 0.5 halves physical droplet count");
+        Check(FemboyRules.FluidIntervalCount(0, 1f) == 1,
+            "empty native preset still emits two droplets");
+        Check(FemboyRules.FluidIntervalCount(9, 50f) == 79,
+            "excessive amount cannot create more than 80 droplets");
+        Check(FemboyRules.FluidIntervalCount(9, float.NaN) == 9,
+            "malformed amount returns to 1.0");
+        Check(FemboyRules.IsFemaleInsertionFinishStart("A_WS_IN_Start"),
+            "anal simultaneous climax start triggers physical liquid");
+        Check(FemboyRules.IsFemaleInsertionFinishStart("SF_IN_Start"),
+            "female-only insertion climax triggers liquid");
+        Check(FemboyRules.IsFemaleInsertionFinishStart("WF_IN_Start"),
+            "normal insertion climax start triggers liquid");
+        Check(FemboyRules.IsFemaleInsertionFinishStart("SS_IN_Start"),
+            "combined insertion climax start triggers liquid");
+        Check(!FemboyRules.IsFemaleInsertionFinishStart("A_WS_IN_A"),
+            "post-climax recovery state does not retrigger liquid");
+        Check(!FemboyRules.IsFemaleInsertionFinishStart("A_M_OUT_Start"),
+            "male-only climax does not trigger heroine liquid");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 73 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 85 FemboyMode rules assertions passed.");
         return 0;
     }
 }
