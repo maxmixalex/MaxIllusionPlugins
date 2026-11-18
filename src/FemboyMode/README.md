@@ -121,8 +121,14 @@ and `abdata/h/list/20_00.unity3d` (~3.37 MiB). To collect those
 
 ```powershell
 .\Collect-KoikatsuBinaries.ps1 -GameRoot "D:\Games\Koikatsu" `
-  -ExtraRelativeFiles @("abdata/h/list/00_00.unity3d", "abdata/h/list/20_00.unity3d")
+  -OnlyExtraFiles `
+  -ExtraRelativeFiles @("abdata/h/list/00_00.unity3d", "abdata/h/list/20_00.unity3d") `
+  -OutputZip ".\Koikatsu-animation-lists.zip"
 ```
+
+The `-OnlyExtraFiles` flag produces a much smaller incremental archive:
+it omits the same DLL/EXE files already provided in the initial debug ZIP.
+It requires at least one `-ExtraRelativeFiles` path.
 
 Only privately share bundles from your own installation. Review the
 resulting ZIP before sharing, and never add these proprietary bundles
