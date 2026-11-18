@@ -34,6 +34,33 @@ namespace FemboyMode
             return next == int.MaxValue ? -1 : next;
         }
 
+        // Native MetaballShoot emits its first droplet immediately and
+        // then uses one aInterval entry for each additional droplet.
+        // A multiplier of 2 therefore doubles (intervals + 1), not just
+        // the number of wait times. Clamped to avoid excessive physics load.
+        internal static int FluidIntervalCount(int nativeIntervals, float amount)
+        {
+            if (float.IsNaN(amount) || float.IsInfinity(amount))
+                amount = 1f;
+            if (amount < 0.25f) amount = 0.25f;
+            if (amount > 5f) amount = 5f;
+            int baseShots = nativeIntervals < 1 ? 2 : nativeIntervals + 1;
+            int shots = (int)Math.Ceiling(baseShots * amount);
+            if (shots < 2) shots = 2;
+            if (shots > 80) shots = 80;
+            return shots - 1;
+        }
+
+        internal static bool IsFemaleInsertionFinishStart(string state)
+        {
+            if (string.IsNullOrEmpty(state))
+                return false;
+            if (state.StartsWith("A_", StringComparison.Ordinal))
+                state = state.Substring(2);
+            return state == "WF_IN_Start" || state == "WS_IN_Start" ||
+                   state == "SF_IN_Start" || state == "SS_IN_Start";
+        }
+
         internal static float SafeShaftFraction(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value))
