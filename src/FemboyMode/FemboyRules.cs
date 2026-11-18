@@ -157,6 +157,35 @@ namespace FemboyMode
 
         // Koikatsu Houshi body clips have the S/M/L or SM/ML motion
         // variants. Never exchange actor facial, reaction, or Sonyu clips.
+        // Canonical Koikatsu human-joint transfer key. Exclude every
+        // facial-expression, collider, physics, clothing and accessory bone.
+        // 0.4.5 swapped 278 indiscriminate bones, deforming faces and rigs.
+        internal static string SharedHoushiJointKey(string name, bool isMale)
+        {
+            string prefix = isMale ? "cm_j_" : "cf_j_";
+            if (string.IsNullOrEmpty(name) ||
+                !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+            string key = name.Substring(prefix.Length).ToLowerInvariant();
+            if (key.StartsWith("hips", StringComparison.Ordinal) ||
+                key.StartsWith("kosi", StringComparison.Ordinal) ||
+                key.StartsWith("spine", StringComparison.Ordinal) ||
+                key.StartsWith("shoulder", StringComparison.Ordinal) ||
+                key.StartsWith("arm", StringComparison.Ordinal) ||
+                key.StartsWith("elbo", StringComparison.Ordinal) ||
+                key.StartsWith("forearm", StringComparison.Ordinal) ||
+                key.StartsWith("hand", StringComparison.Ordinal) ||
+                key.StartsWith("thigh", StringComparison.Ordinal) ||
+                key.StartsWith("leg", StringComparison.Ordinal) ||
+                key.StartsWith("knee", StringComparison.Ordinal) ||
+                key.StartsWith("foot", StringComparison.Ordinal) ||
+                key.StartsWith("toes", StringComparison.Ordinal) ||
+                key.StartsWith("neck", StringComparison.Ordinal) ||
+                key.StartsWith("head", StringComparison.Ordinal))
+                return key;
+            return null;
+        }
+
         internal static bool IsHoushiBodyMotionClip(string name)
         {
             if (string.IsNullOrEmpty(name)) return false;

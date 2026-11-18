@@ -380,13 +380,28 @@ internal static class Program
         Check(!FemboyRules.IsSonyuPreCombinedFinish("A_WS_IN_A"),
             "recovery A does not masquerade as HCtrl pre-climax");
 
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_spine01", false) == "spine01",
+            "female body joint is mapped by canonical stem");
+        Check(FemboyRules.SharedHoushiJointKey("cm_J_spine01", true) == "spine01",
+            "male body joint shares the same canonical stem");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_head", false) == "head",
+            "head orientation can move while facial expression bones stay native");
+        Check(FemboyRules.SharedHoushiJointKey("cf_j_eye01", false) == null,
+            "face and expression joints are not rewritten");
+        Check(FemboyRules.SharedHoushiJointKey("cm_J_dan109_00", true) == null,
+            "genital add-on joints are not exchanged");
+        Check(FemboyRules.SharedHoushiJointKey("cf_d_bust00", false) == null,
+            "body shape bones and physics controls are untouched");
+        Check(FemboyRules.SharedHoushiJointKey("cm_j_hand_L", false) == null,
+            "opposite gender's prefixed joints cannot be substituted");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 160 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 167 FemboyMode rules assertions passed.");
         return 0;
     }
 }
