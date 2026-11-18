@@ -55,13 +55,15 @@ namespace FemboyMode
             if (string.IsNullOrEmpty(boneName))
                 return;
 
-            Transform bone = FindDescendant(_female.objBodyBone.transform, boneName);
+            Transform bone = FemboyRigResolver.FindBone(
+                _female.objBodyBone.transform, boneName);
             if (bone == null)
             {
                 // Female-body rigs may not have a native male appendage bone.
                 // Fall back to the regular Kokan transform so offsets still
                 // work and no item loses its parent.
-                bone = FindDescendant(_female.objBodyBone.transform, "cf_d_kokan");
+                bone = FemboyRigResolver.FindBone(
+                    _female.objBodyBone.transform, "cf_d_kokan");
                 if (bone == null)
                 {
                     FemboyModePlugin.LogMissingAibuBone(boneName);
@@ -123,7 +125,7 @@ namespace FemboyMode
 
             OwnedAnchors[id] = anchor;
             if (FemboyModePlugin.VerboseLogging.Value)
-                FemboyModePlugin.LogAibuBound(boneName, changed);
+                FemboyModePlugin.LogAibuBound(boneName + " -> " + bone.name, changed);
         }
 
         private static int BindKokanItemParents(
@@ -215,16 +217,6 @@ namespace FemboyMode
             if (anchor != null) UnityEngine.Object.Destroy(anchor);
         }
 
-        private static Transform FindDescendant(Transform root, string name)
-        {
-            Transform[] transforms = root.GetComponentsInChildren<Transform>(true);
-            for (int i = 0; i < transforms.Length; i++)
-            {
-                if (string.Equals(transforms[i].name, name, StringComparison.Ordinal))
-                    return transforms[i];
-            }
-            return null;
-        }
     }
 
     /// <summary>
