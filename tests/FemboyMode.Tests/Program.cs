@@ -305,6 +305,8 @@ internal static class Program
 
         Check(FemboyRules.IsReversedHoushiName("[Reversed] Test"),
             "injected role-swapped service entry is detectable");
+        Check(FemboyRules.IsReversedHoushiName("[反转] 测试动作"),
+            "a localized native row still has a reversible action identity");
         Check(!FemboyRules.IsReversedHoushiName("Test"),
             "ordinary donor action remains untouched");
         Check(FemboyRules.IsHoushiBodyMotionClip("M_IN_Loop"),
@@ -354,7 +356,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 148 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 149 FemboyMode rules assertions passed.");
         return 0;
     }
 }

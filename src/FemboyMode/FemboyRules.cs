@@ -126,7 +126,8 @@ namespace FemboyMode
         internal static bool IsReversedHoushiName(string name)
         {
             return !string.IsNullOrEmpty(name) &&
-                name.StartsWith("[Reversed] ", StringComparison.Ordinal);
+                (name.StartsWith("[Reversed] ", StringComparison.Ordinal) ||
+                 name.StartsWith("[反转] ", StringComparison.Ordinal));
         }
 
         // Koikatsu Houshi body clips have the S/M/L or SM/ML motion

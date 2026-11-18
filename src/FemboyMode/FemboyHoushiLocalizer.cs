@@ -28,7 +28,9 @@ namespace FemboyMode
         internal static string LocalizeReversed(string original)
         {
             if (!FemboyRules.IsReversedHoushiName(original)) return original;
-            string actionName = original.Substring("[Reversed] ".Length);
+            string actionName = original.StartsWith("[反转] ", StringComparison.Ordinal)
+                ? original.Substring("[反转] ".Length)
+                : original.Substring("[Reversed] ".Length);
             string localized = Localize(actionName);
             bool chinese = ChineseType != null || ContainsChinese(localized);
             return (chinese ? "[反转] " : "[Reversed] ") + localized;
