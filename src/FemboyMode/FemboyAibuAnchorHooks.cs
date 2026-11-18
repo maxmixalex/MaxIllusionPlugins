@@ -18,6 +18,8 @@ namespace FemboyMode
             "dicAreaLayerInfos", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly FieldInfo FemaleField = typeof(HandCtrl).GetField(
             "female", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo SelectedItemsField = typeof(HandCtrl).GetField(
+            "areaItem", BindingFlags.Instance | BindingFlags.NonPublic);
         private static readonly Dictionary<int, GameObject> OwnedAnchors =
             new Dictionary<int, GameObject>();
 
@@ -29,10 +31,7 @@ namespace FemboyMode
         private static void BeforeHitColliderDiscovery(HandCtrl __instance)
         {
             if (__instance == null || __instance.flags == null ||
-                !__instance.flags.isFreeH ||
-                FemboyModePlugin.EnableKokanAnchor == null ||
-                !FemboyModePlugin.EnableKokanAnchor.Value ||
-                FemaleField == null)
+                !__instance.flags.isFreeH || FemaleField == null)
                 return;
 
             ChaControl _female = FemaleField.GetValue(__instance) as ChaControl;
@@ -49,6 +48,14 @@ namespace FemboyMode
             var layers = AreaLayersField.GetValue(__instance)
                 as Dictionary<int, HandCtrl.LayerInfo>[];
             if (layers == null || layers.Length <= 2 || layers[2] == null)
+                return;
+
+            if (FemboyModePlugin.DisablePhallusToy != null &&
+                FemboyModePlugin.DisablePhallusToy.Value)
+                RemovePhallusToy(__instance, layers[2]);
+
+            if (FemboyModePlugin.EnableKokanAnchor == null ||
+                !FemboyModePlugin.EnableKokanAnchor.Value)
                 return;
 
             string boneName = FemboyModePlugin.KokanAnchorBone.Value;
@@ -82,6 +89,12 @@ namespace FemboyMode
                 if (existing.transform.IsChildOf(_female.objBodyBone.transform))
                 {
                     BindKokanItemParents(layers[2], existing.transform);
+                    FemboyAnchorUpdater oldUpdater =
+                        existing.GetComponent<FemboyAnchorUpdater>();
+                    if (oldUpdater != null)
+                        oldUpdater.Configure(bone,
+                            FemboyRigResolver.FindBone(_female.objBodyBone.transform,
+                                FemboyModePlugin.KokanTipBone.Value));
                     return;
                 }
 
@@ -113,7 +126,10 @@ namespace FemboyMode
             hit.radius = Mathf.Clamp(FemboyModePlugin.KokanHitRadius.Value, 0.005f, 0.25f);
             hit.enabled = FemboyModePlugin.EnableKokanHitCollider.Value &&
                 FemboyModePlugin.EnableKokanAnchor.Value;
-            anchor.AddComponent<FemboyAnchorUpdater>();
+            FemboyAnchorUpdater updater = anchor.AddComponent<FemboyAnchorUpdater>();
+            updater.Configure(bone,
+                FemboyRigResolver.FindBone(_female.objBodyBone.transform,
+                    FemboyModePlugin.KokanTipBone.Value));
 
             int changed = BindKokanItemParents(layers[2], anchor.transform);
 
@@ -126,6 +142,36 @@ namespace FemboyMode
             OwnedAnchors[id] = anchor;
             if (FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogAibuBound(boneName + " -> " + bone.name, changed);
+        }
+
+        private static void RemovePhallusToy(
+            HandCtrl hand, Dictionary<int, HandCtrl.LayerInfo> kokanLayers)
+        {
+            var remove = new List<int>();
+            foreach (KeyValuePair<int, HandCtrl.LayerInfo> pair in kokanLayers)
+            {
+                HandCtrl.LayerInfo entry = pair.Value;
+                if (entry == null || entry.idObjects == null ||
+                    entry.idObjects.Length < 2)
+                    continue;
+
+                if (FemboyRules.IsPhallusToyLayer(
+                    entry.idIocn, entry.idObjects[0], entry.idObjects[1]))
+                    remove.Add(pair.Key);
+            }
+
+            if (remove.Count == 0) return;
+            foreach (int key in remove)
+                kokanLayers.Remove(key);
+
+            // The vanilla mouse wheel uses areaItem[2] to index these
+            // consecutive 0..N-1 rows. Removing the last row leaves the
+            // earlier hand/finger/tongue/massager items available.
+            int[] selected = SelectedItemsField == null ? null :
+                SelectedItemsField.GetValue(hand) as int[];
+            if (selected != null && selected.Length > 2 &&
+                !kokanLayers.ContainsKey(selected[2]))
+                selected[2] = 0;
         }
 
         private static int BindKokanItemParents(
