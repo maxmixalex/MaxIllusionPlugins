@@ -232,13 +232,35 @@ internal static class Program
         Check(!FemboyRules.NeedsNewFluidPreset(2, 14, 2, 14),
             "same Sonyu pose keeps active emission without restarting");
 
+        Check(FemboyRules.DefaultFluidLaunchSpeed < 1.0f &&
+              FemboyRules.DefaultFluidLaunchSpeed > 0.2f,
+            "bone-relative default launch is much shorter than old 2.5");
+        Check(FemboyRules.DefaultFluidLocalPitch == 0f,
+            "default launch follows shaft direction without world-up tilt");
+        Check(FemboyRules.IsSonyuClimaxStartVoice(325),
+            "Sonyu W climax voice starts model-local emission");
+        Check(FemboyRules.IsSonyuClimaxStartVoice(326),
+            "observed RX18 Sonyu S climax code 326 starts emission");
+        Check(FemboyRules.IsSonyuClimaxStartVoice(330),
+            "last native Sonyu climax voice is covered");
+        Check(FemboyRules.IsSonyuClimaxStartVoice(363),
+            "female-initiative start code +38 is covered");
+        Check(FemboyRules.IsSonyuClimaxStartVoice(368),
+            "female-initiative last code +38 is covered");
+        Check(!FemboyRules.IsSonyuClimaxStartVoice(318),
+            "post-climax voice does not duplicate initial fluid");
+        Check(!FemboyRules.IsSonyuClimaxStartVoice(320),
+            "actual male-only fluid voice is never redirected");
+        Check(!FemboyRules.IsSonyuClimaxStartVoice(362),
+            "nonclimax female-initiative code is not redirected");
+
         if (failures > 0)
         {
             Console.Error.WriteLine(failures + " headless rules tests failed.");
             return 1;
         }
 
-        Console.WriteLine("All 97 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 107 FemboyMode rules assertions passed.");
         return 0;
     }
 }
