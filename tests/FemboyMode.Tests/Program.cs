@@ -371,7 +371,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 156 FemboyMode rules assertions passed.");
+        Console.WriteLine("All 155 FemboyMode rules assertions passed.");
         return 0;
     }
 }
