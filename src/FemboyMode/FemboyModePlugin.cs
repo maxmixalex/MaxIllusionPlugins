@@ -28,6 +28,7 @@ namespace FemboyMode
         public const string Version = "0.4.0";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
+        internal static ConfigEntry<bool> ShowFreeHMarker;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<string> MaleGeometryBone;
@@ -74,6 +75,8 @@ namespace FemboyMode
             Log = Logger;
             EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
                 "Hide non-anal insert actions for marked female characters in vanilla two-person Free H.");
+            ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
+                "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
@@ -139,6 +142,7 @@ namespace FemboyMode
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
             harmony = new Harmony(Guid);
             harmony.PatchAll(typeof(FemboyHSceneHooks));
+            harmony.PatchAll(typeof(FemboyHMarkerHooks));
             harmony.PatchAll(typeof(FemboyMakerAssetHooks));
             harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
             harmony.PatchAll(typeof(FemboyClimaxHooks));
