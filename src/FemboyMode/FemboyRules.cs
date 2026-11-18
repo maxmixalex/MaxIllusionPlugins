@@ -8,6 +8,10 @@ namespace FemboyMode
     /// </summary>
     internal static class FemboyRules
     {
+        // Original Koikatsu h_particle TextAsset: LiquidSiru (particle ID 0)
+        // is attached to this transform, not to the Kokan base bone.
+        internal const string DefaultMaleFinishBone = "cm_J_dan109_00";
+
         /// <summary>
         /// Sonyu Start has two pages of seven actions, selected by
         /// HSceneProc.AnimationListInfo.isFemaleInitiative.
