@@ -84,6 +84,27 @@ namespace FemboyMode
         }
 
         /// <summary>
+        /// A Sonyu climax affecting the heroine uses finish kinds orgW,
+        /// sameW, orgS, sameS. Inside/outside-only belong to the actual
+        /// male participant and must never retarget the heroine.
+        /// </summary>
+        internal static bool IsFemaleFinishAnimation(int mode, int finishKind, string state)
+        {
+            if (mode != 2 || finishKind < 3 || finishKind > 6 ||
+                string.IsNullOrEmpty(state))
+                return false;
+
+            if (state.StartsWith("A_", StringComparison.Ordinal))
+                state = state.Substring(2);
+
+            return state == "OLoop" ||
+                   state.StartsWith("WF_", StringComparison.Ordinal) ||
+                   state.StartsWith("SF_", StringComparison.Ordinal) ||
+                   state.StartsWith("WS_", StringComparison.Ordinal) ||
+                   state.StartsWith("SS_", StringComparison.Ordinal);
+        }
+
+        /// <summary>
         /// Deduplicate particle FX for the currently active heroine, not
         /// for the shared HFlag instance alone.
         /// </summary>
