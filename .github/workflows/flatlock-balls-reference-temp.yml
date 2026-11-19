@@ -1,0 +1,30 @@
+name: Temporary FlatLock BP balls reference
+on:
+  push:
+    branches: [feat/femboy-character-flag]
+    paths:
+      - .github/workflows/flatlock-balls-reference-temp.yml
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch upstream original BP assets
+        uses: actions/checkout@v4
+        with:
+          repository: IllusionMods/BetterPenetration
+          ref: master
+          path: upstream
+      - name: Collect Koikatsu Balls meshes
+        run: |
+          mkdir -p build
+          cp "upstream/mods/KK/[KK][Balls]BP DA Color Match.zipmod" build/
+          cp "upstream/mods/KK/[KK][Balls]BP Color Match.zipmod" build/
+          ls -lh build/
+      - name: Export references
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatlock-bp-balls-reference
+          path: build/
+          retention-days: 1
