@@ -268,14 +268,34 @@ namespace FemboyMode
                     for (int axis = 0; axis < 3; axis++)
                     {
                         int selectedMode = mode, selectedAxis = axis;
-                        string modeLabel = mode == 0 ? "缩放" :
-                            mode == 1 ? "位移（米）" : "旋转（°）";
+                        string modeLabel = mode == 0 ? "缩放（%）" :
+                            mode == 1 ? "位移（毫米）" : "旋转（°）";
                         string axisLabel = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
                         float min = mode == 0 ? 0.5f : mode == 1 ? -0.1f : -180f;
                         float max = mode == 0 ? 2f : mode == 1 ? 0.1f : 180f;
-                        geometrySliders[part,mode,axis] = e.AddControl(new MakerSlider(
+                        MakerSlider entry = e.AddControl(new MakerSlider(
                             page, modeLabel + " " + axisLabel, min, max, mode == 0 ? 1f : 0f, this));
-                        geometrySliders[part,mode,axis].ValueChanged.Subscribe(
+                        if (mode == 1)
+                        {
+                            // KKAPI MakerSlider defaults to value*100 as an integer.
+                            // Our internal offsets are metres; display editable millimetres.
+                            entry.ValueToString = v => (v * 1000f).ToString("0.0",
+                                System.Globalization.CultureInfo.InvariantCulture);
+                            entry.StringToValue = v => float.Parse(v,
+                                System.Globalization.CultureInfo.InvariantCulture) / 1000f;
+                            entry.MouseScrollValueChange = v => v.y >= 0 ? .001f : -.001f;
+                        }
+                        else if (mode == 2)
+                        {
+                            // Rotation is stored in degrees: do not multiply by 100.
+                            entry.ValueToString = v => v.ToString("0.0",
+                                System.Globalization.CultureInfo.InvariantCulture);
+                            entry.StringToValue = v => float.Parse(v,
+                                System.Globalization.CultureInfo.InvariantCulture);
+                            entry.MouseScrollValueChange = v => v.y >= 0 ? 1f : -1f;
+                        }
+                        geometrySliders[part,mode,axis] = entry;
+                        entry.ValueChanged.Subscribe(
                             v => OnMakerGeometryChanged(selectedPart, selectedMode, selectedAxis, v));
                     }
                 axisToggles[part] = e.AddControl(new MakerToggle(
