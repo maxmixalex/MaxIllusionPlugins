@@ -25,7 +25,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.4.11";
+        public const string Version = "0.5.0";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -35,7 +35,9 @@ namespace FemboyMode
         internal static ConfigEntry<bool> ShowFreeHMarker;
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
+        internal static ConfigEntry<bool> EnableMaleGeometryTransforms;
         internal static ConfigEntry<string> MaleGeometryBone;
+        internal static ConfigEntry<string> MaleBallsBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
         internal static ConfigEntry<bool> EnablePhysicalFluid;
         internal static ConfigEntry<float> PhysicalFluidAmount;
@@ -75,7 +77,10 @@ namespace FemboyMode
         private Harmony harmony;
         private MakerToggle flagToggle;
         private MakerToggle bodyFlagToggle;
-        private MakerSlider boneScaleX, boneScaleY, boneScaleZ;
+        private readonly MakerSlider[,,] geometrySliders = new MakerSlider[2,3,3];
+        private readonly MakerToggle[] axisToggles = new MakerToggle[2];
+        private readonly bool[] axisVisible = new bool[2];
+        private readonly FemboyMakerAxisPreview axisPreview = new FemboyMakerAxisPreview();
         private static readonly FieldInfo MakerControlObjects =
             typeof(BaseGuiEntry).GetField("_controlObjects",
                 BindingFlags.Instance | BindingFlags.NonPublic);
@@ -102,9 +107,13 @@ namespace FemboyMode
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
-                "Apply per-card X/Y/Z scaling to the configured male geometry bone when available.");
+                "Apply saved per-card Penis X/Y/Z scaling. Position and rotation remain independent.");
+            EnableMaleGeometryTransforms = Config.Bind("Maker", "Enable male genital bone transforms", true,
+                "Apply per-card Penis/Balls position, rotation and scale. Disable to restore original bone transforms.");
             MaleGeometryBone = Config.Bind("Maker", "Male geometry bone", "cm_j_dan100",
-                "Bone for optional X/Y/Z body shape sliders; independent of Aibu target bone.");
+                "Penis root bone (usually cm_J_dan100_00), independent of Aibu anchor.");
+            MaleBallsBone = Config.Bind("Maker", "Male balls bone", "cm_J_dan_f_top",
+                "Independent balls root. If missing, skip transformation; never fall back to the pelvic root.");
             VerboseLogging = Config.Bind("Debug", "Verbose logs", false,
                 "Log character marker changes and integration hook decisions.");
             DumpRigHotkey = Config.Bind("Diagnostics", "Dump rig and animation names",
@@ -213,6 +222,12 @@ namespace FemboyMode
         {
             if (DumpRigHotkey != null && DumpRigHotkey.Value.IsDown())
                 FemboyDiagnostics.DumpCurrent();
+            bool active = MakerAPI.InsideAndLoaded &&
+                          EnableMaleGeometryTransforms != null && EnableMaleGeometryTransforms.Value;
+            FemboyCharacterController controller = active ?
+                GetController(MakerAPI.GetCharacterControl()) : null;
+            axisPreview.Tick(controller != null && controller.IsFemboy
+                ? controller : null, axisVisible);
         }
 
         private void OnDestroy()
@@ -220,6 +235,7 @@ namespace FemboyMode
             if (harmony != null) harmony.UnpatchSelf();
             FemboyMaleAnimationHooks.ResetAll();
             FemboyAibuAnchorHooks.ResetAll();
+            axisPreview.Dispose();
             Log = null;
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
@@ -228,9 +244,7 @@ namespace FemboyMode
 
         private void RegisterMakerControls(object sender, RegisterSubCategoriesEvent e)
         {
-            // Female cards only. No changes to the built-in sex field.
-            if (MakerAPI.GetMakerSex() != 1)
-                return;
+            if (MakerAPI.GetMakerSex() != 1) return;
 
             flagToggle = e.AddControl(new MakerToggle(
                 MakerConstants.Parameter.Character, "伪娘角色标志 (Femboy)", this));
@@ -238,17 +252,40 @@ namespace FemboyMode
                 MakerConstants.Body.All, "伪娘角色标志 (Femboy)", this));
             flagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
             bodyFlagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
-            // These controls are purpose-built for the optional male mesh.
-            // They do not pretend to be missing native female Maker sliders.
-            boneScaleX = e.AddControl(new MakerSlider(
-                MakerConstants.Body.All, "男性骨骼 X 缩放", 0.5f, 2f, 1f, this));
-            boneScaleY = e.AddControl(new MakerSlider(
-                MakerConstants.Body.All, "男性骨骼 Y 缩放", 0.5f, 2f, 1f, this));
-            boneScaleZ = e.AddControl(new MakerSlider(
-                MakerConstants.Body.All, "男性骨骼 Z 缩放", 0.5f, 2f, 1f, this));
-            boneScaleX.ValueChanged.Subscribe(v => OnMakerScaleChanged(0, v));
-            boneScaleY.ValueChanged.Subscribe(v => OnMakerScaleChanged(1, v));
-            boneScaleZ.ValueChanged.Subscribe(v => OnMakerScaleChanged(2, v));
+
+            var penisPage = new MakerCategory(
+                MakerConstants.Body.All.CategoryName, "FemboyPenis", int.MaxValue - 2, "男性器调整");
+            var ballsPage = new MakerCategory(
+                MakerConstants.Body.All.CategoryName, "FemboyBalls", int.MaxValue - 1, "睾丸调整");
+            e.AddSubCategory(penisPage);
+            e.AddSubCategory(ballsPage);
+            for (int part = 0; part < 2; part++)
+            {
+                int selectedPart = part;
+                MakerCategory page = part == 0 ? penisPage : ballsPage;
+                axisVisible[part] = false;
+                for (int mode = 0; mode < 3; mode++)
+                    for (int axis = 0; axis < 3; axis++)
+                    {
+                        int selectedMode = mode, selectedAxis = axis;
+                        string modeLabel = mode == 0 ? "缩放" :
+                            mode == 1 ? "位移（米）" : "旋转（°）";
+                        string axisLabel = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
+                        float min = mode == 0 ? 0.5f : mode == 1 ? -0.1f : -180f;
+                        float max = mode == 0 ? 2f : mode == 1 ? 0.1f : 180f;
+                        geometrySliders[part,mode,axis] = e.AddControl(new MakerSlider(
+                            page, modeLabel + " " + axisLabel, min, max, mode == 0 ? 1f : 0f, this));
+                        geometrySliders[part,mode,axis].ValueChanged.Subscribe(
+                            v => OnMakerGeometryChanged(selectedPart, selectedMode, selectedAxis, v));
+                    }
+                axisToggles[part] = e.AddControl(new MakerToggle(
+                    page, "显示轴（预览）", this));
+                axisToggles[part].ValueChanged.Subscribe(v =>
+                {
+                    if (!refreshing && MakerAPI.InsideAndLoaded)
+                        axisVisible[selectedPart] = v;
+                });
+            }
         }
 
         private void OnMakerFlagChanged(bool enabled)
@@ -265,18 +302,12 @@ namespace FemboyMode
                 Logger.LogInfo("Maker character Femboy flag changed to " + enabled);
         }
 
-        private void OnMakerScaleChanged(int axis, float value)
+        private void OnMakerGeometryChanged(int part, int mode, int axis, float value)
         {
-            if (refreshing || !MakerAPI.InsideAndLoaded)
-                return;
-
+            if (refreshing || !MakerAPI.InsideAndLoaded) return;
             FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
-            if (controller == null)
-                return;
-
-            if (axis == 0) controller.GeometryScaleX = value;
-            else if (axis == 1) controller.GeometryScaleY = value;
-            else controller.GeometryScaleZ = value;
+            if (controller != null && controller.IsFemboy)
+                controller.SetGeometryValue(part, mode, axis, value);
         }
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
@@ -316,15 +347,27 @@ namespace FemboyMode
             {
                 if (flagToggle != null) flagToggle.SetValue(enabled);
                 if (bodyFlagToggle != null) bodyFlagToggle.SetValue(enabled);
-                if (boneScaleX != null)
-                    boneScaleX.SetValue(controller == null ? 1f : controller.GeometryScaleX);
-                if (boneScaleY != null)
-                    boneScaleY.SetValue(controller == null ? 1f : controller.GeometryScaleY);
-                if (boneScaleZ != null)
-                    boneScaleZ.SetValue(controller == null ? 1f : controller.GeometryScaleZ);
-                SetMakerControlVisible(boneScaleX, enabled && EnableMaleBoneScale.Value);
-                SetMakerControlVisible(boneScaleY, enabled && EnableMaleBoneScale.Value);
-                SetMakerControlVisible(boneScaleZ, enabled && EnableMaleBoneScale.Value);
+                for (int part = 0; part < 2; part++)
+                {
+                    for (int mode = 0; mode < 3; mode++)
+                        for (int axis = 0; axis < 3; axis++)
+                        {
+                            MakerSlider slider = geometrySliders[part,mode,axis];
+                            if (slider == null) continue;
+                            slider.SetValue(controller == null
+                                ? (mode == 0 ? 1f : 0f)
+                                : controller.GetGeometryValue(part, mode, axis));
+                            bool visible = enabled && EnableMaleGeometryTransforms.Value &&
+                                (part != 0 || mode != 0 || EnableMaleBoneScale.Value);
+                            SetMakerControlVisible(slider, visible);
+                        }
+                    if (axisToggles[part] != null)
+                    {
+                        axisToggles[part].SetValue(axisVisible[part]);
+                        SetMakerControlVisible(axisToggles[part],
+                            enabled && EnableMaleGeometryTransforms.Value);
+                    }
+                }
             }
             finally
             {
