@@ -109,6 +109,15 @@ namespace FemboyMode
                     " persisted scale multipliers: X=" + mode.GeometryScaleX +
                     " Y=" + mode.GeometryScaleY + " Z=" + mode.GeometryScaleZ +
                     " scaleApplied=" + mode.HasAppliedMaleGeometryScale);
+            if (mode != null)
+                for (int part = 0; part < 2; part++)
+                    for (int operation = 0; operation < 3; operation++)
+                        log.LogInfo("[FemboyMode diagnostics] " + label +
+                            " " + (part == 0 ? "Penis " : "Balls ") +
+                            (operation == 0 ? "scale XYZ=" : operation == 1 ? "move XYZ=" : "rotation XYZ=") +
+                            mode.GetGeometryValue(part, operation, 0) + "," +
+                            mode.GetGeometryValue(part, operation, 1) + "," +
+                            mode.GetGeometryValue(part, operation, 2));
 
             FemboyPhysicalFluidEmitter fluid =
                 c.gameObject.GetComponent<FemboyPhysicalFluidEmitter>();
@@ -163,6 +172,8 @@ namespace FemboyMode
                 {
                     LogBoneResolution(log, label, c.objBodyBone.transform,
                         "male geometry", FemboyModePlugin.MaleGeometryBone);
+                    LogBoneResolution(log, label, c.objBodyBone.transform,
+                        "male balls", FemboyModePlugin.MaleBallsBone);
                     LogBoneResolution(log, label, c.objBodyBone.transform,
                         "Kokan action anchor", FemboyModePlugin.KokanAnchorBone);
                 }
