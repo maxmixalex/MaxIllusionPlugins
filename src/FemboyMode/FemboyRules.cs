@@ -294,6 +294,20 @@ namespace FemboyMode
             return value;
         }
 
+        // Local bone displacement is limited to ten centimeters.
+        // Reject values from malformed/third-party cards.
+        internal static float SafeBoneOffset(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value)) return 0f;
+            return Math.Max(-0.1f, Math.Min(0.1f, value));
+        }
+
+        internal static float SafeBoneRotation(float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value)) return 0f;
+            return Math.Max(-180f, Math.Min(180f, value));
+        }
+
         /// <summary>
         /// Resolve a requested bone against actual installed rig names.
         /// Example: cm_j_dan100 -> cm_J_dan100_00 (observed in RX18).
