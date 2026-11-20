@@ -25,7 +25,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.0";
+        public const string Version = "0.5.1";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -79,7 +79,9 @@ namespace FemboyMode
         private MakerToggle bodyFlagToggle;
         private readonly MakerSlider[,,] geometrySliders = new MakerSlider[2,3,3];
         private readonly MakerToggle[] axisToggles = new MakerToggle[2];
+        private readonly MakerDropdown[] axisModeDropdowns = new MakerDropdown[2];
         private readonly bool[] axisVisible = new bool[2];
+        private readonly int[] axisModes = new int[2];
         private readonly FemboyMakerAxisPreview axisPreview = new FemboyMakerAxisPreview();
         private static readonly FieldInfo MakerControlObjects =
             typeof(BaseGuiEntry).GetField("_controlObjects",
@@ -227,7 +229,7 @@ namespace FemboyMode
             FemboyCharacterController controller = active ?
                 GetController(MakerAPI.GetCharacterControl()) : null;
             axisPreview.Tick(controller != null && controller.IsFemboy
-                ? controller : null, axisVisible);
+                ? controller : null, axisVisible, axisModes, OnMakerAxisDragged);
         }
 
         private void OnDestroy()
@@ -264,6 +266,7 @@ namespace FemboyMode
                 int selectedPart = part;
                 MakerCategory page = part == 0 ? penisPage : ballsPage;
                 axisVisible[part] = false;
+                axisModes[part] = 1;
                 for (int mode = 0; mode < 3; mode++)
                     for (int axis = 0; axis < 3; axis++)
                     {
@@ -298,12 +301,30 @@ namespace FemboyMode
                         entry.ValueChanged.Subscribe(
                             v => OnMakerGeometryChanged(selectedPart, selectedMode, selectedAxis, v));
                     }
-                axisToggles[part] = e.AddControl(new MakerToggle(
-                    page, "显示轴（预览）", this));
-                axisToggles[part].ValueChanged.Subscribe(v =>
+                axisModeDropdowns[part] = e.AddControl(new MakerDropdown(
+                    "显示轴操作模式", new[] { "缩放", "位移", "旋转" }, page, 1, this));
+                axisModeDropdowns[part].ValueChanged.Subscribe(v =>
                 {
                     if (!refreshing && MakerAPI.InsideAndLoaded)
-                        axisVisible[selectedPart] = v;
+                        axisModes[selectedPart] = Mathf.Clamp(v,0,2);
+                });
+                axisToggles[part] = e.AddControl(new MakerToggle(
+                    page, "显示轴（可拖动）", this));
+                axisToggles[part].ValueChanged.Subscribe(v =>
+                {
+                    if (refreshing || !MakerAPI.InsideAndLoaded) return;
+                    axisVisible[selectedPart] = v;
+                    if (v)
+                    {
+                        int other = 1 - selectedPart;
+                        axisVisible[other] = false;
+                        if (axisToggles[other] != null)
+                        {
+                            refreshing = true;
+                            try { axisToggles[other].SetValue(false); }
+                            finally { refreshing = false; }
+                        }
+                    }
                 });
             }
         }
@@ -328,6 +349,15 @@ namespace FemboyMode
             FemboyCharacterController controller = GetController(MakerAPI.GetCharacterControl());
             if (controller != null && controller.IsFemboy)
                 controller.SetGeometryValue(part, mode, axis, value);
+        }
+
+        private void OnMakerAxisDragged(int part, int mode, int axis, float value)
+        {
+            MakerSlider slider = geometrySliders[part,mode,axis];
+            if (slider == null) return;
+            refreshing = true;
+            try { slider.SetValue(value); }
+            finally { refreshing = false; }
         }
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
@@ -381,6 +411,12 @@ namespace FemboyMode
                                 (part != 0 || mode != 0 || EnableMaleBoneScale.Value);
                             SetMakerControlVisible(slider, visible);
                         }
+                    if (axisModeDropdowns[part] != null)
+                    {
+                        axisModeDropdowns[part].SetValue(axisModes[part]);
+                        SetMakerControlVisible(axisModeDropdowns[part],
+                            enabled && EnableMaleGeometryTransforms.Value);
+                    }
                     if (axisToggles[part] != null)
                     {
                         axisToggles[part].SetValue(axisVisible[part]);
