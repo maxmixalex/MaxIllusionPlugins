@@ -157,7 +157,7 @@ namespace FlatLockBand
             var pixels = new Color32[_w * _h];
             for (int y = 0; y < _h; y++)
             {
-                bool buttonStripe = y < _h * 85 / 512;
+                bool buttonStripe = y >= _h * 427 / 512;
                 for (int x = 0; x < _w; x++)
                 {
                     int i = y * _w + x;
