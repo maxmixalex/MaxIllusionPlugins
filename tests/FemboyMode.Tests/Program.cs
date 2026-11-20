@@ -41,6 +41,20 @@ internal static class Program
             "infinity uses neutral scaling");
         Check(FemboyRules.SafeBoneScale(float.NegativeInfinity) == 1f,
             "negative infinity uses neutral scaling");
+        Check(FemboyRules.SafeBoneOffset(-0.15f) == -0.1f,
+            "negative translation is clamped");
+        Check(FemboyRules.SafeBoneOffset(0.15f) == 0.1f,
+            "positive translation is clamped");
+        Check(FemboyRules.SafeBoneOffset(0.03f) == 0.03f,
+            "valid translation is kept");
+        Check(FemboyRules.SafeBoneOffset(float.NaN) == 0f,
+            "malformed translation remains neutral");
+        Check(FemboyRules.SafeBoneRotation(200f) == 180f,
+            "rotation is clamped");
+        Check(FemboyRules.SafeBoneRotation(-201f) == -180f,
+            "negative rotation is clamped");
+        Check(FemboyRules.SafeBoneRotation(float.PositiveInfinity) == 0f,
+            "malformed rotation remains neutral");
 
         long sceneA = FemboyRules.EffectKey(123, 0);
         Check(sceneA != FemboyRules.EffectKey(123, 1),
