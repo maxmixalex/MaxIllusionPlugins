@@ -519,3 +519,28 @@ These changes follow verified RX18 0.4.9 feedback: the full body-role reversal n
 
 ### Runtime verification
 Confirm that the new circle is not covering the portrait, gauges or top-left status; cycle underwear through On -> Shift -> Hang -> Off and check hand movement; finish a reversed Houshi action with Siru and verify the male receives the overlay while the marked heroine remains unstained. CI compile and 188 headless rules assertions cannot verify these visual behaviors.
+
+## 0.5.0: Penis and Balls transforms in Character Maker
+
+Marked female cards now have two new Body subcategories: 男性器调整 (Penis) and 睾丸调整 (Balls).
+Each tab provides XYZ scale (0.5–2), parent-local translation (-0.1 to +0.1 Unity units),
+and bone-local XYZ rotation (-180 to +180 degrees). The old BodyBoneScaleX/Y/Z keys
+and numeric values are preserved; new data is saved with the character card (ESF version 3).
+
+Penis root: cm_j_dan100 (usually resolves to cm_J_dan100_00). Balls root:
+cm_J_dan_f_top. Both names can be overridden in BepInEx config. A missing bone is
+not replaced by the pelvis; this prevents whole-body distortion.
+
+The per-tab 显示轴（预览） toggle shows colored XYZ axes at the selected bone.
+This is a read-only preview. The stock cmpGuid draggable widget is bound to
+accessory slots; taking it over could move the currently selected accessory.
+Drag-to-edit is therefore not claimed, and all edits use native Maker sliders.
+
+Changes are applied after native pose updates and rebased when external animation
+or ABMX changes the bone baseline. Neutral values restore original transforms.
+Unmarked characters remain untouched.
+
+Suggested in-game test: change only Penis position, then only Balls rotation;
+save/reload, switch UncensorSelector model, restore neutral; then switch to Accessories
+and confirm vanilla gizmos work normally. Check H scenes with ABMX/BP enabled.
+CI compilation and headless rules do not replace Koikatsu runtime testing.
