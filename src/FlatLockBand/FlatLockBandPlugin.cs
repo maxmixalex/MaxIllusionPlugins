@@ -10,7 +10,7 @@ namespace FlatLockBand
     // The accessory is an ordinary Sideloader ao_waist part. This module
     // translates FOUR native Koikatsu accessory color swatches into the
     // fabric, button, BLACKED and Queen-of-Spades layers. No F8 window.
-    [BepInPlugin("MaxMixAlex.FlatLockBand", "FlatLock Native Accessory Colors", "6.0.0")]
+    [BepInPlugin("MaxMixAlex.FlatLockBand", "FlatLock Native Accessory Colors", "6.1.0")]
     public sealed class FlatLockBandPlugin : BaseUnityPlugin
     {
         private float _nextScan;
@@ -37,7 +37,7 @@ namespace FlatLockBand
                 enabled = false;
                 return;
             }
-            Logger.LogInfo("FlatLock v6 ready: four native Maker accessory colors; no custom editor/hotkey.");
+            Logger.LogInfo("FlatLock v6.1: three native Maker colors (fabric, snaps, combined print); no custom editor/hotkey.");
         }
 
         private byte[] LoadMask(string name, out int width, out int height)
@@ -116,12 +116,12 @@ namespace FlatLockBand
                     bool printed;
                     if (!TryGetBand(character.cusAcsCmp[slot], out target, out printed)) continue;
                     var part = parts[slot];
-                    if (part == null || part.color == null || part.color.Length < 4) continue;
+                    if (part == null || part.color == null || part.color.Length < 3) continue;
                     var palette = part.color;
                     int id = target.GetInstanceID();
                     present.Add(id);
                     string key = (printed ? "B" : "P") + Hex(palette[0]) + Hex(palette[1]) +
-                                 Hex(palette[2]) + Hex(palette[3]);
+                                 Hex(palette[2]);
                     Applied previous;
                     if (_applied.TryGetValue(id, out previous) && previous.Renderer == target && previous.Key == key)
                     {
@@ -168,7 +168,7 @@ namespace FlatLockBand
                     if (printed)
                     {
                         c = Color.Lerp(c, palette[2], _words[i] / 255f);
-                        c = Color.Lerp(c, palette[3], _spades[i] / 255f);
+                        c = Color.Lerp(c, palette[2], _spades[i] / 255f);
                     }
                     pixels[i] = new Color32(
                         (byte)Mathf.RoundToInt(Mathf.Clamp01(c.r) * 255f),
