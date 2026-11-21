@@ -25,7 +25,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.1";
+        public const string Version = "0.5.2";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -232,6 +232,11 @@ namespace FemboyMode
                 ? controller : null, axisVisible, axisModes, OnMakerAxisDragged);
         }
 
+        private void OnGUI()
+        {
+            axisPreview.DrawOverlay();
+        }
+
         private void OnDestroy()
         {
             if (harmony != null) harmony.UnpatchSelf();
@@ -255,16 +260,14 @@ namespace FemboyMode
             flagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
             bodyFlagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
 
-            var penisPage = new MakerCategory(
-                MakerConstants.Body.All.CategoryName, "FemboyPenis", int.MaxValue - 2, "男性器调整");
-            var ballsPage = new MakerCategory(
-                MakerConstants.Body.All.CategoryName, "FemboyBalls", int.MaxValue - 1, "睾丸调整");
-            e.AddSubCategory(penisPage);
-            e.AddSubCategory(ballsPage);
+            // Keep controls in the original Body > All panel: no separate tabs.
+            // Balls mirror every transform offered to Penis, separated visually.
+            MakerCategory page = MakerConstants.Body.All;
             for (int part = 0; part < 2; part++)
             {
                 int selectedPart = part;
-                MakerCategory page = part == 0 ? penisPage : ballsPage;
+                if (part == 0) e.AddControl(new MakerSeparator(page, this));
+                else e.AddControl(new MakerSeparator(page, this));
                 axisVisible[part] = false;
                 axisModes[part] = 1;
                 for (int mode = 0; mode < 3; mode++)
@@ -274,10 +277,10 @@ namespace FemboyMode
                         string modeLabel = mode == 0 ? "缩放（%）" :
                             mode == 1 ? "位移（毫米）" : "旋转（°）";
                         string axisLabel = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
-                        float min = mode == 0 ? 0.5f : mode == 1 ? -0.1f : -180f;
-                        float max = mode == 0 ? 2f : mode == 1 ? 0.1f : 180f;
+                        float min = mode == 0 ? .25f : mode == 1 ? -.30f : -360f;
+                        float max = mode == 0 ? 4f : mode == 1 ? .30f : 360f;
                         MakerSlider entry = e.AddControl(new MakerSlider(
-                            page, modeLabel + " " + axisLabel, min, max, mode == 0 ? 1f : 0f, this));
+                            page, (part == 0 ? "男性器 " : "Balls ") + modeLabel + " " + axisLabel, min, max, mode == 0 ? 1f : 0f, this));
                         if (mode == 1)
                         {
                             // KKAPI MakerSlider defaults to value*100 as an integer.
@@ -302,14 +305,14 @@ namespace FemboyMode
                             v => OnMakerGeometryChanged(selectedPart, selectedMode, selectedAxis, v));
                     }
                 axisModeDropdowns[part] = e.AddControl(new MakerDropdown(
-                    "显示轴操作模式", new[] { "缩放", "位移", "旋转" }, page, 1, this));
+                    (part == 0 ? "男性器" : "Balls") + " 轴模式", new[] { "缩放", "位移", "旋转" }, page, 1, this));
                 axisModeDropdowns[part].ValueChanged.Subscribe(v =>
                 {
                     if (!refreshing && MakerAPI.InsideAndLoaded)
                         axisModes[selectedPart] = Mathf.Clamp(v,0,2);
                 });
                 axisToggles[part] = e.AddControl(new MakerToggle(
-                    page, "显示轴（可拖动）", this));
+                    page, (part == 0 ? "男性器" : "Balls") + " 显示轴（可拖动）", this));
                 axisToggles[part].ValueChanged.Subscribe(v =>
                 {
                     if (refreshing || !MakerAPI.InsideAndLoaded) return;
