@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_FlatLockBand</AssemblyName>
+    <RootNamespace>FlatLockBand</RootNamespace>
+    <Version>6.1.0</Version>
+    <AssemblyVersion>6.1.0.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+  </ItemGroup>
+</Project>
