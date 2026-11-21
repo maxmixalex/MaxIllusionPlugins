@@ -289,23 +289,23 @@ namespace FemboyMode
         {
             if (float.IsNaN(value) || float.IsInfinity(value))
                 return 1f;
-            if (value < 0.5f) return 0.5f;
-            if (value > 2f) return 2f;
+            if (value < .25f) return .25f;
+            if (value > 4f) return 4f;
             return value;
         }
 
-        // Local bone displacement is limited to ten centimeters.
+        // Local bone displacement is limited to thirty centimeters.
         // Reject values from malformed/third-party cards.
         internal static float SafeBoneOffset(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value)) return 0f;
-            return Math.Max(-0.1f, Math.Min(0.1f, value));
+            return Math.Max(-.30f, Math.Min(.30f, value));
         }
 
         internal static float SafeBoneRotation(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value)) return 0f;
-            return Math.Max(-180f, Math.Min(180f, value));
+            return Math.Max(-360f, Math.Min(360f, value));
         }
 
         /// <summary>
