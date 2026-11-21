@@ -29,9 +29,9 @@ internal static class Program
         Check(!FemboyRules.HasBothFrontButtons(16, -1),
             "negative action index is rejected");
 
-        Check(FemboyRules.SafeBoneScale(-2f) == 0.5f,
+        Check(FemboyRules.SafeBoneScale(-2f) == .25f,
             "clamp small scales");
-        Check(FemboyRules.SafeBoneScale(7f) == 2f,
+        Check(FemboyRules.SafeBoneScale(7f) == 4f,
             "clamp large scales");
         Check(FemboyRules.SafeBoneScale(1.25f) == 1.25f,
             "preserve valid scales");
@@ -41,17 +41,17 @@ internal static class Program
             "infinity uses neutral scaling");
         Check(FemboyRules.SafeBoneScale(float.NegativeInfinity) == 1f,
             "negative infinity uses neutral scaling");
-        Check(FemboyRules.SafeBoneOffset(-0.15f) == -0.1f,
+        Check(FemboyRules.SafeBoneOffset(-0.35f) == -.3f,
             "negative translation is clamped");
-        Check(FemboyRules.SafeBoneOffset(0.15f) == 0.1f,
+        Check(FemboyRules.SafeBoneOffset(0.35f) == .3f,
             "positive translation is clamped");
         Check(FemboyRules.SafeBoneOffset(0.03f) == 0.03f,
             "valid translation is kept");
         Check(FemboyRules.SafeBoneOffset(float.NaN) == 0f,
             "malformed translation remains neutral");
-        Check(FemboyRules.SafeBoneRotation(200f) == 180f,
+        Check(FemboyRules.SafeBoneRotation(400f) == 360f,
             "rotation is clamped");
-        Check(FemboyRules.SafeBoneRotation(-201f) == -180f,
+        Check(FemboyRules.SafeBoneRotation(-401f) == -360f,
             "negative rotation is clamped");
         Check(FemboyRules.SafeBoneRotation(float.PositiveInfinity) == 0f,
             "malformed rotation remains neutral");
