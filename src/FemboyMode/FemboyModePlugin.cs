@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.4";
+        public const string Version = "0.5.5";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -210,18 +210,41 @@ namespace FemboyMode
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
             harmony = new Harmony(Guid);
-            harmony.PatchAll(typeof(FemboyHSceneHooks));
-            harmony.PatchAll(typeof(FemboyHoushiReverseHooks));
-            harmony.PatchAll(typeof(FemboyReversedSiruHooks));
-            harmony.PatchAll(typeof(FemboyHMarkerHooks));
-            harmony.PatchAll(typeof(FemboyMakerAssetHooks));
-            harmony.PatchAll(typeof(FemboyAibuAnchorHooks));
-            harmony.PatchAll(typeof(FemboyClimaxHooks));
-            harmony.PatchAll(typeof(FemboyPhysicalFluidHooks));
-            harmony.PatchAll(typeof(FemboyVoiceHooks));
-            harmony.PatchAll(typeof(FemboyMaleAnimationHooks));
+            Type[] patchGroups =
+            {
+                typeof(FemboyHSceneHooks),
+                typeof(FemboyHoushiReverseHooks),
+                typeof(FemboyReversedSiruHooks),
+                typeof(FemboyHMarkerHooks),
+                typeof(FemboyMakerAssetHooks),
+                typeof(FemboyAibuAnchorHooks),
+                typeof(FemboyClimaxHooks),
+                typeof(FemboyPhysicalFluidHooks),
+                typeof(FemboyVoiceHooks),
+                typeof(FemboyMaleAnimationHooks)
+            };
+            int installed = 0;
+            foreach (Type group in patchGroups)
+            {
+                try
+                {
+                    harmony.PatchAll(group);
+                    installed++;
+                    Logger.LogInfo("Harmony group registered: " + group.Name);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError("Harmony group failed: " + group.Name +
+                        "; continuing with independent groups. " + ex);
+                }
+            }
             UncensorSelectorCompat.TryPatch(harmony);
-            Logger.LogInfo("Femboy Mode " + Version + ": character flag and optional integrations ready.");
+            string startup = "Femboy Mode " + Version + ": Harmony groups registered " +
+                installed + "/" + patchGroups.Length + ".";
+            if (installed == patchGroups.Length)
+                Logger.LogInfo(startup + " Initialization complete.");
+            else
+                Logger.LogWarning(startup + " Partial initialization; see failed groups above.");
         }
 
         private void Update()
