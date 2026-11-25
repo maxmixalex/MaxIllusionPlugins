@@ -13,6 +13,7 @@ using KKAPI.Maker;
 using KKAPI.Maker.UI;
 using UniRx;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace FemboyMode
 {
@@ -25,7 +26,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.2";
+        public const string Version = "0.5.3";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -365,7 +366,34 @@ namespace FemboyMode
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
         {
+            EnsureBodyPageScroll();
             RefreshMakerToggle();
+        }
+
+        private void EnsureBodyPageScroll()
+        {
+            if (bodyFlagToggle == null || MakerControlObjects == null)
+                return;
+
+            IList objects = MakerControlObjects.GetValue(bodyFlagToggle) as IList;
+            if (objects == null)
+                return;
+
+            foreach (object entry in objects)
+            {
+                GameObject widget = entry as GameObject;
+                if (widget == null)
+                    continue;
+
+                try
+                {
+                    MakerPageScroll.Install(widget.transform);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning("Could not install Maker page scroll view: " + ex);
+                }
+            }
         }
 
         private void OnReloadCustomInterface(object sender, EventArgs e)
@@ -509,4 +537,208 @@ namespace FemboyMode
                 character.gameObject.GetComponent<FemboyCharacterController>();
         }
     }
+
+    // Wrap the existing page, not just the added rows. Keeping a single scroll
+    // surface means every control is reachable without changing categories.
+    internal sealed class MakerPageScroll : MonoBehaviour
+    {
+        private RectTransform host;
+        private RectTransform view;
+        private readonly Vector3[] corners = new Vector3[4];
+
+        internal static void Install(Transform widget)
+        {
+            RectTransform parent = widget.parent as RectTransform;
+            if (parent == null)
+                return;
+
+            // Respect existing native/third-party scrolling, including inactive tabs.
+            for (Transform t = parent; t != null; t = t.parent)
+            {
+                ScrollRect existing = t.GetComponent<ScrollRect>();
+                if (existing != null && existing.content != null &&
+                    widget.IsChildOf(existing.content))
+                {
+                    existing.vertical = true;
+                    return;
+                }
+            }
+
+            List<Transform> rows = new List<Transform>();
+            foreach (Transform child in parent)
+                rows.Add(child);
+
+            VerticalLayoutGroup oldLayout = parent.GetComponent<VerticalLayoutGroup>();
+            LayoutGroup oldGroup = parent.GetComponent<LayoutGroup>();
+            ContentSizeFitter oldFitter = parent.GetComponent<ContentSizeFitter>();
+
+            // Pick up the maker's scrollbar artwork before creating our own.
+            Scrollbar nativeBar = null;
+            foreach (ScrollRect candidate in parent.root.GetComponentsInChildren<ScrollRect>(true))
+            {
+                if (candidate.verticalScrollbar != null &&
+                    candidate.verticalScrollbar.targetGraphic is Image)
+                {
+                    nativeBar = candidate.verticalScrollbar;
+                    break;
+                }
+            }
+
+            GameObject root = DefaultControls.CreateScrollView(new DefaultControls.Resources());
+            root.name = "Scroll View";
+            root.transform.SetParent(parent, false);
+            RectTransform rect = (RectTransform)root.transform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            root.AddComponent<LayoutElement>().ignoreLayout = true;
+
+            // A transparent raycast surface preserves the original panel background.
+            Image background = root.GetComponent<Image>();
+            if (background != null)
+                background.color = Color.clear;
+
+            ScrollRect scroll = root.GetComponent<ScrollRect>();
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.scrollSensitivity = 40f;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+            scroll.verticalScrollbarSpacing = 2f;
+            Scrollbar horizontalBar = scroll.horizontalScrollbar;
+            scroll.horizontalScrollbar = null;
+            if (horizontalBar != null)
+            {
+                horizontalBar.gameObject.SetActive(false);
+                Destroy(horizontalBar.gameObject);
+            }
+
+            if (scroll.viewport != null)
+            {
+                scroll.viewport.anchorMin = Vector2.zero;
+                scroll.viewport.anchorMax = Vector2.one;
+                scroll.viewport.offsetMin = Vector2.zero;
+                scroll.viewport.offsetMax = Vector2.zero;
+            }
+
+            if (scroll.verticalScrollbar != null)
+            {
+                RectTransform barRect = (RectTransform)scroll.verticalScrollbar.transform;
+                barRect.anchorMin = new Vector2(1f, 0f);
+                barRect.anchorMax = Vector2.one;
+                barRect.offsetMin = new Vector2(-18f, 0f);
+                barRect.offsetMax = Vector2.zero;
+                if (nativeBar != null)
+                {
+                    CopyImage(nativeBar.GetComponent<Image>(), scroll.verticalScrollbar.GetComponent<Image>());
+                    CopyImage(nativeBar.targetGraphic as Image, scroll.verticalScrollbar.targetGraphic as Image);
+                    scroll.verticalScrollbar.colors = nativeBar.colors;
+                }
+            }
+
+            RectTransform content = scroll.content;
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = Vector2.one;
+            content.pivot = new Vector2(.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = Vector2.zero;
+
+            VerticalLayoutGroup layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.childControlWidth = oldLayout == null || oldLayout.childControlWidth;
+            layout.childControlHeight = oldLayout != null && oldLayout.childControlHeight;
+            layout.childForceExpandWidth = oldLayout == null || oldLayout.childForceExpandWidth;
+            // Do not distribute unused height among rows as the viewport changes.
+            layout.childForceExpandHeight = false;
+            if (oldLayout != null)
+            {
+                RectOffset p = oldLayout.padding;
+                layout.padding = new RectOffset(p.left, p.right, p.top, p.bottom);
+                layout.spacing = oldLayout.spacing;
+                layout.childAlignment = oldLayout.childAlignment;
+            }
+            else
+            {
+                layout.childAlignment = TextAnchor.UpperLeft;
+            }
+
+            ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            if (oldGroup != null)
+                oldGroup.enabled = false;
+            if (oldFitter != null)
+                oldFitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+
+            foreach (Transform row in rows)
+                row.SetParent(content, false);
+
+            MakerPageScroll bounds = root.AddComponent<MakerPageScroll>();
+            bounds.host = parent;
+            bounds.view = rect;
+            bounds.UpdateBounds();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+            scroll.verticalNormalizedPosition = 1f;
+        }
+
+        private static void CopyImage(Image source, Image target)
+        {
+            if (source == null || target == null)
+                return;
+            target.sprite = source.sprite;
+            target.type = source.type;
+            target.color = source.color;
+            target.preserveAspect = source.preserveAspect;
+        }
+
+        private void LateUpdate()
+        {
+            UpdateBounds();
+        }
+
+        private void UpdateBounds()
+        {
+            if (host == null || view == null)
+                return;
+
+            // Some maker panels have a content-driven height instead of a fixed
+            // viewport. Bound the scroll view to the containing panel/canvas,
+            // using canvas-local coordinates rather than a hardcoded resolution.
+            Rect r = host.rect;
+            float lower = r.yMin;
+            float upper = r.yMax;
+            for (Transform t = host.parent; t != null; t = t.parent)
+            {
+                RectTransform ancestor = t as RectTransform;
+                if (ancestor != null && ancestor.rect.height > 1f)
+                {
+                    ancestor.GetWorldCorners(corners);
+                    float min = float.PositiveInfinity, max = float.NegativeInfinity;
+                    for (int i = 0; i < corners.Length; i++)
+                    {
+                        float y = host.InverseTransformPoint(corners[i]).y;
+                        min = Mathf.Min(min, y);
+                        max = Mathf.Max(max, y);
+                    }
+                    // Only use a meaningful ancestor spanning the top of this
+                    // page; decorative/header transforms are not viewports.
+                    if (max >= r.yMax - 2f && min < r.yMax - 32f)
+                    {
+                        lower = Mathf.Max(lower, min);
+                        upper = Mathf.Min(upper, max);
+                    }
+                }
+                if (t.GetComponent<Canvas>() != null)
+                    break;
+            }
+            Vector2 minOffset = new Vector2(0f, Mathf.Max(0f, lower - r.yMin));
+            Vector2 maxOffset = new Vector2(0f, Mathf.Min(0f, upper - r.yMax));
+            if ((view.offsetMin - minOffset).sqrMagnitude > .01f)
+                view.offsetMin = minOffset;
+            if ((view.offsetMax - maxOffset).sqrMagnitude > .01f)
+                view.offsetMax = maxOffset;
+        }
+    }
+
 }
