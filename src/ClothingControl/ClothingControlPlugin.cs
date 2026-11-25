@@ -9,7 +9,7 @@ using KKAPI.Maker;
 using MaximumUI;
 using Studio;
 using UnityEngine;
-using UnityEngine.UI;
+using Toggle = UnityEngine.UI.Toggle;
 
 [assembly: System.Reflection.AssemblyFileVersion(ClothingControl.ClothingControlPlugin.Version)]
 
