@@ -26,4 +26,6 @@ dotnet build src/LoveJuice/LoveJuice.csproj -c Release
 
 在安装 BepInEx 5 和 KKAPI 的 Koikatsu / Koikatsu Party 中，将 DLL 放入 `BepInEx/plugins/`，启动游戏后检查 `LogOutput.log` 的 LoveJuice 加载消息和配置文件。Studio 不应加载此插件。0.1.0 不应产生场景变化。
 
+GitHub Actions 的 `LoveJuice scaffold build` 工作流负责编译、检查两个输出目录的 DLL 一致性，并生成只含本仓插件及许可/安装说明的安装产物。编译验证不代表已经完成游戏内加载验收。
+
 本次框架尚未经过游戏内验收。
