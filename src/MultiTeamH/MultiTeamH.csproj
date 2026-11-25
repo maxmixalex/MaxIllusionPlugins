@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>MultiTeamH</Product>
     <AssemblyTitle>MultiTeamH</AssemblyTitle>
-    <Version>0.11.62</Version>
-    <AssemblyVersion>0.11.62.0</AssemblyVersion>
+    <Version>0.11.65</Version>
+    <AssemblyVersion>0.11.65.0</AssemblyVersion>
     <NoWarn>$(NoWarn);AD0001;KKANAL01;KKANAL03</NoWarn>
   </PropertyGroup>
   <ItemGroup>

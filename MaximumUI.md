@@ -1,5 +1,7 @@
 # MaximumUI 设计文档
 
+> 当前实现为 0.3.0，已接入四个功能编辑器。Metro 主题、缓存失效、输入归属、生命周期与已实现 API 请优先阅读 [库 README](src/MaximumUI/README.md) 和 [四插件接入记录](docs/Integration-2026-10-23.md)。本文保留设计说明，规划内容不等同于所有后端已经实现。
+
 ## 1. 概述
 
 MaximumUI 是一个面向 Koikatsu 插件开发的 C# 声明式 IMGUI UI 库。

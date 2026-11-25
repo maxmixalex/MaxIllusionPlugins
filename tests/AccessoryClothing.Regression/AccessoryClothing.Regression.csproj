@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MaximumUI/MaximumUI.csproj" />
+    <ProjectReference Include="../../src/MaximumUI.Tests/MaximumUI.Tests.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <Reference Include="UnityEngine">
+      <!-- MaximumUI mount options/runtime expose Unity type signatures. The
+           alias keeps those signatures separate from external game doubles. -->
+      <HintPath>../../bin/$(Configuration)/MaximumUI.Tests/UnityEngine.dll</HintPath>
+      <Aliases>NativeUnity</Aliases>
+      <Private>true</Private>
+    </Reference>
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryOperations.cs" Link="Production/AccessoryOperations.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryHighlighter.cs" Link="Production/AccessoryHighlighter.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/MaterialEditorBridge.cs" Link="Production/MaterialEditorBridge.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryEditorSession.cs" Link="Production/AccessoryEditorSession.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/CoordinateCardSource.cs" Link="Production/CoordinateCardSource.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionModels.cs" Link="Production/CompressionModels.cs" />
+    <Compile Include="../../src/ClothingCompression/ItemCatalog.cs" Link="Production/ItemCatalog.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionController.cs" Link="Production/CompressionController.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionEditorView.cs" Link="Production/CompressionEditorView.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionEditorSupport.cs" Link="Production/CompressionEditorSupport.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionEditorData.cs" Link="Production/CompressionEditorData.cs" />
+    <Compile Include="../../src/ClothingCompression/CompressionGui.cs" Link="Production/CompressionGui.cs" />
+    <Compile Include="../../src/Common/AtomicXmlFile.cs" Link="Production/AtomicXmlFile.cs" />
+  </ItemGroup>
+</Project>

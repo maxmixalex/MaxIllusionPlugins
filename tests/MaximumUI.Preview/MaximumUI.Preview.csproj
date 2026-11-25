@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+    <MaximumUiAssembly Condition="'$(MaximumUiAssembly)' == ''">$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\MaximumUI\MaximumUI.dll</MaximumUiAssembly>
+    <UnityEngineAssembly Condition="'$(UnityEngineAssembly)' == ''">$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\MaximumUI.Tests\UnityEngine.dll</UnityEngineAssembly>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/JuiceControl/JuiceEditorView.cs" Link="Production/JuiceEditorView.cs" />
+    <Compile Include="../../src/AccessoryBatchManager/AccessoryEditorView.cs" Link="Production/AccessoryEditorView.cs" />
+    <Compile Include="../../src/MaximumUI/WindowGeometry.cs" Link="Production/WindowGeometry.cs" />
+    <Compile Include="../../src/MaximumUI/ChoiceCache.cs" Link="Production/ChoiceCache.cs" />
+    <Reference Include="MaximumUI">
+      <HintPath>$(MaximumUiAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(UnityEngineAssembly)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequirePreviewAssemblies" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(MaximumUiAssembly)')" Text="Build MaximumUI first, or pass -p:MaximumUiAssembly=/absolute/path/to/MaximumUI.dll." />
+    <Error Condition="!Exists('$(UnityEngineAssembly)')" Text="Build MaximumUI.Tests first, or pass -p:UnityEngineAssembly=/absolute/path/to/UnityEngine.dll (the compilation reference)." />
+  </Target>
+</Project>

@@ -36,6 +36,13 @@ namespace AccessoryBatchManager {
             return character.nowCoordinate.accessory.parts ?? new ChaFileAccessory.PartsInfo[0];
         }
 
+        internal static ChaFileCoordinate GetCoordinate(ChaControl character, int coordinate) {
+            // ChaControl.ChangeCoordinateType deserializes a separate working copy.
+            // Edits in Maker can therefore be newer than chaFile.coordinate[current].
+            return coordinate == character.fileStatus.coordinateType
+                ? character.nowCoordinate : character.chaFile.coordinate[coordinate];
+        }
+
         internal static int EffectiveSlotCount(ChaFileAccessory.PartsInfo[] parts) {
             if (parts == null || parts.Length == 0) return 0;
             int last = Array.FindLastIndex(parts, delegate(ChaFileAccessory.PartsInfo part) { return !IsEmpty(part); });
@@ -130,6 +137,7 @@ namespace AccessoryBatchManager {
             List<SlotPair> pairs = BuildPairs(sources, destinations, move);
             if (pairs.Count == 0) return 0;
             ChaFileAccessory.PartsInfo[] parts = CurrentParts(character);
+            if (!ValidPairs(pairs, parts.Length, parts.Length)) return 0;
             var copied = new List<ChaFileAccessory.PartsInfo>(pairs.Count);
             foreach (SlotPair pair in pairs) {
                 ChaFileAccessory.PartsInfo value = Clone(parts[pair.Source]);
@@ -158,15 +166,20 @@ namespace AccessoryBatchManager {
         }
 
         internal static int CopyOrMoveBetweenCoordinates(ChaControl character, int sourceCoordinate, int destinationCoordinate, IList<int> sources, IList<int> destinations, bool reverseParent, bool move) {
-            if (sourceCoordinate == destinationCoordinate)
+            if (!ValidCoordinate(character, sourceCoordinate) || !ValidCoordinate(character, destinationCoordinate)) return 0;
+            if (sourceCoordinate == destinationCoordinate && sourceCoordinate == character.fileStatus.coordinateType)
                 return CopyOrMoveSlots(character, sources, destinations, reverseParent, move);
 
-            List<SlotPair> pairs = BuildPairs(sources, destinations, move);
+            List<SlotPair> pairs = BuildPairs(sources, destinations, move, sourceCoordinate != destinationCoordinate);
             if (pairs.Count == 0) return 0;
-            ChaFileAccessory.PartsInfo[] source = character.chaFile.coordinate[sourceCoordinate].accessory.parts;
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] source = GetCoordinate(character, sourceCoordinate).accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
+            if (source == null || destination == null || !ValidPairs(pairs, source.Length, int.MaxValue)) return 0;
             int required = Math.Max(destination.Length, pairs.Max(delegate(SlotPair pair) { return pair.Destination; }) + 1);
-            if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
+            if (required > destination.Length) {
+                destination = ResizeWithEmpty(destination, required);
+                if (sourceCoordinate == destinationCoordinate) source = destination;
+            }
 
             var copied = new List<ChaFileAccessory.PartsInfo>(pairs.Count);
             foreach (SlotPair pair in pairs) {
@@ -178,16 +191,22 @@ namespace AccessoryBatchManager {
                 copied.Add(value);
             }
             for (int i = 0; i < pairs.Count; i++) destination[pairs[i].Destination] = copied[i];
-            if (move) foreach (SlotPair pair in pairs) source[pair.Source] = NewEmpty();
+            if (move) {
+                var retained = new HashSet<int>(pairs.Select(pair => pair.Destination));
+                foreach (SlotPair pair in pairs)
+                    if (sourceCoordinate != destinationCoordinate || !retained.Contains(pair.Source)) source[pair.Source] = NewEmpty();
+            }
 
             character.chaFile.coordinate[sourceCoordinate].accessory.parts = source;
             character.chaFile.coordinate[destinationCoordinate].accessory.parts = destination;
             int current = character.fileStatus.coordinateType;
-            character.nowCoordinate.accessory.parts = character.chaFile.coordinate[current].accessory.parts;
+            if (destinationCoordinate == current) character.nowCoordinate.accessory.parts = destination;
+            else if (sourceCoordinate == current) character.nowCoordinate.accessory.parts = source;
             MarkMakerDirty(character);
 
             int[] sameIndexes = pairs.Where(delegate(SlotPair pair) { return pair.Source == pair.Destination; }).Select(delegate(SlotPair pair) { return pair.Source; }).ToArray();
-            if (sameIndexes.Length > 0) MakerEventBridge.AccessoriesCopied(sameIndexes, sourceCoordinate, destinationCoordinate);
+            if (sourceCoordinate != destinationCoordinate && sameIndexes.Length > 0)
+                MakerEventBridge.AccessoriesCopied(sameIndexes, sourceCoordinate, destinationCoordinate);
             return pairs.Count;
         }
 
@@ -195,8 +214,10 @@ namespace AccessoryBatchManager {
             int destinationCoordinate, IList<int> sources, IList<int> destinations, bool move) {
             List<SlotPair> pairs = BuildClothingPairs(sources, destinations, move);
             if (pairs.Any(pair => !IsAllowedClothingPair(pair.Source, pair.Destination))) return 0;
-            if (character == null || source == null || pairs.Count == 0) return 0;
-            ChaFileClothes.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].clothes.parts;
+            if (!ValidCoordinate(character, destinationCoordinate) || source == null || pairs.Count == 0 ||
+                (move && !ValidCoordinate(character, sourceCoordinate))) return 0;
+            ChaFileClothes.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).clothes.parts;
+            if (destination == null || !ValidPairs(pairs, source.Length, destination.Length)) return 0;
             var copied = pairs.Select(pair => CloneClothing(source[pair.Source])).ToArray();
             for (int i = 0; i < pairs.Count; i++) destination[pairs[i].Destination] = copied[i];
             if (move) {
@@ -208,6 +229,7 @@ namespace AccessoryBatchManager {
             if (move) character.chaFile.coordinate[sourceCoordinate].clothes.parts = source;
             character.chaFile.coordinate[destinationCoordinate].clothes.parts = destination;
             if (destinationCoordinate == character.fileStatus.coordinateType) character.nowCoordinate.clothes.parts = destination;
+            else if (move && sourceCoordinate == character.fileStatus.coordinateType) character.nowCoordinate.clothes.parts = source;
             MarkMakerDirty(character);
             return pairs.Count;
         }
@@ -240,11 +262,14 @@ namespace AccessoryBatchManager {
 
         internal static int CopyOrMoveClothingToAccessories(ChaControl character, ChaFileClothes.PartsInfo[] source,
             int sourceCoordinate, int destinationCoordinate, IList<int> sources, IList<int> destinations, bool reverseParent, bool move) {
-            List<SlotPair> pairs = BuildPairs(sources, destinations, move)
+            // Clothing and accessory slots are separate collections, even in one coordinate.
+            List<SlotPair> pairs = BuildPairs(sources, destinations, move, true)
                 .Where(pair => pair.Source >= 0 && pair.Source < ClothingSlotCount && pair.Destination >= 0)
                 .ToList();
-            if (character == null || source == null || pairs.Count == 0) return 0;
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            if (!ValidCoordinate(character, destinationCoordinate) || source == null || pairs.Count == 0 ||
+                (move && !ValidCoordinate(character, sourceCoordinate))) return 0;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
+            if (destination == null || !ValidPairs(pairs, source.Length, int.MaxValue)) return 0;
             int required = Math.Max(destination.Length, pairs.Max(pair => pair.Destination) + 1);
             if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
             for (int i = 0; i < pairs.Count; i++) {
@@ -257,6 +282,7 @@ namespace AccessoryBatchManager {
             }
             if (move) foreach (SlotPair pair in pairs) source[pair.Source] = new ChaFileClothes.PartsInfo();
             if (move) character.chaFile.coordinate[sourceCoordinate].clothes.parts = source;
+            if (move && sourceCoordinate == character.fileStatus.coordinateType) character.nowCoordinate.clothes.parts = source;
             character.chaFile.coordinate[destinationCoordinate].accessory.parts = destination;
             if (destinationCoordinate == character.fileStatus.coordinateType) character.nowCoordinate.accessory.parts = destination;
             MarkMakerDirty(character);
@@ -274,7 +300,7 @@ namespace AccessoryBatchManager {
             List<int> validSources = sources.Where(index => index >= 0 && index < source.Length).Distinct().OrderBy(index => index).ToList();
             if (validSources.Count == 0) return 0;
 
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
             int used = UsedSlotCount(destination);
             insertIndex = atFront ? 0 : used;
             int required = Math.Max(VanillaSlotCount, used + validSources.Count);
@@ -310,7 +336,7 @@ namespace AccessoryBatchManager {
                 .ToList();
             if (pairs.Count == 0) return 0;
 
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
             int required = Math.Max(destination.Length, pairs.Max(delegate(SlotPair pair) { return pair.Destination; }) + 1);
             if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
             foreach (SlotPair pair in pairs) {
@@ -325,15 +351,19 @@ namespace AccessoryBatchManager {
             character.chaFile.coordinate[destinationCoordinate].accessory.parts = destination;
             if (destinationCoordinate == character.fileStatus.coordinateType) character.nowCoordinate.accessory.parts = destination;
             MarkMakerDirty(character);
-            foreach (int destinationSlot in pairs.Select(delegate(SlotPair pair) { return pair.Destination; }).Distinct())
-                MakerEventBridge.AccessoryKindChanged(destinationSlot);
+            // KindChanged has no coordinate parameter; raising it for an inactive
+            // coordinate makes integrations clear the visible coordinate's metadata.
+            if (destinationCoordinate == character.fileStatus.coordinateType)
+                foreach (int destinationSlot in pairs.Select(delegate(SlotPair pair) { return pair.Destination; }).Distinct())
+                    MakerEventBridge.AccessoryKindChanged(destinationSlot);
             return pairs.Count;
         }
 
         internal static int CopyAdjustments(ChaControl character, IList<int> sources, IList<int> destinations, int adjustment, MirrorMode mirror) {
             List<SlotPair> pairs = BuildPairs(sources, destinations, false);
-            if (pairs.Count == 0) return 0;
+            if (pairs.Count == 0 || adjustment < 0 || adjustment > 1) return 0;
             ChaFileAccessory.PartsInfo[] parts = CurrentParts(character);
+            if (!ValidPairs(pairs, parts.Length, parts.Length) || pairs.Any(pair => parts[pair.Source] == null || parts[pair.Destination] == null)) return 0;
             var values = new Vector3[pairs.Count, 3];
             for (int pairIndex = 0; pairIndex < pairs.Count; pairIndex++) {
                 for (int component = 0; component < 3; component++) {
@@ -354,41 +384,61 @@ namespace AccessoryBatchManager {
         }
 
         internal static int CopyAdjustmentsBetweenCoordinates(ChaControl character, int sourceCoordinate, int destinationCoordinate, IList<int> sources, IList<int> destinations, int adjustment, MirrorMode mirror) {
-            if (sourceCoordinate == destinationCoordinate)
+            if (!ValidCoordinate(character, sourceCoordinate) || !ValidCoordinate(character, destinationCoordinate) || adjustment < 0 || adjustment > 1) return 0;
+            if (sourceCoordinate == destinationCoordinate && sourceCoordinate == character.fileStatus.coordinateType)
                 return CopyAdjustments(character, sources, destinations, adjustment, mirror);
 
-            List<SlotPair> pairs = BuildPairs(sources, destinations, false);
+            List<SlotPair> pairs = BuildPairs(sources, destinations, false, sourceCoordinate != destinationCoordinate);
             if (pairs.Count == 0) return 0;
-            ChaFileAccessory.PartsInfo[] source = character.chaFile.coordinate[sourceCoordinate].accessory.parts;
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] source = GetCoordinate(character, sourceCoordinate).accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
+            if (source == null || destination == null || !ValidPairs(pairs, source.Length, int.MaxValue) || pairs.Any(pair => source[pair.Source] == null)) return 0;
             int required = Math.Max(destination.Length, pairs.Max(delegate(SlotPair pair) { return pair.Destination; }) + 1);
             if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
+            // Snapshot before writing: the selected coordinate need not be the visible one,
+            // and overlapping copies must not read values written by an earlier pair.
+            var values = new Vector3[pairs.Count, 3];
             for (int pairIndex = 0; pairIndex < pairs.Count; pairIndex++) {
                 for (int component = 0; component < 3; component++) {
                     Vector3 value = source[pairs[pairIndex].Source].addMove[adjustment, component];
                     if (component == 1 && mirror == MirrorMode.LeftRight) value.y = WrapAngle(value.y + 180f);
                     if (component == 1 && mirror == MirrorMode.UpDown) value.x = WrapAngle(value.x + 180f);
-                    destination[pairs[pairIndex].Destination].addMove[adjustment, component] = value;
+                    values[pairIndex, component] = value;
                 }
+            }
+            for (int pairIndex = 0; pairIndex < pairs.Count; pairIndex++) {
+                int slot = pairs[pairIndex].Destination;
+                if (destination[slot] == null) destination[slot] = NewEmpty();
+                for (int component = 0; component < 3; component++)
+                    destination[slot].addMove[adjustment, component] = values[pairIndex, component];
             }
             character.chaFile.coordinate[destinationCoordinate].accessory.parts = destination;
             int current = character.fileStatus.coordinateType;
-            character.nowCoordinate.accessory.parts = character.chaFile.coordinate[current].accessory.parts;
+            if (destinationCoordinate == current) character.nowCoordinate.accessory.parts = destination;
+            else if (sourceCoordinate == current) character.nowCoordinate.accessory.parts = source;
             MarkMakerDirty(character);
             return pairs.Count;
         }
 
         internal static int CopyAdjustmentsFromParts(ChaControl character, ChaFileAccessory.PartsInfo[] source, int destinationCoordinate, IList<int> sources, IList<int> destinations, int adjustment, MirrorMode mirror) {
-            if (character == null || source == null || destinationCoordinate < 0 || destinationCoordinate >= character.chaFile.coordinate.Length) return 0;
-            List<SlotPair> pairs = BuildPairs(sources, destinations, false, true)
-                .Where(delegate(SlotPair pair) { return pair.Source >= 0 && pair.Source < source.Length && pair.Destination >= 0; })
-                .ToList();
-            if (pairs.Count == 0) return 0;
+            if (!ValidCoordinate(character, destinationCoordinate) || source == null || adjustment < 0 || adjustment > 1) return 0;
+            List<SlotPair> pairs = BuildPairs(sources, destinations, false, true);
+            if (pairs.Count == 0 || !ValidPairs(pairs, source.Length, int.MaxValue)) return 0;
 
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
+            if (destination == null) return 0;
+            // The source is an independent coordinate card. Its MessagePack data may
+            // contain null entries (displayed as selectable empty slots) or malformed
+            // adjustment arrays. Validate the entire mapping before changing any slot.
+            foreach (SlotPair pair in pairs) {
+                if (!HasAdjustment(source[pair.Source], adjustment)) return 0;
+                if (pair.Destination < destination.Length && destination[pair.Destination] != null &&
+                    !HasAdjustment(destination[pair.Destination], adjustment)) return 0;
+            }
             int required = Math.Max(destination.Length, pairs.Max(delegate(SlotPair pair) { return pair.Destination; }) + 1);
             if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
             foreach (SlotPair pair in pairs) {
+                if (destination[pair.Destination] == null) destination[pair.Destination] = NewEmpty();
                 for (int component = 0; component < 3; component++) {
                     Vector3 value = source[pair.Source].addMove[adjustment, component];
                     if (component == 1 && mirror == MirrorMode.LeftRight) value.y = WrapAngle(value.y + 180f);
@@ -403,13 +453,17 @@ namespace AccessoryBatchManager {
             return pairs.Count;
         }
 
+        private static bool HasAdjustment(ChaFileAccessory.PartsInfo part, int adjustment) {
+            return part != null && part.addMove != null && part.addMove.GetLength(0) > adjustment && part.addMove.GetLength(1) >= 3;
+        }
+
         internal static int CopyAcrossCoordinates(ChaControl character, int sourceCoordinate, int destinationCoordinate, ICollection<int> selected) {
             if (character == null || character.chaFile == null || character.chaFile.coordinate == null) return 0;
             if (sourceCoordinate < 0 || destinationCoordinate < 0 || sourceCoordinate >= character.chaFile.coordinate.Length || destinationCoordinate >= character.chaFile.coordinate.Length) return 0;
             if (sourceCoordinate == destinationCoordinate) return 0;
 
-            ChaFileAccessory.PartsInfo[] source = character.chaFile.coordinate[sourceCoordinate].accessory.parts;
-            ChaFileAccessory.PartsInfo[] destination = character.chaFile.coordinate[destinationCoordinate].accessory.parts;
+            ChaFileAccessory.PartsInfo[] source = GetCoordinate(character, sourceCoordinate).accessory.parts;
+            ChaFileAccessory.PartsInfo[] destination = GetCoordinate(character, destinationCoordinate).accessory.parts;
             int required = selected.Count == 0 ? destination.Length : Math.Max(destination.Length, selected.Max() + 1);
             if (required > destination.Length) destination = ResizeWithEmpty(destination, required);
 
@@ -464,6 +518,18 @@ namespace AccessoryBatchManager {
             MarkMakerDirty(character);
         }
 
+        private static bool ValidCoordinate(ChaControl character, int coordinate) {
+            return character != null && character.chaFile != null && character.chaFile.coordinate != null &&
+                character.fileStatus != null && character.nowCoordinate != null && coordinate >= 0 &&
+                coordinate < character.chaFile.coordinate.Length && character.chaFile.coordinate[coordinate] != null;
+        }
+
+        private static bool ValidPairs(IList<SlotPair> pairs, int sourceLength, int destinationLength) {
+            foreach (SlotPair pair in pairs)
+                if (pair.Source < 0 || pair.Source >= sourceLength || pair.Destination < 0 || pair.Destination >= destinationLength) return false;
+            return true;
+        }
+
         private static int UsedSlotCount(ChaFileAccessory.PartsInfo[] parts) {
             if (parts == null) return 0;
             int last = Array.FindLastIndex(parts, delegate(ChaFileAccessory.PartsInfo part) { return !IsEmpty(part); });
@@ -477,31 +543,48 @@ namespace AccessoryBatchManager {
 
         private static IEnumerator RefreshCharacterRoutine(ChaControl character) {
             var rendererStates = new Dictionary<Renderer, bool>();
-            HideCharacterRenderers(character, rendererStates);
-            object materialEditorState = MaterialEditorBridge.CaptureState(character);
-            NormalizeCoordinateLengths(character);
-            SyncMoreAccessories(character, EffectiveSlotCount(CurrentParts(character)));
-            character.AssignCoordinate((ChaFileDefine.CoordinateType)character.fileStatus.coordinateType);
+            object materialEditorState = null;
             var routines = new Stack<IEnumerator>();
-            routines.Push(character.ReloadAsync(false, false, false, false, false));
-            while (routines.Count > 0) {
-                IEnumerator routine = routines.Peek();
-                bool more = routine.MoveNext();
-                if (!more) {
-                    routines.Pop();
-                    continue;
-                }
-                var nested = routine.Current as IEnumerator;
-                if (nested != null) {
-                    routines.Push(nested);
-                    continue;
+            try {
+                materialEditorState = MaterialEditorBridge.CaptureState(character);
+                HideCharacterRenderers(character, rendererStates);
+                NormalizeCoordinateLengths(character);
+                SyncMoreAccessories(character, EffectiveSlotCount(CurrentParts(character)));
+                character.AssignCoordinate((ChaFileDefine.CoordinateType)character.fileStatus.coordinateType);
+                routines.Push(character.ReloadAsync(false, false, false, false, false));
+                while (routines.Count > 0) {
+                    IEnumerator routine = routines.Peek();
+                    bool more = routine.MoveNext();
+                    if (!more) {
+                        routines.Pop();
+                        IDisposable completed = routine as IDisposable;
+                        if (completed != null) completed.Dispose();
+                        continue;
+                    }
+                    var nested = routine.Current as IEnumerator;
+                    if (nested != null) {
+                        routines.Push(nested);
+                        continue;
+                    }
+                    HideCharacterRenderers(character, rendererStates);
+                    yield return routine.Current;
                 }
                 HideCharacterRenderers(character, rendererStates);
-                yield return routine.Current;
             }
-            HideCharacterRenderers(character, rendererStates);
-            RestoreCharacterRenderers(rendererStates);
-            MaterialEditorBridge.RestoreState(materialEditorState);
+            finally {
+                // A failing integration or a cancelled reload must never leave the
+                // character invisible or drop the captured MaterialEditor state.
+                try {
+                    while (routines.Count > 0) {
+                        IDisposable pending = routines.Pop() as IDisposable;
+                        if (pending != null) pending.Dispose();
+                    }
+                }
+                finally {
+                    RestoreCharacterRenderers(rendererStates);
+                    MaterialEditorBridge.RestoreState(materialEditorState);
+                }
+            }
             MaterialEditorBridge.ReapplyAllImmediately(character);
             MarkMakerDirty(character);
         }
@@ -539,6 +622,9 @@ namespace AccessoryBatchManager {
 
         private static void NormalizeCoordinateLengths(ChaControl character) {
             int length = VanillaSlotCount;
+            int current = character.fileStatus.coordinateType;
+            // Retain the current working copy before normalizing the saved coordinates.
+            character.chaFile.coordinate[current].accessory.parts = CurrentParts(character);
             foreach (ChaFileCoordinate coordinate in character.chaFile.coordinate)
                 if (coordinate != null && coordinate.accessory != null && coordinate.accessory.parts != null) length = Math.Max(length, coordinate.accessory.parts.Length);
             if (character.fileStatus.showAccessory != null) length = Math.Max(length, character.fileStatus.showAccessory.Length);
@@ -551,7 +637,6 @@ namespace AccessoryBatchManager {
                 ChaFileAccessory.PartsInfo[] parts = coordinate.accessory.parts ?? new ChaFileAccessory.PartsInfo[0];
                 if (parts.Length != length) coordinate.accessory.parts = ResizeWithEmpty(parts, length);
             }
-            int current = character.fileStatus.coordinateType;
             character.nowCoordinate.accessory.parts = character.chaFile.coordinate[current].accessory.parts;
         }
 

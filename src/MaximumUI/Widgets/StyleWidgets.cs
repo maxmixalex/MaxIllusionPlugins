@@ -3,15 +3,23 @@ using System.Collections.Generic;
 
 namespace MaximumUI {
     public class ThemeEditor : Widget {
+        public string Title;
+        public bool ShowTitle;
         public ThemeTokens Tokens;
         public Action<ThemeTokens> OnChange;
         public bool ShowColors;
         public bool ShowScalars;
         public int MaxRows;
         public float ScalarStep;
+        // Null includes every token; an explicit list scopes an editor to the
+        // capabilities of its drawing backend. Empty arrays intentionally hide a group.
+        public ThemeColorToken[] ColorTokens;
+        public ThemeScalarToken[] ScalarTokens;
 
         public ThemeEditor(ThemeTokens tokens, Action<ThemeTokens> onChange = null, object key = null)
             : base(key) {
+            Title = "Theme Editor";
+            ShowTitle = true;
             Tokens = tokens ?? new ThemeTokens();
             OnChange = onChange;
             ShowColors = true;
@@ -387,7 +395,15 @@ namespace MaximumUI {
             ThemeColorToken.InfoBg,
             ThemeColorToken.SuccessBg,
             ThemeColorToken.WarningBg,
-            ThemeColorToken.ErrorBg
+            ThemeColorToken.ErrorBg,
+            ThemeColorToken.TitleBg,
+            ThemeColorToken.TextMuted,
+            ThemeColorToken.OnAccent,
+            ThemeColorToken.AccentHover,
+            ThemeColorToken.FocusRing,
+            ThemeColorToken.AccentPressed,
+            ThemeColorToken.ControlBorder,
+            ThemeColorToken.ControlHoverBorder
         };
 
         public static readonly ThemeScalarToken[] ScalarTokens = new ThemeScalarToken[] {
@@ -422,7 +438,26 @@ namespace MaximumUI {
             if (token == ThemeColorToken.InfoBg) return "InfoBg";
             if (token == ThemeColorToken.SuccessBg) return "SuccessBg";
             if (token == ThemeColorToken.WarningBg) return "WarningBg";
+            if (token == ThemeColorToken.TitleBg) return "TitleBg";
+            if (token == ThemeColorToken.TextMuted) return "TextMuted";
+            if (token == ThemeColorToken.OnAccent) return "OnAccent";
+            if (token == ThemeColorToken.AccentHover) return "AccentHover";
+            if (token == ThemeColorToken.FocusRing) return "FocusRing";
+            if (token == ThemeColorToken.AccentPressed) return "AccentPressed";
+            if (token == ThemeColorToken.ControlBorder) return "ControlBorder";
+            if (token == ThemeColorToken.ControlHoverBorder) return "ControlHoverBorder";
             return "ErrorBg";
+        }
+
+        public static float MeasureLabelWidth(ThemeEditor editor, Func<string, float> measureText, float availableWidth) {
+            float width = 0f;
+            ThemeColorToken[] colors = GetColors(editor);
+            for (int i = 0; i < colors.Length; i++) {
+                string name = ColorName(colors[i]);
+                float measured = measureText == null ? ThemeTypography.EstimateTextWidth(name, ThemeTypography.DefaultFontSize) : measureText(name);
+                width = Math.Max(width, measured + 8f);
+            }
+            return Math.Min((float)Math.Ceiling(width / 4f) * 4f, Math.Max(0f, availableWidth) * 0.4f);
         }
 
         public static string ScalarName(ThemeScalarToken token) {
@@ -445,9 +480,17 @@ namespace MaximumUI {
             if (editor == null) return 1;
 
             int count = 0;
-            if (editor.ShowColors) count += ColorTokens.Length;
-            if (editor.ShowScalars) count += ScalarTokens.Length;
+            if (editor.ShowColors) count += GetColors(editor).Length;
+            if (editor.ShowScalars) count += GetScalars(editor).Length;
             return count;
+        }
+
+        public static ThemeColorToken[] GetColors(ThemeEditor editor) {
+            return editor != null && editor.ColorTokens != null ? editor.ColorTokens : ColorTokens;
+        }
+
+        public static ThemeScalarToken[] GetScalars(ThemeEditor editor) {
+            return editor != null && editor.ScalarTokens != null ? editor.ScalarTokens : ScalarTokens;
         }
     }
 }

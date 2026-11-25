@@ -65,6 +65,10 @@ namespace MaximumUI {
     public sealed class UiQueryStore {
         private readonly List<ItemQuery> items = new List<ItemQuery>();
         private readonly List<WindowQuery> windows = new List<WindowQuery>();
+        private readonly List<ItemQuery> itemPool = new List<ItemQuery>();
+        private readonly List<WindowQuery> windowPool = new List<WindowQuery>();
+        private readonly List<MuiRect> inputRegions = new List<MuiRect>();
+        private readonly List<MuiRect> overlayRegions = new List<MuiRect>();
         private readonly Dictionary<string, ItemQuery> itemById = new Dictionary<string, ItemQuery>();
         private readonly Dictionary<string, WindowQuery> windowById = new Dictionary<string, WindowQuery>();
         private readonly InputCaptureState capture = new InputCaptureState();
@@ -84,6 +88,8 @@ namespace MaximumUI {
         public void BeginFrame() {
             items.Clear();
             windows.Clear();
+            inputRegions.Clear();
+            overlayRegions.Clear();
             itemById.Clear();
             windowById.Clear();
             capture.WantCaptureMouse = false;
@@ -113,6 +119,34 @@ namespace MaximumUI {
             capture.Command = input.Command;
         }
 
+        internal void RecordInputRegion(MuiRect rect) {
+            RecordInputRegion(rect, false);
+        }
+
+        internal void RecordInputRegion(MuiRect rect, bool overlay) {
+            if (rect.Width <= 0f || rect.Height <= 0f) return;
+            inputRegions.Add(rect);
+            if (overlay) overlayRegions.Add(rect);
+        }
+
+        internal bool ContainsInputRegion(MuiVec2 point) {
+            for (int i = inputRegions.Count - 1; i >= 0; i--)
+                if (inputRegions[i].Contains(point)) return true;
+            return false;
+        }
+
+        internal bool ContainsOverlayRegion(MuiVec2 point) {
+            for (int i = overlayRegions.Count - 1; i >= 0; i--)
+                if (overlayRegions[i].Contains(point)) return true;
+            return false;
+        }
+
+        internal bool ContainsVisibleWindow(MuiVec2 point) {
+            for (int i = windows.Count - 1; i >= 0; i--)
+                if (windows[i].Visible && windows[i].Rect.Contains(point)) return true;
+            return false;
+        }
+
         public void SetCapture(bool mouse, bool keyboard, bool textInput) {
             capture.WantCaptureMouse = capture.WantCaptureMouse || mouse;
             capture.WantCaptureKeyboard = capture.WantCaptureKeyboard || keyboard;
@@ -134,41 +168,50 @@ namespace MaximumUI {
         public void RecordItem(Widget widget, string path, MuiRect rect, bool hovered, bool active, bool focused, bool clicked) {
             if (widget == null || widget is EmptyWidget) return;
 
-            ItemQuery query = new ItemQuery {
-                Id = ItemId(widget, path),
-                Key = widget.Key == null ? null : widget.Key.ToString(),
-                Path = path ?? string.Empty,
-                TypeName = widget.GetType().Name,
-                Rect = rect,
-                Visible = true,
-                Hovered = hovered,
-                Active = active,
-                Focused = focused,
-                Clicked = clicked
-            };
-
-            AddItem(query);
+            int slot = items.Count;
+            ItemQuery query;
+            if (slot < itemPool.Count) query = itemPool[slot];
+            else {
+                query = new ItemQuery();
+                if (slot < 512) itemPool.Add(query);
+            }
+            query.Id = widget.Identity(path);
+            query.Key = widget.IdentityKeyText;
+            query.Path = path ?? string.Empty;
+            query.TypeName = widget.IdentityTypeName;
+            query.Rect = rect;
+            query.Visible = true;
+            query.Hovered = hovered;
+            query.Active = active;
+            query.Focused = focused;
+            query.Clicked = clicked;
+            query.Edited = query.Activated = query.Deactivated = query.DeactivatedAfterEdit = query.ToggledOpen = false;
+            AddItem(query, widget.PathIdentity(path));
         }
 
         public void RecordWindow(Window window, string path, MuiRect rect, MuiRect titleRect, bool hovered, bool focused, bool titleHovered, bool titleActive) {
             if (window == null) return;
 
-            WindowQuery query = new WindowQuery {
-                Id = ItemId(window, path),
-                Key = window.Key == null ? null : window.Key.ToString(),
-                Title = window.Title ?? string.Empty,
-                Rect = rect,
-                TitleRect = titleRect,
-                Visible = window.Visible,
-                Hovered = hovered,
-                Focused = focused,
-                TitleHovered = titleHovered,
-                TitleActive = titleActive
-            };
+            int slot = windows.Count;
+            WindowQuery query;
+            if (slot < windowPool.Count) query = windowPool[slot];
+            else {
+                query = new WindowQuery();
+                if (slot < 32) windowPool.Add(query);
+            }
+            query.Id = window.Identity(path);
+            query.Key = window.IdentityKeyText;
+            query.Title = window.Title ?? string.Empty;
+            query.Rect = rect;
+            query.TitleRect = titleRect;
+            query.Visible = window.Visible;
+            query.Hovered = hovered;
+            query.Focused = focused;
+            query.TitleHovered = titleHovered;
+            query.TitleActive = titleActive;
 
             windows.Add(query);
             windowById[query.Id] = query;
-            if (!string.IsNullOrEmpty(query.Key)) windowById["key:" + query.Key] = query;
         }
 
         public ItemQuery GetItem(object key) {
@@ -190,33 +233,33 @@ namespace MaximumUI {
         }
 
         public bool IsHovered(object key) {
-            ItemQuery query = GetItem(key);
+            ItemQuery query = FindItem(key);
             return query != null && query.Hovered;
         }
 
         public bool IsActive(object key) {
-            ItemQuery query = GetItem(key);
+            ItemQuery query = FindItem(key);
             return query != null && query.Active;
         }
 
         public bool IsFocused(object key) {
-            ItemQuery query = GetItem(key);
+            ItemQuery query = FindItem(key);
             return query != null && query.Focused;
         }
 
         public bool IsClicked(object key) {
-            ItemQuery query = GetItem(key);
+            ItemQuery query = FindItem(key);
             return query != null && query.Clicked;
         }
 
         public bool IsVisible(object key) {
-            ItemQuery query = GetItem(key);
+            ItemQuery query = FindItem(key);
             return query != null && query.Visible;
         }
 
         public bool IsWindowHovered(object key) {
-            WindowQuery query = GetWindow(key);
-            return query != null && query.Hovered;
+            WindowQuery query;
+            return key != null && windowById.TryGetValue("key:" + key, out query) && query.Hovered;
         }
 
         public IList<ItemQuery> SnapshotItems() {
@@ -249,16 +292,15 @@ namespace MaximumUI {
             }
         }
 
-        private void AddItem(ItemQuery query) {
-            items.Add(query);
-            itemById[query.Id] = query;
-            itemById["path:" + query.Path] = query;
-            if (!string.IsNullOrEmpty(query.Key)) itemById["key:" + query.Key] = query;
+        private ItemQuery FindItem(object key) {
+            ItemQuery query;
+            return key != null && itemById.TryGetValue("key:" + key, out query) ? query : null;
         }
 
-        private static string ItemId(Widget widget, string path) {
-            if (widget != null && widget.Key != null) return "key:" + widget.Key;
-            return "path:" + (path ?? string.Empty);
+        private void AddItem(ItemQuery query, string pathId) {
+            items.Add(query);
+            itemById[query.Id] = query;
+            itemById[pathId] = query;
         }
     }
 }

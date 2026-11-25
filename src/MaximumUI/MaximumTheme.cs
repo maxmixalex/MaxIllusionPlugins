@@ -1,10 +1,35 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaximumUI {
-    public sealed class MaximumTheme {
+    public sealed class MaximumTheme : IDisposable {
         private static MaximumTheme expressionLight;
+        private static MaximumTheme cleanLight;
+        private static MaximumTheme metroDark;
+        private static MaximumTheme metroLight;
+        private readonly List<Texture2D> ownedTextures = new List<Texture2D>();
+        private readonly bool shared;
+        private bool disposed;
+        private GUISkin scrollSkin;
+        private readonly GUIContent measurementContent = new GUIContent();
+        private readonly GUIStyle wrappedLabel;
+        private readonly Dictionary<GUIStyle, GUIStyle> wrappedStyles = new Dictionary<GUIStyle, GUIStyle>();
 
+        public readonly string Name;
+        public readonly ThemeTokens Tokens;
+        public readonly GUIStyle Heading;
+        public readonly GUIStyle Subheading;
+        public readonly GUIStyle Caption;
+        public readonly GUIStyle MutedLabel;
+        public readonly GUIStyle PrimaryButton;
+        public readonly GUIStyle QuietButton;
+        public readonly GUIStyle DangerButton;
+        public readonly GUIStyle NavigationItem;
         public readonly int FontSize;
+        public readonly float RowHeight;
+        public readonly float SmallRowHeight;
+        public readonly float TitleBarHeight;
         public readonly GUIStyle Window;
         public readonly GUIStyle FoldedWindow;
         public readonly GUIStyle Box;
@@ -43,27 +68,51 @@ namespace MaximumUI {
         public readonly Texture2D Black;
         public readonly Texture2D Gray;
 
-        private MaximumTheme(int fontSize) {
+        private MaximumTheme(int fontSize, bool clean) {
+            shared = true;
+            Name = clean ? "Clean Light" : "Expression Light";
+            Tokens = clean ? ThemePalettes.MetroLight() : new ThemeTokens();
+            Tokens.FontSize = fontSize;
             FontSize = fontSize;
-            WindowOpacity = 0.8f;
-            WindowOn = ThemeResources.LoadTexture("WindowOn.png", 32, 32);
-            WindowOff = ThemeResources.LoadTexture("WindowOff.png", 32, 32);
-            WindowFoldOn = ThemeResources.LoadTexture("WindowFoldOn.png", 32, 32);
-            WindowFoldOff = ThemeResources.LoadTexture("WindowFoldOff.png", 32, 32);
-            BackgroundOn = ThemeResources.LoadTexture("BackgroundOn.png", 32, 32);
-            ButtonNormal = ThemeResources.LoadTexture("ButtonNormal.png", 32, 32);
-            ButtonHover = ThemeResources.LoadTexture("ButtonHover.png", 32, 32);
-            ButtonActive = ThemeResources.LoadTexture("ButtonActive.png", 32, 32);
-            InputNormal = ThemeResources.LoadTexture("InputNormal.png", 32, 32);
-            InputActive = ThemeResources.LoadTexture("InputActive.png", 32, 32);
+            RowHeight = Math.Max(26f, fontSize + 12f);
+            SmallRowHeight = Math.Max(20f, fontSize + 6f);
+            TitleBarHeight = Math.Max(26f, fontSize + 12f);
+            WindowOpacity = clean ? 1f : 0.8f;
+            Color border = new Color(0.78f, 0.81f, 0.85f, 1f);
+            Color text = new Color(0.13f, 0.17f, 0.23f, 1f);
+            Color accent = new Color(0.15f, 0.36f, 0.75f, 1f);
+            if (clean) {
+                WindowOn = Textures.Frame(new Color(0.97f, 0.98f, 0.99f, 1f), border);
+                WindowOff = WindowOn;
+                WindowFoldOn = WindowOn;
+                WindowFoldOff = WindowOn;
+                BackgroundOn = Textures.Frame(new Color(0.94f, 0.96f, 0.98f, 1f), border);
+                ButtonNormal = Textures.Frame(Color.white, border);
+                ButtonHover = Textures.Frame(new Color(0.91f, 0.95f, 1f, 1f), accent);
+                ButtonActive = Textures.Frame(new Color(0.80f, 0.88f, 1f, 1f), accent);
+                InputNormal = Textures.Frame(Color.white, border);
+                InputActive = Textures.Frame(Color.white, accent);
+            } else {
+                WindowOn = ThemeResources.LoadTexture("WindowOn.png", 32, 32);
+                WindowOff = ThemeResources.LoadTexture("WindowOff.png", 32, 32);
+                WindowFoldOn = ThemeResources.LoadTexture("WindowFoldOn.png", 32, 32);
+                WindowFoldOff = ThemeResources.LoadTexture("WindowFoldOff.png", 32, 32);
+                BackgroundOn = ThemeResources.LoadTexture("BackgroundOn.png", 32, 32);
+                ButtonNormal = ThemeResources.LoadTexture("ButtonNormal.png", 32, 32);
+                ButtonHover = ThemeResources.LoadTexture("ButtonHover.png", 32, 32);
+                ButtonActive = ThemeResources.LoadTexture("ButtonActive.png", 32, 32);
+                InputNormal = ThemeResources.LoadTexture("InputNormal.png", 32, 32);
+                InputActive = ThemeResources.LoadTexture("InputActive.png", 32, 32);
+            }
             Black = Textures.Solid(Color.black);
-            Gray = Textures.Solid(new Color(0.8f, 0.8f, 0.8f, 1f));
-            WindowContentPadding = new RectOffset(10, 10, 26, 10);
-            DialogContentPadding = new RectOffset(10, 10, 26, 10);
+            Gray = Textures.Solid(clean ? border : new Color(0.8f, 0.8f, 0.8f, 1f));
+            int titlePadding = clean ? System.Math.Max(28, fontSize + 14) : 26;
+            WindowContentPadding = new RectOffset(10, 10, titlePadding, 10);
+            DialogContentPadding = new RectOffset(10, 10, titlePadding, 10);
             DropdownContentPadding = new RectOffset(4, 4, 4, 4);
 
-            Window = new GUIStyle("window") {
-                fontSize = 12,
+            Window = new GUIStyle() {
+                fontSize = fontSize,
                 alignment = TextAnchor.UpperCenter,
                 border = new RectOffset(8, 8, 20, 8),
                 contentOffset = new Vector2(0f, 2f)
@@ -72,8 +121,8 @@ namespace MaximumUI {
             SetOnBackground(Window, WindowOn);
             SetTextColor(Window, Color.black);
 
-            FoldedWindow = new GUIStyle("window") {
-                fontSize = 12,
+            FoldedWindow = new GUIStyle() {
+                fontSize = fontSize,
                 alignment = TextAnchor.UpperCenter,
                 border = new RectOffset(8, 8, 0, 0),
                 contentOffset = new Vector2(0f, 2f),
@@ -83,17 +132,18 @@ namespace MaximumUI {
             SetOnBackground(FoldedWindow, WindowFoldOn);
             SetTextColor(FoldedWindow, Color.black);
 
-            Label = new GUIStyle("label") {
+            Label = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.MiddleLeft
             };
             SetTextColor(Label, Color.black);
+            wrappedLabel = new GUIStyle(Label) { wordWrap = true };
 
             CenterLabel = new GUIStyle(Label) {
                 alignment = TextAnchor.MiddleCenter
             };
 
-            Button = new GUIStyle("button") {
+            Button = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.MiddleCenter,
                 border = new RectOffset(6, 6, 6, 6)
@@ -104,13 +154,13 @@ namespace MaximumUI {
             Button.active.background = ButtonActive;
             SetTextColor(Button, Color.black);
 
-            Toggle = new GUIStyle("toggle") {
+            Toggle = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.MiddleLeft
             };
             SetTextColor(Toggle, Color.black);
 
-            ToggleBox = new GUIStyle("box") {
+            ToggleBox = new GUIStyle() {
                 border = new RectOffset(4, 4, 4, 4),
                 fixedWidth = 14f,
                 fixedHeight = 14f,
@@ -125,7 +175,7 @@ namespace MaximumUI {
             ToggleCheck = new GUIStyle();
             SetBackground(ToggleCheck, Black);
 
-            TextField = new GUIStyle("textfield") {
+            TextField = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.MiddleLeft,
                 border = new RectOffset(6, 6, 6, 6)
@@ -138,7 +188,7 @@ namespace MaximumUI {
 
             ComboBoxButton = new GUIStyle(Button);
 
-            ComboBoxItem = new GUIStyle("button") {
+            ComboBoxItem = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.MiddleLeft,
                 border = new RectOffset(4, 4, 4, 4),
@@ -150,19 +200,19 @@ namespace MaximumUI {
             ComboBoxItem.active.background = ButtonActive;
             SetTextColor(ComboBoxItem, Color.black);
 
-            HorizontalSlider = new GUIStyle("horizontalslider") {
+            HorizontalSlider = new GUIStyle() {
                 fixedHeight = 4f,
                 border = new RectOffset(2, 2, 2, 2)
             };
             SetBackground(HorizontalSlider, Gray);
-            HorizontalSliderThumb = new GUIStyle("horizontalsliderthumb") {
+            HorizontalSliderThumb = new GUIStyle() {
                 fixedWidth = 12f,
                 fixedHeight = 12f,
                 border = new RectOffset(4, 4, 4, 4)
             };
             SetBackground(HorizontalSliderThumb, ButtonActive);
 
-            Box = new GUIStyle("box") {
+            Box = new GUIStyle() {
                 fontSize = fontSize,
                 alignment = TextAnchor.UpperLeft,
                 border = new RectOffset(12, 12, 12, 12)
@@ -201,17 +251,379 @@ namespace MaximumUI {
             Dropdown = new GUIStyle(Box) {
                 padding = DropdownContentPadding
             };
+
+            if (clean) {
+                GUIStyle[] framed = { Window, FoldedWindow, Box, Button, ToggleBox, TextField,
+                    ComboBoxButton, ComboBoxItem, HelpBox, Dialog, TabButton, FoldoutHeader, Dropdown };
+                for (int i = 0; i < framed.Length; i++) {
+                    framed[i].border = new RectOffset(1, 1, 1, 1);
+                    SetTextColor(framed[i], text);
+                }
+                GUIStyle[] labels = { Label, CenterLabel, Toggle, wrappedLabel };
+                for (int i = 0; i < labels.Length; i++) SetTextColor(labels[i], text);
+                Window.alignment = FoldedWindow.alignment = Dialog.alignment = TextAnchor.UpperLeft;
+                Window.padding = FoldedWindow.padding = Dialog.padding = new RectOffset(10, 54, 5, 5);
+                Window.contentOffset = FoldedWindow.contentOffset = Dialog.contentOffset = Vector2.zero;
+                Button.padding = ComboBoxButton.padding = TabButton.padding = new RectOffset(8, 8, 3, 3);
+                TextField.padding = new RectOffset(7, 7, 3, 3);
+                SetBackground(Separator, Gray);
+                SetBackground(ToggleCheck, Textures.Solid(accent));
+            }
+            Heading = new GUIStyle(Label) { fontSize = fontSize + 7 };
+            Subheading = new GUIStyle(Label) { fontSize = fontSize + 4 };
+            Caption = new GUIStyle(Label) { fontSize = Math.Max(10, fontSize - 2) };
+            MutedLabel = new GUIStyle(Label);
+            SetTextColor(MutedLabel, ColorOf(Tokens.TextMuted));
+            PrimaryButton = new GUIStyle(Button);
+            QuietButton = new GUIStyle(Button);
+            DangerButton = new GUIStyle(Button);
+            NavigationItem = new GUIStyle(TabButton) { alignment = TextAnchor.MiddleLeft };
+        }
+
+        private MaximumTheme(ThemeTokens palette, int fontSize, string name, bool isShared) {
+            shared = isShared;
+            Name = string.IsNullOrEmpty(name) ? "Custom" : name;
+            Tokens = ThemePalettes.Normalize(palette);
+            FontSize = Math.Max(8, Math.Min(32, fontSize > 0 ? fontSize : (int)Tokens.FontSize));
+            Tokens.FontSize = FontSize;
+            WindowOpacity = 1f;
+            LayoutMetrics geometry = ThemeTypography.CreateLayoutMetrics(Tokens);
+            RowHeight = geometry.RowHeight;
+            SmallRowHeight = geometry.SmallRowHeight;
+            int titleHeight = (int)geometry.WindowPaddingTop - 16;
+            TitleBarHeight = titleHeight;
+            WindowContentPadding = new RectOffset(16, 16, (int)geometry.WindowPaddingTop, 16);
+            DialogContentPadding = new RectOffset(24, 24, (int)geometry.DialogPaddingTop, 24);
+            DropdownContentPadding = new RectOffset(4, 4, 4, 4);
+
+            WindowOn = Own(Textures.WindowSurface(ColorOf(Tokens.WindowBg), ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border), titleHeight));
+            WindowOff = WindowOn;
+            WindowFoldOn = Own(Textures.Frame(ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border)));
+            WindowFoldOff = WindowFoldOn;
+            BackgroundOn = Own(Textures.Frame(ColorOf(Tokens.PanelBg), ColorOf(Tokens.Separator)));
+            ButtonNormal = Own(Textures.Frame(ColorOf(Tokens.ButtonBg), ColorOf(Tokens.ButtonBg), 2));
+            ButtonHover = Own(Textures.Frame(ColorOf(Tokens.ButtonHoverBg), ColorOf(Tokens.ControlBorder), 2));
+            ButtonActive = Own(Textures.Frame(ColorOf(Tokens.ButtonActiveBg), ColorOf(Tokens.ButtonActiveBg), 2));
+            InputNormal = Own(Textures.Frame(ColorOf(Tokens.FieldBg), ColorOf(Tokens.ControlBorder), 2));
+            InputActive = Own(Textures.Frame(ColorOf(Tokens.FieldActiveBg), ColorOf(Tokens.Accent), 2));
+            Black = Own(Textures.Solid(Color.black));
+            Gray = Own(Textures.Solid(ColorOf(Tokens.Separator)));
+            Texture2D accent = Own(Textures.Solid(ColorOf(Tokens.Accent)));
+            Texture2D transparent = Own(Textures.Solid(Color.clear));
+            Texture2D hoverSurface = Own(Textures.Solid(ColorOf(Tokens.ButtonHoverBg)));
+            Texture2D selectedTab = Own(Textures.Surface(ColorOf(Tokens.SelectedBg), ColorOf(Tokens.SelectedBg), ColorOf(Tokens.Accent), 1, 3));
+            Texture2D selectedRow = Own(Textures.Surface(ColorOf(Tokens.SelectedBg), ColorOf(Tokens.SelectedBg), ColorOf(Tokens.Accent), 2, 3));
+
+            Label = TextStyle(FontSize, TextAnchor.MiddleLeft, Tokens.Text);
+            wrappedLabel = new GUIStyle(Label) { wordWrap = true };
+            CenterLabel = new GUIStyle(Label) { alignment = TextAnchor.MiddleCenter };
+            Heading = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Heading), TextAnchor.MiddleLeft, Tokens.Text);
+            Heading.font = ThemeFonts.Get(TextWeight.Semilight);
+            Subheading = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Subheading), TextAnchor.MiddleLeft, Tokens.Text);
+            Caption = TextStyle((int)ThemeTypography.FontSize(Tokens, LabelRole.Caption), TextAnchor.MiddleLeft, Tokens.TextMuted);
+            MutedLabel = TextStyle(FontSize, TextAnchor.MiddleLeft, Tokens.TextMuted);
+            Window = TextStyle(FontSize, TextAnchor.UpperLeft, Tokens.Text);
+            Window.padding = new RectOffset(16, 64, 8, 0);
+            Window.border = new RectOffset(1, 1, titleHeight, 1);
+            SetBackground(Window, WindowOn);
+            SetOnBackground(Window, WindowOn);
+            FoldedWindow = new GUIStyle(Window) { border = new RectOffset(1, 1, 1, 1) };
+            SetBackground(FoldedWindow, WindowFoldOn);
+            SetOnBackground(FoldedWindow, WindowFoldOn);
+
+            Box = TextStyle(FontSize, TextAnchor.UpperLeft, Tokens.Text);
+            Box.border = new RectOffset(1, 1, 1, 1);
+            SetBackground(Box, BackgroundOn);
+            SetOnBackground(Box, BackgroundOn);
+            Button = TextStyle(FontSize, TextAnchor.MiddleCenter, Tokens.Text);
+            Button.border = new RectOffset(2, 2, 2, 2);
+            Button.padding = new RectOffset(8, 8, 4, 4);
+            Button.normal.background = ButtonNormal;
+            Button.hover.background = ButtonHover;
+            Button.active.background = ButtonActive;
+            Button.focused.background = ButtonHover;
+            SetOnBackground(Button, ButtonActive);
+
+            PrimaryButton = new GUIStyle(Button);
+            SetBackground(PrimaryButton, accent);
+            PrimaryButton.hover.background = Own(Textures.Frame(ColorOf(Tokens.AccentHover), ColorOf(Tokens.ControlBorder), 2));
+            PrimaryButton.focused.background = Own(Textures.Frame(ColorOf(Tokens.Accent), ColorOf(Tokens.OnAccent)));
+            PrimaryButton.active.background = Own(Textures.Solid(ColorOf(Tokens.AccentPressed)));
+            SetTextColor(PrimaryButton, ColorOf(Tokens.OnAccent));
+            QuietButton = new GUIStyle(Button);
+            QuietButton.normal.background = transparent;
+            QuietButton.hover.background = hoverSurface;
+            QuietButton.active.background = ButtonActive;
+            DangerButton = new GUIStyle(Button);
+            DangerButton.normal.background = Own(Textures.Frame(ColorOf(Tokens.ErrorBg), ColorOf(Tokens.Border)));
+            DangerButton.hover.background = DangerButton.active.background = Own(Textures.Frame(ColorOf(Tokens.ErrorBg), ColorOf(Tokens.Text)));
+
+            Toggle = new GUIStyle(Label);
+            ToggleBox = new GUIStyle {
+                border = new RectOffset(2, 2, 2, 2),
+                fixedWidth = Math.Max(14f, Tokens.ToggleBoxSize), fixedHeight = Math.Max(14f, Tokens.ToggleBoxSize)
+            };
+            SetBackground(ToggleBox, InputNormal);
+            SetOnBackground(ToggleBox, InputActive);
+            ToggleBox.hover.background = ToggleBox.focused.background = InputActive;
+            ToggleCheck = new GUIStyle();
+            SetBackground(ToggleCheck, accent);
+            TextField = new GUIStyle(Label) { border = new RectOffset(2, 2, 2, 2), padding = new RectOffset(8, 8, 4, 4) };
+            SetBackground(TextField, InputNormal);
+            TextField.hover.background = Own(Textures.Frame(ColorOf(Tokens.FieldHoverBg), ColorOf(Tokens.ControlHoverBorder), 2));
+            TextField.focused.background = TextField.active.background = InputActive;
+            ComboBoxButton = new GUIStyle(Button) { alignment = TextAnchor.MiddleLeft, padding = new RectOffset(8, 32, 4, 4) };
+            ComboBoxButton.normal.background = InputNormal;
+            ComboBoxButton.hover.background = TextField.hover.background;
+            ComboBoxItem = new GUIStyle(Label) { padding = new RectOffset(10, 10, 3, 3) };
+            SetBackground(ComboBoxItem, transparent);
+            ComboBoxItem.hover.background = ComboBoxItem.focused.background = hoverSurface;
+            ComboBoxItem.active.background = selectedRow;
+            SetOnBackground(ComboBoxItem, selectedRow);
+
+            TabButton = new GUIStyle(Button) { border = new RectOffset(1, 1, 1, 3), padding = new RectOffset(12, 12, 4, 5) };
+            TabButton.normal.background = transparent;
+            TabButton.hover.background = hoverSurface;
+            TabButton.active.background = selectedTab;
+            SetOnBackground(TabButton, selectedTab);
+            NavigationItem = new GUIStyle(TabButton) {
+                alignment = TextAnchor.MiddleLeft, border = new RectOffset(3, 1, 1, 1), padding = new RectOffset(14, 10, 4, 4)
+            };
+            NavigationItem.active.background = selectedRow;
+            SetOnBackground(NavigationItem, selectedRow);
+            FoldoutHeader = new GUIStyle(NavigationItem);
+            HorizontalSlider = new GUIStyle { fixedHeight = Math.Max(2f, Tokens.SliderTrackHeight) };
+            SetBackground(HorizontalSlider, Own(Textures.Solid(ColorOf(Tokens.Border))));
+            HorizontalSliderThumb = new GUIStyle {
+                fixedWidth = Math.Max(8f, Tokens.SliderThumbWidth), fixedHeight = Math.Max(16f, Tokens.SliderThumbHeight)
+            };
+            SetBackground(HorizontalSliderThumb, accent);
+            HorizontalSliderThumb.hover.background = PrimaryButton.hover.background;
+            HorizontalSliderThumb.active.background = PrimaryButton.hover.background;
+            Separator = new GUIStyle();
+            SetBackground(Separator, Gray);
+            HelpBox = new GUIStyle(Box) { wordWrap = true, padding = new RectOffset(12, 12, 9, 9) };
+            Dialog = new GUIStyle(Window);
+            Dialog.fontSize = Heading.fontSize;
+            Dialog.font = Heading.font;
+            Dialog.padding = new RectOffset(24, 24, 20, 0);
+            Texture2D dialogSurface = Own(Textures.WindowSurface(ColorOf(Tokens.DialogBg), ColorOf(Tokens.TitleBg), ColorOf(Tokens.Border), titleHeight));
+            SetBackground(Dialog, dialogSurface);
+            SetOnBackground(Dialog, dialogSurface);
+            Dropdown = new GUIStyle(Box) { padding = DropdownContentPadding };
+            SetBackground(Dropdown, Own(Textures.Frame(ColorOf(Tokens.DropdownBg), ColorOf(Tokens.Border))));
+        }
+
+        private static GUIStyle TextStyle(int size, TextAnchor alignment, MuiColor color) {
+            GUIStyle result = new GUIStyle { font = ThemeFonts.Get(TextWeight.Normal), fontSize = size, alignment = alignment };
+            SetTextColor(result, ColorOf(color));
+            return result;
+        }
+
+        private Texture2D Own(Texture2D texture) {
+            ownedTextures.Add(texture);
+            return texture;
+        }
+
+        private static Color ColorOf(MuiColor color) {
+            return new Color(color.R, color.G, color.B, color.A);
+        }
+
+        /// <summary>Create on Unity's main thread; the caller owns this theme and must dispose it after unmount/replacement.</summary>
+        public static MaximumTheme Create(ThemeTokens tokens, int fontSize = 0, string name = "Custom") {
+            return new MaximumTheme(tokens, fontSize, name, false);
+        }
+
+        /// <summary>Releases only custom-theme textures. Built-in shared themes live for the application lifetime.</summary>
+        public void Dispose() {
+            if (shared || disposed) return;
+            disposed = true;
+            if (scrollSkin != null) UnityEngine.Object.Destroy(scrollSkin);
+            scrollSkin = null;
+            for (int i = 0; i < ownedTextures.Count; i++) {
+                if (ownedTextures[i] != null) UnityEngine.Object.Destroy(ownedTextures[i]);
+            }
+            ownedTextures.Clear();
+            wrappedStyles.Clear();
+        }
+
+        /// <summary>
+        /// Native scrollbars require track, thumb and arrow styles from the same skin.
+        /// Only BeginScrollView reads those styles; restore the caller's skin before
+        /// drawing child controls and pair this with the usual GUI.EndScrollView().
+        /// </summary>
+        public Vector2 BeginScrollView(Rect position, Vector2 scrollPosition, Rect viewRect,
+            bool alwaysShowHorizontal = false, bool alwaysShowVertical = false) {
+            if (disposed) throw new ObjectDisposedException("MaximumTheme");
+            GUISkin previous = GUI.skin;
+            GUISkin themed = GetScrollSkin(previous);
+            MuiRect visible = ScrollGeometry.ContentViewport(new MuiRect(position.x, position.y, position.width, position.height),
+                new MuiRect(viewRect.x, viewRect.y, viewRect.width, viewRect.height), alwaysShowHorizontal, alwaysShowVertical, ScrollbarGeometry.GutterSize);
+            // Match the shared thumb formula even in an unusually short viewport.
+            int verticalInset = (int)ScrollbarGeometry.NativeEndInset(visible.Height);
+            int horizontalInset = (int)ScrollbarGeometry.NativeEndInset(visible.Width);
+            themed.verticalScrollbar.padding.top = themed.verticalScrollbar.padding.bottom = verticalInset;
+            themed.horizontalScrollbar.padding.left = themed.horizontalScrollbar.padding.right = horizontalInset;
+            int verticalMinimum = (int)ScrollbarGeometry.NativeMinimumThumb(visible.Height - verticalInset * 2f);
+            int horizontalMinimum = (int)ScrollbarGeometry.NativeMinimumThumb(visible.Width - horizontalInset * 2f);
+            themed.verticalScrollbarThumb.padding.top = verticalMinimum / 2;
+            themed.verticalScrollbarThumb.padding.bottom = verticalMinimum - verticalMinimum / 2;
+            themed.horizontalScrollbarThumb.padding.left = horizontalMinimum / 2;
+            themed.horizontalScrollbarThumb.padding.right = horizontalMinimum - horizontalMinimum / 2;
+            MuiRect content = new MuiRect(viewRect.x, viewRect.y, viewRect.width, viewRect.height);
+            MuiVec2 finitePosition = ScrollGeometry.ClampPosition(new MuiVec2(scrollPosition.x, scrollPosition.y), content, visible);
+            scrollPosition = new Vector2(finitePosition.X, finitePosition.Y);
+            try {
+                GUI.skin = themed;
+                if (!ScrollGeometry.HasNativeScrollArea(visible)) {
+                    // A collapsed host cannot draw or hit a thumb. Keep native
+                    // control IDs and the paired scroll clip, but skip SliderHandler
+                    // so a captured drag cannot divide by a zero-length track.
+                    return GUI.BeginScrollView(new Rect(visible.X, visible.Y, visible.Width, visible.Height), scrollPosition, viewRect,
+                        alwaysShowHorizontal, alwaysShowVertical, GUIStyle.none, GUIStyle.none);
+                }
+                Vector2 next = GUI.BeginScrollView(position, scrollPosition, viewRect,
+                    alwaysShowHorizontal, alwaysShowVertical, themed.horizontalScrollbar, themed.verticalScrollbar);
+                finitePosition = ScrollGeometry.ClampPosition(new MuiVec2(next.x, next.y), content, visible);
+                return new Vector2(finitePosition.X, finitePosition.Y);
+            } finally {
+                GUI.skin = previous;
+            }
+        }
+
+        private GUISkin GetScrollSkin(GUISkin source) {
+            if (scrollSkin == null) {
+                // A private scroll-only skin avoids mutating the global game skin or
+                // inheriting user customStyles that could shadow canonical thumb names.
+                scrollSkin = ScriptableObject.CreateInstance<GUISkin>();
+                scrollSkin.hideFlags = HideFlags.HideAndDontSave;
+                Texture2D track = Own(Textures.Solid(ColorOf(ScrollbarGeometry.TrackColor(Tokens))));
+                Texture2D thumb = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, false, false))));
+                Texture2D hovered = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, true, false))));
+                Texture2D active = Own(Textures.Solid(ColorOf(ScrollbarGeometry.ThumbColor(Tokens, false, true))));
+
+                GUIStyle vertical = new GUIStyle {
+                    fixedWidth = ScrollbarGeometry.GutterSize, margin = new RectOffset(), padding = new RectOffset(4, 4, 2, 2)
+                };
+                GUIStyle horizontal = new GUIStyle {
+                    fixedHeight = ScrollbarGeometry.GutterSize, margin = new RectOffset(), padding = new RectOffset(2, 2, 4, 4)
+                };
+                SetBackground(vertical, track);
+                SetBackground(horizontal, track);
+                GUIStyle verticalThumb = new GUIStyle {
+                    fixedWidth = ScrollbarGeometry.ThumbWidth, padding = new RectOffset(0, 0, 12, 12)
+                };
+                GUIStyle horizontalThumb = new GUIStyle {
+                    fixedHeight = ScrollbarGeometry.ThumbWidth, padding = new RectOffset(12, 12, 0, 0)
+                };
+                SetBackground(verticalThumb, thumb);
+                SetBackground(horizontalThumb, thumb);
+                verticalThumb.hover.background = verticalThumb.focused.background = hovered;
+                horizontalThumb.hover.background = horizontalThumb.focused.background = hovered;
+                verticalThumb.active.background = horizontalThumb.active.background = active;
+                scrollSkin.verticalScrollbar = vertical;
+                scrollSkin.verticalScrollbarThumb = verticalThumb;
+                scrollSkin.verticalScrollbarUpButton = new GUIStyle { fixedWidth = ScrollbarGeometry.GutterSize, fixedHeight = 0f };
+                scrollSkin.verticalScrollbarDownButton = new GUIStyle { fixedWidth = ScrollbarGeometry.GutterSize, fixedHeight = 0f };
+                scrollSkin.horizontalScrollbar = horizontal;
+                scrollSkin.horizontalScrollbarThumb = horizontalThumb;
+                scrollSkin.horizontalScrollbarLeftButton = new GUIStyle { fixedWidth = 0f, fixedHeight = ScrollbarGeometry.GutterSize };
+                scrollSkin.horizontalScrollbarRightButton = new GUIStyle { fixedWidth = 0f, fixedHeight = ScrollbarGeometry.GutterSize };
+                scrollSkin.scrollView = new GUIStyle();
+            }
+            Font font = source == null ? null : source.font;
+            if (scrollSkin.font != font) scrollSkin.font = font;
+            return scrollSkin;
+        }
+
+        public static MaximumTheme MetroDark {
+            get {
+                if (metroDark == null) metroDark = new MaximumTheme(ThemePalettes.MetroDark(), 14, "MDL2 Dark", true);
+                return metroDark;
+            }
+        }
+
+        public static MaximumTheme MetroLight {
+            get {
+                if (metroLight == null) metroLight = new MaximumTheme(ThemePalettes.MetroLight(), 14, "MDL2 Light", true);
+                return metroLight;
+            }
         }
 
         public static MaximumTheme ExpressionLight {
             get {
-                if (expressionLight == null) expressionLight = new MaximumTheme(ScaledPixels(12));
+                if (expressionLight == null) expressionLight = new MaximumTheme(ScaledPixels(12), false);
                 return expressionLight;
             }
         }
 
+        /// <summary>Opaque, compact light theme with consistent spacing and a blue selection accent.</summary>
+        public static MaximumTheme CleanLight {
+            get {
+                if (cleanLight == null) cleanLight = new MaximumTheme(ScaledPixels(12), true);
+                return cleanLight;
+            }
+        }
+
         public static int ScaledPixels(int value) {
-            return (int)((1f + (Screen.width / 1280f - 1f) * 0.6f) * value);
+            return ThemeSizing.ScalePixels(value, Screen.width);
+        }
+
+        public LayoutMetrics CreateLayoutMetrics() {
+            LayoutMetrics result = ThemeTypography.CreateLayoutMetrics(Tokens);
+            result.TitleHeight = result.WindowPaddingTop = WindowContentPadding.top;
+            result.WindowPaddingLeft = WindowContentPadding.left;
+            result.WindowPaddingRight = WindowContentPadding.right;
+            result.WindowPaddingBottom = WindowContentPadding.bottom;
+            result.DialogPaddingLeft = DialogContentPadding.left;
+            result.DialogPaddingTop = DialogContentPadding.top;
+            result.DialogPaddingRight = DialogContentPadding.right;
+            result.DialogPaddingBottom = DialogContentPadding.bottom;
+            result.MeasureText = MeasureTextWidth;
+            result.MeasureWrappedTextHeight = MeasureWrappedTextHeight;
+            result.MeasureLabelWidth = MeasureLabelWidth;
+            result.MeasureLabelHeight = MeasureLabelHeight;
+            return result;
+        }
+
+        private GUIStyle LabelStyle(Label label) {
+            GUIStyle custom = label == null ? null : label.Style as GUIStyle;
+            if (custom != null) return custom;
+            return label != null && label.Role == LabelRole.Heading ? Heading :
+                label != null && label.Role == LabelRole.Subheading ? Subheading :
+                label != null && label.Role == LabelRole.Caption ? Caption :
+                label != null && label.Role == LabelRole.Muted ? MutedLabel : Label;
+        }
+
+        private float MeasureLabelWidth(Label label) {
+            measurementContent.text = label == null ? string.Empty : label.Text ?? string.Empty;
+            return LabelStyle(label).CalcSize(measurementContent).x;
+        }
+
+        private float MeasureLabelHeight(Label label, float width) {
+            GUIStyle style = LabelStyle(label);
+            measurementContent.text = label == null ? string.Empty : label.Text ?? string.Empty;
+            float rowHeight = Math.Max(ThemeTypography.LineHeight(Tokens, label == null ? LabelRole.Body : label.Role),
+                style.CalcSize(measurementContent).y);
+            if (label == null || !label.WordWrap || width <= 0f || float.IsInfinity(width)) return rowHeight;
+            GUIStyle wrapped;
+            if (style == Label) wrapped = wrappedLabel;
+            else if (!wrappedStyles.TryGetValue(style, out wrapped)) {
+                if (wrappedStyles.Count >= 64) wrappedStyles.Clear();
+                wrapped = new GUIStyle(style) { wordWrap = true };
+                wrappedStyles.Add(style, wrapped);
+            }
+            return Math.Max(rowHeight, wrapped.CalcHeight(measurementContent, width));
+        }
+
+        private float MeasureTextWidth(string text) {
+            measurementContent.text = text ?? string.Empty;
+            return Label.CalcSize(measurementContent).x;
+        }
+
+        private float MeasureWrappedTextHeight(string text, float width) {
+            measurementContent.text = text ?? string.Empty;
+            return wrappedLabel.CalcHeight(measurementContent, width);
         }
 
         public static void SetBackground(GUIStyle style, Texture2D texture) {

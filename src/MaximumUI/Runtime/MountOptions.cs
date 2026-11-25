@@ -6,6 +6,7 @@ namespace MaximumUI {
         public KeyCode ToggleKey;
         public bool HasToggleKey;
         public bool BuildEveryOnGUI;
+        public bool BuildEveryFrame;
         public bool SoftMouseCapture;
         public bool SoftKeyboardCapture;
         public int SortOrder;
@@ -14,7 +15,8 @@ namespace MaximumUI {
         public MountOptions() {
             Visible = true;
             HasToggleKey = false;
-            BuildEveryOnGUI = true;
+            BuildEveryOnGUI = false;
+            BuildEveryFrame = true;
             SoftMouseCapture = true;
             SoftKeyboardCapture = false;
             SortOrder = 0;

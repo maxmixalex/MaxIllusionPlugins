@@ -36,6 +36,8 @@ bld/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+__pycache__/
+*.pyc
 
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt

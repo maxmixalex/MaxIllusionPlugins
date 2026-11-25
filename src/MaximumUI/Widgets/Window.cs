@@ -11,6 +11,7 @@ namespace MaximumUI {
         public bool Foldable;
         public bool Closable;
         public bool Visible;
+        public bool Resizable;
         public Action<bool> OnVisibleChange;
 
         public Window(
@@ -33,6 +34,7 @@ namespace MaximumUI {
             Foldable = foldable;
             Closable = closable;
             Visible = true;
+            Resizable = true;
             OnVisibleChange = onVisibleChange;
         }
     }

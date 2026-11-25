@@ -24,7 +24,7 @@ namespace MultiTeamH {
     public sealed class MultiTeamHPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.MultiTeamH";
         public const string Name = "MultiTeamH";
-        public const string Version = "0.11.62";
+        public const string Version = "0.11.65";
 
         internal static MultiTeamHPlugin Instance { get; private set; }
         internal static ConfigEntry<bool> Enabled { get; private set; }
@@ -34,6 +34,8 @@ namespace MultiTeamH {
         internal static ConfigEntry<KeyboardShortcut> ToggleWindowKey { get; private set; }
         internal static ConfigEntry<bool> DebugLogging { get; private set; }
         internal static ConfigEntry<bool> PreventMiddleClickAuto { get; private set; }
+        internal static ConfigEntry<bool> AutoBackgroundClimax { get; private set; }
+        internal static ConfigEntry<BackgroundClimaxFinish> BackgroundFinish { get; private set; }
         internal static ConfigEntry<string> RememberedFemaleCard { get; private set; }
         internal static ConfigEntry<string> RememberedMaleCard { get; private set; }
         internal static ConfigEntry<int> RememberedStage { get; private set; }
@@ -48,6 +50,7 @@ namespace MultiTeamH {
         private GUISkin panelSkin;
         private GUIStyle foldedWindowStyle;
         private bool mouseDownOnWindow;
+        private float nextFreeHDiscovery;
 
         private void Awake() {
             Instance = this;
@@ -59,6 +62,10 @@ namespace MultiTeamH {
             if (ToggleWindowKey.Value.MainKey == KeyCode.F8) ToggleWindowKey.Value = new KeyboardShortcut(KeyCode.Minus);
             DebugLogging = Config.Bind("Debug", "Logging", false, "Write detailed rebinding messages to the BepInEx log.");
             PreventMiddleClickAuto = Config.Bind("Controls", "Prevent middle-click auto", true, "Prevent the native speed panel from enabling automatic motion through an accidental middle click.");
+            AutoBackgroundClimax = Config.Bind("Background teams", "Automatic climax", false,
+                "Request a native finish when a non-focused service/insertion team's male gauge reaches 100. Does not override gauge locks, transitions or pending actions.");
+            BackgroundFinish = Config.Bind("Background teams", "Climax finish", BackgroundClimaxFinish.Outside,
+                "Automatic climax finish location. Inside falls back to outside for service actions that do not expose an inside finish.");
             RememberedFemaleCard = Config.Bind("Team 2 cards", "Female card", string.Empty, "Last selected team 2 female card.");
             RememberedMaleCard = Config.Bind("Team 2 cards", "Male card", string.Empty, "Last selected team 2 male card.");
             RememberedStage = Config.Bind("Team 2 cards", "H stage", 0, "Last selected team 2 H stage.");
@@ -87,6 +94,12 @@ namespace MultiTeamH {
 
         private void OnDestroy() {
             DisposeSession();
+            if (freeHMode != null) {
+                FreeHModeController old = freeHMode;
+                freeHMode = null;
+                old.Shutdown();
+                Destroy(old);
+            }
             if (harmony != null) harmony.UnpatchSelf();
             if (Instance == this) Instance = null;
         }
@@ -97,7 +110,12 @@ namespace MultiTeamH {
             // separate lifetimes.  A session can remain alive briefly while
             // the selection screen is already back, so never gate discovery
             // of its entry button on session == null.
-            if (freeHMode == null) DiscoverFreeHScene();
+            if (freeHMode == null && Time.realtimeSinceStartup >= nextFreeHDiscovery) {
+                // Scene hooks attach immediately. This is only a fallback for
+                // already-loaded menus; a global object scan must not run at FPS.
+                nextFreeHDiscovery = Time.realtimeSinceStartup + 1f;
+                DiscoverFreeHScene();
+            }
             if (ToggleWindowKey.Value.IsDown() || Input.GetKeyDown(KeyCode.KeypadMinus)) showWindow = !showWindow;
             if (session != null && SwitchTeamKey.Value.IsDown()) session.SwitchTo(1 - session.ActiveTeam);
         }
@@ -113,17 +131,22 @@ namespace MultiTeamH {
                 Color oldColor = GUI.color;
                 Color oldBackground = GUI.backgroundColor;
                 Color oldContent = GUI.contentColor;
-                GUI.skin = panelSkin;
-                GUI.color = Color.white;
-                GUI.backgroundColor = new Color(1f, 1f, 1f, 0.82f);
-                GUI.contentColor = Color.black;
-                windowRect.height = windowMinimized ? 20f : 420f;
-                windowRect = GUI.Window(68150240, windowRect, DrawWindow, Name + " " + Version,
-                    windowMinimized ? foldedWindowStyle : panelSkin.window);
-                GUI.skin = oldSkin;
-                GUI.color = oldColor;
-                GUI.backgroundColor = oldBackground;
-                GUI.contentColor = oldContent;
+                bool oldEnabled = GUI.enabled;
+                try {
+                    GUI.skin = panelSkin;
+                    GUI.color = Color.white;
+                    GUI.backgroundColor = new Color(1f, 1f, 1f, 0.82f);
+                    GUI.contentColor = Color.black;
+                    windowRect.height = windowMinimized ? 20f : 474f;
+                    windowRect = GUI.Window(68150240, windowRect, DrawWindow, Name + " " + Version,
+                        windowMinimized ? foldedWindowStyle : panelSkin.window);
+                } finally {
+                    GUI.skin = oldSkin;
+                    GUI.color = oldColor;
+                    GUI.backgroundColor = oldBackground;
+                    GUI.contentColor = oldContent;
+                    GUI.enabled = oldEnabled;
+                }
                 windowRect.x = Mathf.Clamp(windowRect.x, 0f, Mathf.Max(0f, Screen.width - windowRect.width));
                 windowRect.y = Mathf.Clamp(windowRect.y, 0f, Mathf.Max(0f, Screen.height - 24f));
                 HandleWindowMouseInput();
@@ -186,6 +209,14 @@ namespace MultiTeamH {
             }
 
             PreventMiddleClickAuto.Value = GUILayout.Toggle(PreventMiddleClickAuto.Value, "防止中键误触自动模式");
+            AutoBackgroundClimax.Value = GUILayout.Toggle(AutoBackgroundClimax.Value, "非焦点队伍侍奉 / 插入满槽自动高潮");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("自动结束方式", GUILayout.Width(100f));
+            if (GUILayout.Toggle(BackgroundFinish.Value == BackgroundClimaxFinish.Outside, "外部", GUI.skin.button))
+                BackgroundFinish.Value = BackgroundClimaxFinish.Outside;
+            if (GUILayout.Toggle(BackgroundFinish.Value == BackgroundClimaxFinish.Inside, "内部", GUI.skin.button))
+                BackgroundFinish.Value = BackgroundClimaxFinish.Inside;
+            GUILayout.EndHorizontal();
 
             GUILayout.Label("切换键: " + SwitchTeamKey.Value);
             if (GUILayout.Button("关闭窗口 (" + ToggleWindowKey.Value + ")")) showWindow = false;
@@ -240,7 +271,10 @@ namespace MultiTeamH {
         }
 
         internal void FreeHModeEnded(FreeHModeController ended) {
-            if (freeHMode == ended) freeHMode = null;
+            if (freeHMode == ended) {
+                freeHMode = null;
+                nextFreeHDiscovery = 0f;
+            }
         }
 
         internal void SessionEnded(TeamSession ended) {
@@ -661,19 +695,6 @@ namespace MultiTeamH {
         }
     }
 
-    [HarmonyPatch(typeof(HSprite), "InitHeroine")]
-    internal static class NativeThreePPortraitHook {
-        [HarmonyPrefix]
-        private static void PreserveTeamPortrait(HSprite __instance) {
-            TeamSession.DetachManagedPortraitBeforeNative3P(__instance);
-        }
-
-        [HarmonyPostfix]
-        private static void RestoreTeamPortrait(HSprite __instance) {
-            TeamSession.RestoreManagedPortraitAfterNative3P(__instance);
-        }
-    }
-
     [HarmonyPatch]
     internal static class BackgroundSpriteBoolWriteHooks {
         private static IEnumerable<MethodBase> TargetMethods() {
@@ -726,18 +747,6 @@ namespace MultiTeamH {
     internal static class SpecialActionLabelHooks {
         private static void Postfix(HSprite __instance) {
             if (TeamSession.IsManagedSprite(__instance)) TeamSession.DecorateSpecialActionLabels(__instance);
-        }
-    }
-
-    [HarmonyPatch(typeof(HSprite), "CreateMotionList")]
-    internal static class SpecialActionMenuBuildHooks {
-        private static void Prefix(HSprite __instance, ref HFlag.EMode __state) {
-            if (TeamSession.IsManagedSprite(__instance)) DiagnosticProbe.Info("CreateMotionList-enter");
-            if (!TeamSession.BeginSpecialMenuBuild(__instance, out __state)) __state = (HFlag.EMode)(-1);
-        }
-
-        private static void Postfix(HSprite __instance, HFlag.EMode __state) {
-            if ((int)__state >= 0) TeamSession.EndSpecialMenuBuild(__instance, __state);
         }
     }
 

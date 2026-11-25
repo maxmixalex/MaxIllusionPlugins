@@ -3,8 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaximumUI {
-    public sealed class UnityPainter {
+    public sealed class UnityPainter : IDisposable {
         private readonly Texture2D white;
+        private Texture2D disc;
+        private readonly Dictionary<TextStyleKey, GUIStyle> textStyles = new Dictionary<TextStyleKey, GUIStyle>();
+        private GUIStyle defaultTextStyle;
+        private MaximumTheme theme;
         private readonly Stack<MuiVec2> clipOrigins = new Stack<MuiVec2>();
         private MuiVec2 clipOrigin;
 
@@ -12,12 +16,30 @@ namespace MaximumUI {
             white = Textures.Solid(Color.white);
         }
 
+        public MaximumTheme Theme {
+            get { return theme; }
+            set {
+                if (object.ReferenceEquals(theme, value)) return;
+                theme = value;
+                defaultTextStyle = null;
+                textStyles.Clear();
+            }
+        }
+
+        public void Dispose() {
+            if (white != null) UnityEngine.Object.Destroy(white);
+            if (disc != null) UnityEngine.Object.Destroy(disc);
+            textStyles.Clear();
+            defaultTextStyle = null;
+        }
+
         public void Paint(DrawList drawList) {
-            if (drawList == null) return;
+            if (drawList == null || Event.current == null || !GuiEventPolicy.ShouldPaint(Event.current.type)) return;
 
             clipOrigins.Clear();
             clipOrigin = new MuiVec2(0f, 0f);
-            for (int i = 0; i < drawList.Commands.Count; i++) {
+            try {
+              for (int i = 0; i < drawList.Commands.Count; i++) {
                 DrawCommand command = drawList.Commands[i];
                 if (command == null) continue;
 
@@ -55,6 +77,13 @@ namespace MaximumUI {
                 } else if (command.Type == DrawCommandType.Image) {
                     DrawTexture(command.Rect, command.Resource as Texture, command.Color);
                 }
+              }
+            } finally {
+                // A malformed/custom draw command must not leave the whole plugin UI clipped.
+                while (clipOrigins.Count > 0) {
+                    GUI.EndClip();
+                    clipOrigin = clipOrigins.Pop();
+                }
             }
         }
 
@@ -67,27 +96,85 @@ namespace MaximumUI {
         }
 
         private void DrawText(DrawCommand command) {
-            GUIStyle style = command.Resource as GUIStyle;
-            if (style == null) style = GUI.skin.label;
+            GUIStyle source = command.Resource as GUIStyle;
+            if (source == null) {
+                if (defaultTextStyle == null) {
+                    defaultTextStyle = new GUIStyle((theme ?? MaximumTheme.MetroLight).Label);
+                    MaximumTheme.SetTextColor(defaultTextStyle, Color.white);
+                }
+                source = defaultTextStyle;
+            }
+            TextStyleKey key = new TextStyleKey(source, command.TextFormat);
+            GUIStyle style;
+            if (!textStyles.TryGetValue(key, out style)) {
+                // GUI.contentColor multiplies style color. A black source style used to
+                // make every custom color black; normalize a private cached copy only.
+                style = new GUIStyle(source);
+                TextFormat format = command.TextFormat;
+                if (format.FontSize > 0f) {
+                    style.fontSize = Math.Max(1, (int)Math.Round(format.FontSize));
+                    style.font = ThemeFonts.Get(format.Weight);
+                    style.fontStyle = format.Weight == TextWeight.Bold ? FontStyle.Bold : FontStyle.Normal;
+                    style.alignment = format.VerticalAlignment == TextVerticalAlignment.Top
+                        ? (format.Alignment == TextAlignment.Center ? TextAnchor.UpperCenter : format.Alignment == TextAlignment.End ? TextAnchor.UpperRight : TextAnchor.UpperLeft)
+                        : format.VerticalAlignment == TextVerticalAlignment.Bottom
+                        ? (format.Alignment == TextAlignment.Center ? TextAnchor.LowerCenter : format.Alignment == TextAlignment.End ? TextAnchor.LowerRight : TextAnchor.LowerLeft)
+                        : (format.Alignment == TextAlignment.Center ? TextAnchor.MiddleCenter : format.Alignment == TextAlignment.End ? TextAnchor.MiddleRight : TextAnchor.MiddleLeft);
+                    style.wordWrap = format.WordWrap;
+                    style.padding = new RectOffset(0, 0, 0, 0);
+                    style.clipping = TextClipping.Clip;
+                }
+                MaximumTheme.SetTextColor(style, Color.white);
+                // Keep warm entries when custom drawing exceeds the cache budget.
+                // Clearing the whole dictionary here makes a stable 129-style
+                // frame recreate every GUIStyle on every repaint.
+                if (textStyles.Count < 128) textStyles.Add(key, style);
+            }
 
             Color oldColor = GUI.contentColor;
-            GUI.contentColor = ToColor(command.Color);
-            GUI.Label(ToRectRelative(command.Rect), command.Text ?? string.Empty, style);
-            GUI.contentColor = oldColor;
+            try {
+                GUI.contentColor = ToColor(command.Color);
+                GUI.Label(ToRectRelative(command.Rect), command.Text ?? string.Empty, style);
+            } finally {
+                GUI.contentColor = oldColor;
+            }
+        }
+
+        private struct TextStyleKey : IEquatable<TextStyleKey> {
+            private readonly GUIStyle source;
+            private readonly TextFormat format;
+            public TextStyleKey(GUIStyle source, TextFormat format) { this.source = source; this.format = format; }
+            public bool Equals(TextStyleKey other) {
+                return object.ReferenceEquals(source, other.source) && format.FontSize == other.format.FontSize &&
+                    format.Weight == other.format.Weight && format.Alignment == other.format.Alignment &&
+                    format.VerticalAlignment == other.format.VerticalAlignment && format.WordWrap == other.format.WordWrap;
+            }
+            public override bool Equals(object obj) { return obj is TextStyleKey && Equals((TextStyleKey)obj); }
+            public override int GetHashCode() {
+                unchecked {
+                    int hash = source == null ? 0 : source.GetHashCode();
+                    hash = hash * 31 + format.FontSize.GetHashCode();
+                    hash = hash * 31 + (int)format.Weight;
+                    hash = hash * 31 + (int)format.Alignment;
+                    hash = hash * 31 + (int)format.VerticalAlignment;
+                    return hash * 31 + (format.WordWrap ? 1 : 0);
+                }
+            }
         }
 
         private void DrawTexture(MuiRect rect, Texture texture, MuiColor color) {
             if (texture == null) return;
 
             Color oldColor = GUI.color;
-            GUI.color = ToColor(color);
-            GUI.DrawTexture(ToRectRelative(rect), texture);
-            GUI.color = oldColor;
+            try {
+                GUI.color = ToColor(color);
+                GUI.DrawTexture(ToRectRelative(rect), texture);
+            } finally {
+                GUI.color = oldColor;
+            }
         }
 
         private void DrawLine(MuiVec2 start, MuiVec2 end, MuiColor color, float thickness) {
-            start = ToPointRelative(start);
-            end = ToPointRelative(end);
             float dx = end.X - start.X;
             float dy = end.Y - start.Y;
             float length = Mathf.Sqrt(dx * dx + dy * dy);
@@ -97,15 +184,21 @@ namespace MaximumUI {
                 return;
             }
 
+            start = ToPointRelative(start);
+            end = ToPointRelative(end);
+
             float t = thickness <= 0f ? 1f : thickness;
             Matrix4x4 oldMatrix = GUI.matrix;
             Color oldColor = GUI.color;
-            GUI.color = ToColor(color);
-            float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
-            GUIUtility.RotateAroundPivot(angle, new Vector2(start.X, start.Y));
-            GUI.DrawTexture(new Rect(start.X, start.Y - t * 0.5f, length, t), white);
-            GUI.matrix = oldMatrix;
-            GUI.color = oldColor;
+            try {
+                GUI.color = ToColor(color);
+                float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                GUIUtility.RotateAroundPivot(angle, new Vector2(start.X, start.Y));
+                GUI.DrawTexture(new Rect(start.X, start.Y - t * 0.5f, length, t), white);
+            } finally {
+                GUI.matrix = oldMatrix;
+                GUI.color = oldColor;
+            }
         }
 
         private void DrawPolyline(MuiVec2[] points, MuiColor color, float thickness) {
@@ -118,30 +211,26 @@ namespace MaximumUI {
         private void StrokeCircle(MuiVec2 center, float radius, MuiColor color, float thickness, int segments) {
             if (radius <= 0f) return;
             int count = Mathf.Clamp(segments <= 0 ? 32 : segments, 8, 128);
-            MuiVec2[] points = new MuiVec2[count + 1];
-            for (int i = 0; i <= count; i++) {
+            MuiVec2 previous = new MuiVec2(center.X + radius, center.Y);
+            for (int i = 1; i <= count; i++) {
                 float angle = (float)(Math.PI * 2.0 * i / count);
-                points[i] = new MuiVec2(center.X + Mathf.Cos(angle) * radius, center.Y + Mathf.Sin(angle) * radius);
+                MuiVec2 next = new MuiVec2(center.X + Mathf.Cos(angle) * radius, center.Y + Mathf.Sin(angle) * radius);
+                DrawLine(previous, next, color, thickness);
+                previous = next;
             }
-            DrawPolyline(points, color, thickness);
         }
 
         private void FillCircle(MuiVec2 center, float radius, MuiColor color) {
             if (radius <= 0f) return;
 
-            int r = Mathf.CeilToInt(radius);
-            for (int y = -r; y <= r; y++) {
-                float halfWidth = Mathf.Sqrt(Mathf.Max(0f, radius * radius - y * y));
-                DrawTexture(new MuiRect(center.X - halfWidth, center.Y + y, halfWidth * 2f, 1f), white, color);
-            }
+            if (disc == null) disc = Textures.Disc();
+            DrawTexture(new MuiRect(center.X - radius, center.Y - radius, radius * 2f, radius * 2f), disc, color);
         }
 
         private void FillTriangle(MuiVec2 a, MuiVec2 b, MuiVec2 c, MuiColor color) {
-            MuiVec2[] points = new MuiVec2[] { a, b, c };
-            Array.Sort(points, CompareY);
-            a = points[0];
-            b = points[1];
-            c = points[2];
+            if (a.Y > b.Y) Swap(ref a, ref b);
+            if (b.Y > c.Y) Swap(ref b, ref c);
+            if (a.Y > b.Y) Swap(ref a, ref b);
 
             int minY = Mathf.FloorToInt(a.Y);
             int maxY = Mathf.CeilToInt(c.Y);
@@ -169,36 +258,31 @@ namespace MaximumUI {
             }
         }
 
-        private static int CompareY(MuiVec2 a, MuiVec2 b) {
-            return a.Y.CompareTo(b.Y);
+        private static void Swap(ref MuiVec2 a, ref MuiVec2 b) {
+            MuiVec2 temp = a;
+            a = b;
+            b = temp;
         }
 
         private static bool TriangleScanline(MuiVec2 a, MuiVec2 b, MuiVec2 c, float y, out float x1, out float x2) {
             x1 = 0f;
             x2 = 0f;
-            float[] xs = new float[3];
             int count = 0;
-            AddIntersection(a, b, y, xs, ref count);
-            AddIntersection(b, c, y, xs, ref count);
-            AddIntersection(c, a, y, xs, ref count);
-            if (count < 2) return false;
-            x1 = xs[0];
-            x2 = xs[1];
-            if (count > 2) {
-                x1 = Mathf.Min(x1, xs[2]);
-                x2 = Mathf.Max(x2, xs[2]);
-            }
-            return true;
+            AddIntersection(a, b, y, ref x1, ref x2, ref count);
+            AddIntersection(b, c, y, ref x1, ref x2, ref count);
+            AddIntersection(c, a, y, ref x1, ref x2, ref count);
+            return count >= 2;
         }
 
-        private static void AddIntersection(MuiVec2 a, MuiVec2 b, float y, float[] xs, ref int count) {
-            if (count >= xs.Length) return;
+        private static void AddIntersection(MuiVec2 a, MuiVec2 b, float y, ref float x1, ref float x2, ref int count) {
             if (Mathf.Abs(a.Y - b.Y) <= 0.0001f) return;
             float min = Mathf.Min(a.Y, b.Y);
             float max = Mathf.Max(a.Y, b.Y);
             if (y < min || y >= max) return;
             float t = (y - a.Y) / (b.Y - a.Y);
-            xs[count++] = a.X + (b.X - a.X) * t;
+            float x = a.X + (b.X - a.X) * t;
+            if (count++ == 0) x1 = x2 = x;
+            else { x1 = Mathf.Min(x1, x); x2 = Mathf.Max(x2, x); }
         }
 
         private static MuiVec2 Cubic(MuiVec2 p1, MuiVec2 p2, MuiVec2 p3, MuiVec2 p4, float t) {

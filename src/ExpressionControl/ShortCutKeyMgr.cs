@@ -85,6 +85,7 @@ namespace ExpressionControl
 			}
 			public bool GetKeyState()
 			{
+				if (string.IsNullOrEmpty(this.key)) return false;
 				bool flag = !ShortCutKeyMgr.chkModKeyOnCurrentFrame;
 				if (flag)
 				{
@@ -97,6 +98,7 @@ namespace ExpressionControl
 			}
 			public bool GetKeyState_Move()
 			{
+				if (string.IsNullOrEmpty(this.key)) return false;
 				bool flag = !ShortCutKeyMgr.chkModKeyOnCurrentFrame;
 				if (flag)
 				{
@@ -113,11 +115,14 @@ namespace ExpressionControl
 			}
 			private static void StringToKey(ShortCutKeyMgr.ShortCutKey hotkey, string s)
 			{
+				hotkey.key = string.Empty;
+				hotkey.ctrl = hotkey.alt = hotkey.shift = false;
+				s = s == null ? string.Empty : s.Trim();
 				bool flag = string.IsNullOrEmpty(s);
 				if (!flag)
 				{
 					hotkey.ctrl = (hotkey.alt = (hotkey.shift = false));
-					s = s.ToLower();
+					s = s.ToLowerInvariant();
 					bool flag2 = s.Contains("ctrl+");
 					if (flag2)
 					{

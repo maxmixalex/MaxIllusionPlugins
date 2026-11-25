@@ -21,7 +21,7 @@ namespace ExpressionControl
 	public class ExpressionControlPlugin : BaseUnityPlugin
 	{
 		public const string GUID = "ExpressionControl";
-        public const string Version = "0.2.7.18";
+        public const string Version = "0.3.1";
 		public const string Name = GUID;
 		
 		public void Start()
@@ -31,12 +31,23 @@ namespace ExpressionControl
 			ExpressionControlPlugin.inst = ExpressionControlPlugin.goMain.AddComponent<ExpressionControl>();
 			ExpressionControlPlugin.hotkey = ExpressionControlPlugin.goMain.AddComponent<ShortCutKeyMgr>();
             UnityEngine.Object.DontDestroyOnLoad(ExpressionControlPlugin.goMain);
-			Harmony.CreateAndPatchAll(typeof(Hooks), null);
+			this.harmony = Harmony.CreateAndPatchAll(typeof(Hooks), GUID);
 		}
 		public void OnSceneLoad(Scene scene, LoadSceneMode mode)
 		{
-			ExpressionControlPlugin.inst.ReStart();
+			if (ExpressionControlPlugin.inst != null && ExpressionControlPlugin.inst.enabled) ExpressionControlPlugin.inst.ReStart();
 		}
+		private void OnDestroy()
+		{
+			SceneManager.sceneLoaded -= this.OnSceneLoad;
+			if (this.harmony != null) this.harmony.UnpatchSelf();
+			this.harmony = null;
+			if (ExpressionControlPlugin.goMain != null) UnityEngine.Object.Destroy(ExpressionControlPlugin.goMain);
+			ExpressionControlPlugin.goMain = null;
+			ExpressionControlPlugin.inst = null;
+			ExpressionControlPlugin.hotkey = null;
+		}
+		private Harmony harmony;
 		private static GameObject goMain;
 		internal static ExpressionControl inst;
 		internal static ShortCutKeyMgr hotkey;

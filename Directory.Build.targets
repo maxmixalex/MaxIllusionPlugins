@@ -1,5 +1,5 @@
 <Project>
-  <Target Name="CopyPluginArtifacts" AfterTargets="Build">
+  <Target Name="CopyPluginArtifacts" AfterTargets="Build" Condition="'$(IsPluginArtifact)' != 'false'">
     <ItemGroup>
       <PluginArtifacts Include="$(TargetPath)" />
     </ItemGroup>

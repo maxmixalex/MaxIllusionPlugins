@@ -1,0 +1,140 @@
+{
+  "disclosure": "Managed drawing preview; Unity font/input not validated.",
+  "previews": [
+    {
+      "file": "maximumui-metro-dark-preview.svg",
+      "source": "MaximumUIGallery.GalleryView.Build",
+      "detail": "Production default Overview",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 940,
+        "height": 840
+      },
+      "nodes": 64,
+      "commands": 77,
+      "virtualRowsBuilt": 0,
+      "virtualItems": 0,
+      "scrollViews": 1
+    },
+    {
+      "file": "maximumui-metro-light-preview.svg",
+      "source": "MaximumUIGallery.GalleryView.Build",
+      "detail": "Production default Overview",
+      "palette": "Metro Light",
+      "viewport": {
+        "width": 940,
+        "height": 840
+      },
+      "nodes": 64,
+      "commands": 77,
+      "virtualRowsBuilt": 0,
+      "virtualItems": 0,
+      "scrollViews": 1
+    },
+    {
+      "file": "juicecontrol-effects-preview.svg",
+      "source": "JuiceControl.JuiceEditorView.Build",
+      "detail": "Anonymous fixture; production effects page",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 620,
+        "height": 760
+      },
+      "nodes": 71,
+      "commands": 148,
+      "virtualRowsBuilt": 12,
+      "virtualItems": 12,
+      "scrollViews": 0
+    },
+    {
+      "file": "juicecontrol-presets-preview.svg",
+      "source": "JuiceControl.JuiceEditorView.Build",
+      "detail": "Anonymous fixture; production presets page",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 620,
+        "height": 760
+      },
+      "nodes": 35,
+      "commands": 63,
+      "virtualRowsBuilt": 0,
+      "virtualItems": 0,
+      "scrollViews": 1
+    },
+    {
+      "file": "accessory-batch-manager-batch-preview.svg",
+      "source": "AccessoryBatchManager.AccessoryEditorView.Build",
+      "detail": "Anonymous fixture; production batch page",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 900,
+        "height": 760
+      },
+      "nodes": 41,
+      "commands": 57,
+      "virtualRowsBuilt": 19,
+      "virtualItems": 48,
+      "scrollViews": 0
+    },
+    {
+      "file": "accessory-batch-manager-copy-preview.svg",
+      "source": "AccessoryBatchManager.AccessoryEditorView.Build",
+      "detail": "Anonymous fixture; production copy page",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 900,
+        "height": 760
+      },
+      "nodes": 74,
+      "commands": 130,
+      "virtualRowsBuilt": 22,
+      "virtualItems": 96,
+      "scrollViews": 0
+    },
+    {
+      "file": "expressioncontrol-expressions-preview.svg",
+      "source": "ExpressionControl.ExpressionControl.ExpressionEditorView.Build",
+      "detail": "Anonymous fixture from ExpressionEditorPreviewFactory.CreatePreview",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 1080,
+        "height": 760
+      },
+      "nodes": 111,
+      "commands": 262,
+      "virtualRowsBuilt": 8,
+      "virtualItems": 32,
+      "scrollViews": 1
+    },
+    {
+      "file": "expressioncontrol-program-preview.svg",
+      "source": "ExpressionControl.ExpressionControl.ExpressionEditorView.Build",
+      "detail": "Anonymous fixture from ExpressionEditorPreviewFactory.CreateProgramPreview",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 1080,
+        "height": 760
+      },
+      "nodes": 105,
+      "commands": 258,
+      "virtualRowsBuilt": 19,
+      "virtualItems": 38,
+      "scrollViews": 1
+    },
+    {
+      "file": "clothingcompression-editor-preview.svg",
+      "source": "ClothingCompression.CompressionEditorView.Build",
+      "detail": "Anonymous fixture from CompressionEditorPreview.CreatePreview",
+      "palette": "Metro Dark",
+      "viewport": {
+        "width": 900,
+        "height": 720
+      },
+      "nodes": 84,
+      "commands": 223,
+      "virtualRowsBuilt": 3,
+      "virtualItems": 3,
+      "scrollViews": 1
+    }
+  ]
+}

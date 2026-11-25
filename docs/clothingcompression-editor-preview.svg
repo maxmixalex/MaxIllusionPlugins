@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="964" height="940" viewBox="0 0 964 940" role="img" aria-labelledby="title description" xmlns="http://www.w3.org/2000/svg">
+  <title id="title">ClothingCompression / 服装压缩 / actual production View</title>
+  <desc id="description">Managed drawing preview; Unity font/input not validated. Geometry and colors come from ClothingCompression.CompressionEditorView.Build, LayoutEngine, WidgetPainter and ThemePalettes. Virtual rows are built by their production factory and laid out with LayoutEngine. SVG uses estimated text metrics and text roles from the real widget tree. Native window chrome and scrollbars are outside this preview.</desc>
+  <metadata>Source: ClothingCompression.CompressionEditorView.Build; MaximumUI.LayoutEngine; MaximumUI.WidgetPainter; palette=Metro Dark; nodes=84; commands=223; viewport=900x720; virtual rows built=3; Anonymous fixture from CompressionEditorPreview.CreatePreview</metadata>
+  <rect x="0" y="0" width="964" height="940" fill="#15181c" />
+  <text x="32" y="33" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">MAXIMUM UI   /   DESIGN REVIEW</text>
+  <text x="32" y="65" font-size="25" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">ClothingCompression / 服装压缩</text>
+  <text x="32" y="88" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">Metro Dark  /  ACTUAL PRODUCTION VIEW  /  MANAGED DRAWLIST</text>
+  <g transform="translate(32 112)">
+    <rect x="0" y="0" width="900" height="720" fill="#191d22" />
+    <rect x="0.5" y="0.5" width="899" height="719" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="0" y="15.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0" fill="#ebf0f4">Clothing Compression · 形变编辑器</text>
+    <text x="16" y="65.3" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.0.0" fill="#ebf0f4">示例角色</text>
+    <rect x="714" y="44" width="76" height="17" fill="#1a463a" />
+    <rect x="714.5" y="44.5" width="75" height="16" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="752" y="56.4" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.0.1" fill="#ebf0f4">已保存</text>
+    <text x="798" y="60.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.0.2" fill="#a4b1be">3 个形变</text>
+    <rect x="265.98" y="82" width="6" height="580" fill="#2f3841" />
+    <rect x="16" y="82" width="249.98" height="580" fill="#20252b" />
+    <text x="28" y="115.8" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.0" fill="#ebf0f4">形变列表</text>
+    <text x="28" y="151.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.1" fill="#ebf0f4">新增种类</text>
+    <rect x="106" y="133" width="147.98" height="30" fill="#2b323a" />
+    <rect x="106.5" y="133.5" width="146.98" height="29" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="112" y="151.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.1" fill="#ebf0f4">大腿</text>
+    <text x="237.98" y="151.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.1" fill="#ebf0f4">v</text>
+    <rect x="28" y="171" width="225.98" height="32" fill="#49aae6" />
+    <text x="140.99" y="190.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.0.0.2" fill="#131e28">新增形变</text>
+    <rect x="28" y="211" width="225.98" height="363" fill="#171b1f" />
+    <rect x="28.5" y="211.5" width="224.98" height="362" fill="none" stroke-width="1" stroke="#424e5a" />
+    <defs>
+      <clipPath id="clip-0">
+        <rect x="28" y="211" width="209.98" height="363" fill="#ffffff" />
+      </clipPath>
+    </defs>
+    <g clip-path="url(#clip-0)">
+      <rect x="28" y="211" width="209.98" height="32" fill="#1c3d52" />
+      <rect x="28" y="211" width="3" height="32" fill="#49aae6" />
+      <text x="42" y="230.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.3.row0" fill="#ebf0f4">● 1 黑色长筒袜（大腿）</text>
+      <text x="42" y="262.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.3.row1" fill="#ebf0f4">● 2 长手套（大臂）</text>
+      <text x="42" y="294.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.0.0.3.row2" fill="#ebf0f4">● 3 腿环（膝部）</text>
+    </g>
+    <rect x="28" y="582" width="109.99" height="26" fill="#2b323a" />
+    <rect x="28.5" y="582.5" width="108.99" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="82.995" y="598.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.0.0.4.0" fill="#ebf0f4">复制</text>
+    <rect x="143.99" y="582" width="109.99" height="26" fill="#542a30" />
+    <rect x="144.49" y="582.5" width="108.99" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="198.985" y="598.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.0.0.4.1" fill="#ebf0f4">删除</text>
+    <rect x="28" y="620" width="109.99" height="26" fill="#242a31" />
+    <rect x="28.5" y="620.5" width="108.99" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="82.995" y="636.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.0.0.5.0" fill="#758290">上移</text>
+    <rect x="143.99" y="620" width="109.99" height="26" fill="#2b323a" />
+    <rect x="144.49" y="620.5" width="108.99" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="198.985" y="636.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.0.0.5.1" fill="#ebf0f4">下移</text>
+    <rect x="271.98" y="82" width="612.02" height="580" fill="#20252b" />
+    <defs>
+      <clipPath id="clip-1">
+        <rect x="283.98" y="94" width="572.02" height="516" fill="#ffffff" />
+      </clipPath>
+    </defs>
+    <g clip-path="url(#clip-1)">
+      <text x="283.98" y="115.8" font-size="21" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.0" fill="#ebf0f4">形变设置</text>
+      <rect x="283.98" y="140" width="16" height="16" fill="#171b1f" />
+      <rect x="284.48" y="140.5" width="15" height="15" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="286.98" y="143" width="10" height="10" fill="#49aae6" />
+      <text x="304.98" y="151.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.1" fill="#ebf0f4">启用这个形变</text>
+      <text x="283.98" y="189.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.2" fill="#ebf0f4">种类</text>
+      <rect x="375.98" y="171" width="480.02" height="30" fill="#2b323a" />
+      <rect x="376.48" y="171.5" width="479.02" height="29" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="381.98" y="189.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.2" fill="#ebf0f4">大腿</text>
+      <text x="840" y="189.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.2" fill="#ebf0f4">v</text>
+      <text x="283.98" y="226.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.3.0" fill="#ebf0f4">应用侧</text>
+      <rect x="381.98" y="215" width="16" height="16" fill="#171b1f" />
+      <rect x="382.48" y="215.5" width="15" height="15" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="384.98" y="218" width="10" height="10" fill="#49aae6" />
+      <text x="402.98" y="226.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.3.1" fill="#ebf0f4">左腿</text>
+      <rect x="485.98" y="215" width="16" height="16" fill="#171b1f" />
+      <rect x="486.48" y="215.5" width="15" height="15" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="488.98" y="218" width="10" height="10" fill="#49aae6" />
+      <text x="506.98" y="226.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.3.2" fill="#ebf0f4">右腿</text>
+      <text x="283.98" y="268.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.4" fill="#ebf0f4">绑定对象</text>
+      <rect x="375.98" y="249" width="480.02" height="32" fill="#2b323a" />
+      <rect x="376.48" y="249.5" width="479.02" height="31" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="381.98" y="268.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.4" fill="#ebf0f4">袜子 · 黑色长筒袜</text>
+      <text x="840" y="268.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.4" fill="#ebf0f4">v</text>
+      <text x="283.98" y="308.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.5" fill="#ebf0f4">保存级别</text>
+      <rect x="375.98" y="290" width="480.02" height="30" fill="#2b323a" />
+      <rect x="376.48" y="290.5" width="479.02" height="29" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="381.98" y="308.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.5" fill="#ebf0f4">角色 + 服装/饰品</text>
+      <text x="840" y="308.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.5" fill="#ebf0f4">v</text>
+      <rect x="283.98" y="341.5" width="265.71" height="1" fill="#2f3841" />
+      <rect x="590.29" y="341.5" width="265.71" height="1" fill="#2f3841" />
+      <text x="549.69" y="345.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.6" fill="#ebf0f4">大腿参数</text>
+      <text x="283.98" y="380.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.7.0" fill="#ebf0f4">束口位置</text>
+      <rect x="423.98" y="371" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="371.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="545.348" y="364" width="10" height="18" fill="#49aae6" />
+      <rect x="545.848" y="364.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="364" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="364.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="380.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.7.2" fill="#ebf0f4">0.32</text>
+      <rect x="808" y="364" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="364.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="380.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.7.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="364" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="364.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="380.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.7.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="419.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.8.0" fill="#ebf0f4">影响宽度</text>
+      <rect x="423.98" y="410" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="410.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="474.812" y="403" width="10" height="18" fill="#49aae6" />
+      <rect x="475.312" y="403.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="403" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="403.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="419.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.8.2" fill="#ebf0f4">0.09</text>
+      <rect x="808" y="403" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="403.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="419.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.8.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="403" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="403.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="419.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.8.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="458.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.9.0" fill="#ebf0f4">内收深度 (cm)</text>
+      <rect x="423.98" y="449" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="449.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="459.502" y="442" width="10" height="18" fill="#49aae6" />
+      <rect x="460.002" y="442.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="442" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="442.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="458.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.9.2" fill="#ebf0f4">1.2</text>
+      <rect x="808" y="442" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="442.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="458.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.9.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="442" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="442.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="458.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.9.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="497.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.10.0" fill="#ebf0f4">上侧隆起 (cm)</text>
+      <rect x="423.98" y="488" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="488.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="446.182" y="481" width="10" height="18" fill="#49aae6" />
+      <rect x="446.682" y="481.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="481" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="481.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="497.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.10.2" fill="#ebf0f4">0.6</text>
+      <rect x="808" y="481" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="481.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="497.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.10.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="481" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="481.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="497.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.10.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="536.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.11.0" fill="#ebf0f4">下侧隆起 (cm)</text>
+      <rect x="423.98" y="527" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="527.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="438.781" y="520" width="10" height="18" fill="#49aae6" />
+      <rect x="439.281" y="520.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="520" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="520.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="536.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.11.2" fill="#ebf0f4">0.4</text>
+      <rect x="808" y="520" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="520.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="536.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.11.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="520" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="520.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="536.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.11.2" fill="#ebf0f4">+</text>
+      <rect x="283.98" y="571.5" width="265.71" height="1" fill="#2f3841" />
+      <rect x="590.29" y="571.5" width="265.71" height="1" fill="#2f3841" />
+      <text x="549.69" y="575.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.12" fill="#ebf0f4">服装外扩</text>
+      <text x="283.98" y="610.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.13.0" fill="#ebf0f4">X (cm)</text>
+      <rect x="423.98" y="601" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="601.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="428.42" y="594" width="10" height="18" fill="#49aae6" />
+      <rect x="428.92" y="594.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="594" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="594.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="610.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.13.2" fill="#ebf0f4">0.15</text>
+      <rect x="808" y="594" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="594.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="610.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.13.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="594" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="594.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="610.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.13.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="649.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.14.0" fill="#ebf0f4">Y (cm)</text>
+      <rect x="423.98" y="640" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="640.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="428.42" y="633" width="10" height="18" fill="#49aae6" />
+      <rect x="428.92" y="633.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="633" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="633.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="649.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.14.2" fill="#ebf0f4">0.15</text>
+      <rect x="808" y="633" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="633.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="649.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.14.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="633" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="633.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="649.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.14.2" fill="#ebf0f4">+</text>
+      <text x="283.98" y="688.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.15.0" fill="#ebf0f4">Z (cm)</text>
+      <rect x="423.98" y="679" width="306.02" height="3" fill="#171b1f" />
+      <rect x="424.48" y="679.5" width="305.02" height="2" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="428.42" y="672" width="10" height="18" fill="#49aae6" />
+      <rect x="428.92" y="672.5" width="9" height="17" fill="none" stroke-width="1" stroke="#424e5a" />
+      <rect x="738" y="672" width="70" height="26" fill="#171b1f" />
+      <rect x="738.5" y="672.5" width="69" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="742" y="688.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.15.2" fill="#ebf0f4">0.15</text>
+      <rect x="808" y="672" width="24" height="26" fill="#2b323a" />
+      <rect x="808.5" y="672.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="808" y="688.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.15.2" fill="#ebf0f4">-</text>
+      <rect x="832" y="672" width="24" height="26" fill="#2b323a" />
+      <rect x="832.5" y="672.5" width="23" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="832" y="688.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.15.2" fill="#ebf0f4">+</text>
+      <rect x="283.98" y="723.5" width="247.835" height="1" fill="#2f3841" />
+      <rect x="608.165" y="723.5" width="247.835" height="1" fill="#2f3841" />
+      <text x="531.815" y="727.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.0" fill="#ebf0f4">从其他服装搭配复制</text>
+      <text x="283.98" y="763.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.1" fill="#ebf0f4">来源搭配</text>
+      <rect x="375.98" y="745" width="480.02" height="30" fill="#2b323a" />
+      <rect x="376.48" y="745.5" width="479.02" height="29" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="381.98" y="763.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.1" fill="#ebf0f4">学生服（放学）</text>
+      <text x="840" y="763.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.1" fill="#ebf0f4">v</text>
+      <text x="283.98" y="801.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.2" fill="#ebf0f4">来源形变</text>
+      <rect x="375.98" y="783" width="480.02" height="30" fill="#2b323a" />
+      <rect x="376.48" y="783.5" width="479.02" height="29" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="381.98" y="801.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.2" fill="#ebf0f4">腿环（膝部）</text>
+      <text x="840" y="801.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.2" fill="#ebf0f4">v</text>
+      <rect x="283.98" y="821" width="282.01" height="26" fill="#2b323a" />
+      <rect x="284.48" y="821.5" width="281.01" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="424.985" y="837.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.3.0" fill="#ebf0f4">复制所选形变</text>
+      <rect x="573.99" y="821" width="282.01" height="26" fill="#2b323a" />
+      <rect x="574.49" y="821.5" width="281.01" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="714.995" y="837.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.16.3.1" fill="#ebf0f4">复制全部形变</text>
+      <rect x="283.98" y="860" width="572.02" height="36" fill="#20252b" />
+      <rect x="284.48" y="860.5" width="571.02" height="35" fill="none" stroke-width="1" stroke="#424e5a" />
+      <text x="289.98" y="872.8" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.17" fill="#ebf0f4">绑定物品关闭时形变停用；启用时同步含对应骨骼的已穿着蒙皮服饰。普通 MeshRenderer 暂</text>
+      <text x="289.98" y="891" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.1.1.0.0.0.17" fill="#ebf0f4">不支持。</text>
+    </g>
+    <rect x="283.98" y="618" width="290.01" height="26" fill="#2b323a" />
+    <rect x="284.48" y="618.5" width="289.01" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="428.985" y="634.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.1.0.1.0" fill="#ebf0f4">立即重算</text>
+    <rect x="581.99" y="618" width="290.01" height="26" fill="#2b323a" />
+    <rect x="582.49" y="618.5" width="289.01" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="726.995" y="634.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.1.1.0.1.1" fill="#ebf0f4">取消绑定</text>
+    <text x="16" y="686.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" data-widget-path="0.0.2.0" fill="#a4b1be">修改即时预览；保存仅写入已绑定的形变。</text>
+    <rect x="630" y="670" width="112" height="26" fill="#2b323a" />
+    <rect x="630.5" y="670.5" width="111" height="25" fill="none" stroke-width="1" stroke="#424e5a" />
+    <text x="686" y="686.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.1" fill="#ebf0f4">从 XML 重载</text>
+    <rect x="750" y="670" width="134" height="26" fill="#49aae6" />
+    <text x="817" y="686.9" font-size="13" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="middle" xml:space="preserve" data-widget-path="0.0.2.2" fill="#131e28">保存形变设置</text>
+  </g>
+  <text x="32" y="864" font-size="12" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#ebf0f4">Managed drawing preview; Unity font/input not validated.</text>
+  <text x="32" y="886" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">Production widgets, layout, palette and drawing commands. Anonymous example data. SVG typography is approximate; native chrome and</text>
+  <text x="32" y="902" font-size="11" font-family="'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', 'DejaVu Sans', sans-serif" text-anchor="start" xml:space="preserve" fill="#a4b1be">scrollbars are omitted.</text>
+</svg>

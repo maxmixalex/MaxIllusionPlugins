@@ -23,14 +23,18 @@ namespace AccessoryBatchManager {
         private static readonly MethodInfo MemberwiseCloneMethod = typeof(object).GetMethod("MemberwiseClone", BindingFlags.Instance | BindingFlags.NonPublic);
 
         internal static object CaptureState(ChaControl character) {
-            object controller = GetController(character);
+            return CaptureControllerState(GetController(character));
+        }
+
+        internal static object CaptureControllerState(object controller) {
             if (controller == null) return null;
             var snapshot = new StateSnapshot(controller);
             Type controllerType = controller.GetType();
             foreach (string name in PropertyListNames) {
                 FieldInfo field = controllerType.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
                 IList list = field == null ? null : field.GetValue(controller) as IList;
-                if (list != null) snapshot.Lists[field] = list.Cast<object>().ToArray();
+                if (list != null) snapshot.Lists[field] = list.Cast<object>()
+                    .Select(value => value == null ? null : MemberwiseCloneMethod.Invoke(value, null)).ToArray();
             }
             FieldInfo textureField = controllerType.GetField("TextureDictionary", BindingFlags.Instance | BindingFlags.NonPublic);
             IDictionary textures = textureField == null ? null : textureField.GetValue(controller) as IDictionary;
@@ -191,7 +195,8 @@ namespace AccessoryBatchManager {
             try {
                 loadCoordinate.Invoke(controller, new object[] { sourceCoordinate });
                 foreach (KeyValuePair<FieldInfo, IList> item in lists) {
-                    imported[item.Key] = item.Value.Cast<object>()
+                    IList loadedList = item.Key.GetValue(controller) as IList;
+                    imported[item.Key] = (loadedList == null ? new object[0] : loadedList.Cast<object>())
                         .Where(value => IsObjectType(value, sourceType) && pairs.Any(pair => pair.Source == ReadInt(value, "Slot")))
                         .ToArray();
                 }
@@ -209,7 +214,8 @@ namespace AccessoryBatchManager {
             int copiedProperties = 0;
             var textureIdMap = new Dictionary<int, int>();
             foreach (KeyValuePair<FieldInfo, IList> item in lists) {
-                IList destinationList = item.Value;
+                IList destinationList = item.Key.GetValue(controller) as IList;
+                if (destinationList == null) continue;
                 var destinationSlots = new HashSet<int>(pairs.Select(pair => pair.Destination));
                 for (int i = destinationList.Count - 1; i >= 0; i--) {
                     object value = destinationList[i];
@@ -269,7 +275,8 @@ namespace AccessoryBatchManager {
                 textures.Add(newId, constructor.Invoke(new object[] { (byte[])data.Clone() }));
                 textureIdMap[oldId] = newId;
             }
-            textureIdField.SetValue(property, Activator.CreateInstance(textureIdField.FieldType, new object[] { newId }));
+            textureIdField.SetValue(property, textureIdField.FieldType == typeof(int)
+                ? (object)newId : Activator.CreateInstance(textureIdField.FieldType, new object[] { newId }));
         }
 
         internal static void CopyOrMoveClothingProperties(ChaControl character, int sourceCoordinate, int destinationCoordinate,

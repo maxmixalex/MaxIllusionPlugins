@@ -34,8 +34,8 @@ namespace MultiTeamH {
                 if (boundToggle != toggle) {
                     boundTeam = null;
                     boundToggle = toggle;
-                    States[0].Initialized = false;
-                    States[1].Initialized = false;
+                    States[0].Reset();
+                    States[1].Reset();
                 }
                 if (toggle != null && boundTeam != null && boundTeam != team) {
                     int oldIndex = boundTeam.IsClone ? 1 : 0;
@@ -72,8 +72,8 @@ namespace MultiTeamH {
         internal static void Reset() {
             boundTeam = null;
             boundToggle = null;
-            States[0].Initialized = false;
-            States[1].Initialized = false;
+            States[0].Reset();
+            States[1].Reset();
             warned = false;
         }
 
@@ -94,6 +94,13 @@ namespace MultiTeamH {
             private bool forceOLoop;
             private bool forceStopVoice;
             private float orgasmTimer;
+
+            internal void Reset() {
+                Initialized = false;
+                forceOLoop = false;
+                forceStopVoice = false;
+                orgasmTimer = 0f;
+            }
 
             internal void Capture(object toggle) {
                 if (ForceOLoopField != null) forceOLoop = (bool)ForceOLoopField.GetValue(toggle);

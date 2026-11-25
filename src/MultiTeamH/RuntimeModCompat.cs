@@ -27,6 +27,7 @@ namespace MultiTeamH {
         private static readonly Dictionary<int, int> cyuKissReadyFrame = new Dictionary<int, int>();
         private static readonly Dictionary<int, int> cyuExplicitKissUntilFrame = new Dictionary<int, int>();
         private static readonly Dictionary<int, int> cyuKissBlockUntilFrame = new Dictionary<int, int>();
+        private static readonly Dictionary<object, IEnumerator> cyuKissIterators = new Dictionary<object, IEnumerator>();
         private static readonly Dictionary<int, int> blockedKissSetPlayFrame = new Dictionary<int, int>();
         private static FieldInfo actionFemaleField;
         private static readonly HashSet<string> loggedCharacterCompat = new HashSet<string>();
@@ -90,11 +91,13 @@ namespace MultiTeamH {
                 if (cyuNested[i].Name.StartsWith("<Waitfor>", StringComparison.Ordinal)) {
                     harmony.Patch(moveNext,
                         prefix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(BeforeCyuWaitfor)),
-                        postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterCyuWaitfor)));
+                        postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterCyuWaitfor)),
+                        finalizer: new HarmonyMethod(typeof(RuntimeModCompat), nameof(FinalizeExternalControl)));
                 } else if (cyuNested[i].Name.StartsWith("<BeroKiss>", StringComparison.Ordinal)) {
                     harmony.Patch(moveNext,
                         prefix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(BeforeCyuKissCoroutine)),
-                        postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterCyuKissCoroutine)));
+                        postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterCyuKissCoroutine)),
+                        finalizer: new HarmonyMethod(typeof(RuntimeModCompat), nameof(FinalizeExternalControl)));
                 }
             }
             Type fixClosure = fixType.GetNestedType("<>c", BindingFlags.Public | BindingFlags.NonPublic);
@@ -241,15 +244,17 @@ namespace MultiTeamH {
             MethodInfo gui = AccessTools.Method(type, "GUIFunc");
             HarmonyMethod prefix = new HarmonyMethod(typeof(RuntimeModCompat), nameof(BeforeHCtrl));
             HarmonyMethod postfix = new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterHCtrl));
-            if (update != null) harmony.Patch(update, prefix: prefix, postfix: postfix);
-            if (gui != null) harmony.Patch(gui, prefix: prefix, postfix: postfix);
+            HarmonyMethod finalizer = new HarmonyMethod(typeof(RuntimeModCompat), nameof(FinalizeExternalControl));
+            if (update != null) harmony.Patch(update, prefix: prefix, postfix: postfix, finalizer: finalizer);
+            if (gui != null) harmony.Patch(gui, prefix: prefix, postfix: postfix, finalizer: finalizer);
             MethodInfo changeSW = AccessTools.Method(type, "ChangeSW", new[] { typeof(bool) });
             if (changeSW != null) harmony.Patch(changeSW,
                 prefix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(ProbeHCtrlChangeSW)));
             MethodInfo autoUpdate = autoSpeedType == null ? null : AccessTools.Method(autoSpeedType, "Update");
             if (autoUpdate != null) harmony.Patch(autoUpdate,
                 prefix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(BeforeAutoSpeed)),
-                postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterAutoSpeed)));
+                postfix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AfterAutoSpeed)),
+                finalizer: finalizer);
             MethodInfo autoOnEnable = autoSpeedType == null ? null : AccessTools.Method(autoSpeedType, "OnEnable");
             if (autoOnEnable != null) harmony.Patch(autoOnEnable,
                 prefix: new HarmonyMethod(typeof(RuntimeModCompat), nameof(AllowAutoSpeedOnEnable)));
@@ -257,7 +262,7 @@ namespace MultiTeamH {
             for (int i = 0; i < nested.Length; i++) {
                 if (!nested[i].Name.StartsWith("<CoAutoRestart", StringComparison.Ordinal)) continue;
                 MethodInfo moveNext = AccessTools.Method(nested[i], "MoveNext");
-                if (moveNext != null) harmony.Patch(moveNext, prefix: prefix, postfix: postfix);
+                if (moveNext != null) harmony.Patch(moveNext, prefix: prefix, postfix: postfix, finalizer: finalizer);
             }
             hCtrlPatched = update != null || gui != null;
             if (hCtrlPatched) log.LogInfo("MultiTeamH patched KK_HCtrl with an independent target-team context.");
@@ -302,8 +307,7 @@ namespace MultiTeamH {
             try {
                 if (cyu != null && cyuKissFlagField != null && (bool)cyuKissFlagField.GetValue(cyu) && cyuKissMethod != null)
                     cyuKissMethod.Invoke(cyu, new object[] { false });
-                MonoBehaviour behaviour = cyu as MonoBehaviour;
-                if (behaviour != null) behaviour.StopAllCoroutines();
+                StopCyuKissCoroutine(cyu);
                 if (cyu != null && cyuKissFlagField != null) cyuKissFlagField.SetValue(cyu, false);
                 if (cyu != null && cyuKissingField != null) cyuKissingField.SetValue(cyu, false);
             } catch (Exception ex) {
@@ -327,7 +331,7 @@ namespace MultiTeamH {
                 if (team.Controllers != null && team.Controllers.Hand != null)
                     handFlag = Traverse.Create(team.Controllers.Hand).Field("isKiss").GetValue<bool>();
                 if (cyuFlag && cyuKissMethod != null) cyuKissMethod.Invoke(cyu, new object[] { false });
-                if (cyu is MonoBehaviour behaviour) behaviour.StopAllCoroutines();
+                StopCyuKissCoroutine(cyu);
                 if (cyu != null && cyuKissFlagField != null) cyuKissFlagField.SetValue(cyu, false);
                 if (cyu != null && cyuKissingField != null) cyuKissingField.SetValue(cyu, false);
                 if (handFlag) Traverse.Create(team.Controllers.Hand).Field("isKiss").SetValue(false);
@@ -339,6 +343,24 @@ namespace MultiTeamH {
             } catch (Exception ex) {
                 DiagnosticProbe.Warning("kiss tail cleanup failed for " + team.Female.gameObject.name + ": " + ex.Message);
             }
+        }
+
+        private static void StopCyuKissCoroutine(Component cyu) {
+            MonoBehaviour behaviour = cyu as MonoBehaviour;
+            IEnumerator iterator;
+            if (behaviour == null || !cyuKissIterators.TryGetValue(cyu, out iterator)) return;
+            cyuKissIterators.Remove(cyu);
+            // Cyu also starts permanent Waitfor/GetMouse loops in Start. A
+            // StopAllCoroutines here kills those for the rest of the scene.
+            // The native Kiss method allows only one active BeroKiss iterator.
+            behaviour.StopCoroutine(iterator);
+        }
+
+        private static void ReleaseCyuKissIterator(ExternalControlScope state) {
+            if (state == null || state.CyuOwner == null || state.CyuIterator == null) return;
+            IEnumerator tracked;
+            if (cyuKissIterators.TryGetValue(state.CyuOwner, out tracked) && ReferenceEquals(tracked, state.CyuIterator))
+                cyuKissIterators.Remove(state.CyuOwner);
         }
 
         internal static bool ShouldBlockKissSetPlay(HActionBase action) {
@@ -556,15 +578,13 @@ namespace MultiTeamH {
             object expectedActions = session.GetTeamActions(team);
             if (cachedActionsField != null && ReferenceEquals(cachedActionsField.GetValue(__instance), expectedActions)) return;
             int previousTarget = session.GetBoundTeamIndex();
-            session.PushControlContext(team);
             __state = new ExternalControlScope { Session = session, Target = team, PreviousTarget = previousTarget };
+            session.PushControlContext(team);
             DiagnosticProbe.OnceInfo("cyu-waitfor-" + female.GetInstanceID(), "cyu Waitfor context female=" + female.gameObject.name + " team=" + (team + 1));
         }
 
         private static void AfterCyuWaitfor(ExternalControlScope __state) {
-            if (__state == null || __state.Session == null) return;
-            if (__state.Camera != null) __state.Camera.Restore();
-            __state.Session.PopExternalControlContext(__state.PreviousTarget);
+            RestoreExternalContext(__state);
         }
 
         private static bool BeforeCyuKissCoroutine(object __instance, ref bool __result, ref ExternalControlScope __state) {
@@ -574,18 +594,21 @@ namespace MultiTeamH {
             int team;
             if (!TryGetCyuOwner(__instance, out cyu, out female, out session, out team)) return true;
             int previousTarget = session.GetBoundTeamIndex();
-            session.PushControlContext(team);
             bool inactive = !session.IsActiveFemale(female);
             HFlag flags = session.GetFlagsObject(team);
+            IEnumerator iterator = __instance as IEnumerator;
+            if (iterator != null) cyuKissIterators[cyu] = iterator;
             __state = new ExternalControlScope { Session = session, Target = team, PreviousTarget = previousTarget,
-                Female = female, Camera = inactive ? CyuCameraSnapshot.Capture(flags == null ? null : flags.ctrlCamera) : null };
+                Female = female, CyuOwner = cyu, CyuIterator = iterator,
+                Camera = inactive ? CyuCameraSnapshot.Capture(flags == null ? null : flags.ctrlCamera) : null };
+            session.PushControlContext(team);
             return true;
         }
 
         private static void AfterCyuKissCoroutine(bool __result, ExternalControlScope __state) {
             if (__state == null || __state.Session == null) return;
-            if (__state.Camera != null) __state.Camera.Restore();
-            __state.Session.PopExternalControlContext(__state.PreviousTarget);
+            if (!__result) ReleaseCyuKissIterator(__state);
+            RestoreExternalContext(__state);
             if (!__result && __state.Female != null) {
                 // The coroutine can finish while the native kiss animator is
                 // still exiting. Keep the snapshot and Tab guard until the
@@ -649,19 +672,21 @@ namespace MultiTeamH {
                 if (!guiFrame) for (int i = 0; i < targets.Length; i++) if (targets[i] == session.ActiveTeam) { target = targets[i]; break; }
             }
             int previousTarget = session.GetBoundTeamIndex();
-            bool cursorLocked = GameCursor.isLock;
+            // Publish the cleanup scope before any operation can partially
+            // rebind the shared scene or throw while restoring plugin state.
+            __state = new ExternalControlScope { Session = session, ProcessFrame = processFrame, IsTopLevel = forcedHCtrlTarget < 0,
+                Target = target, PreviousTarget = previousTarget, Started = DiagnosticProbe.Start(),
+                Method = __originalMethod == null ? "unknown" : __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
+                IsGui = guiFrame, CursorLocked = GameCursor.isLock,
+                HCtrlOwner = IsHCtrlInstance(__instance) ? __instance : null };
             session.PushControlContext(target);
-            bool uiPass = processFrame && session.BeginExternalUiPass(target);
-            if (IsHCtrlInstance(__instance)) {
+            __state.UiPass = processFrame && session.BeginExternalUiPass(target);
+            if (__state.HCtrlOwner != null) {
                 RegisterAutoSpeedOwner(__instance);
                 RestoreHCtrlState(__instance, target);
             }
-            bool sample = processFrame && Time.realtimeSinceStartup - lastHCtrlLog >= 2f;
-            __state = new ExternalControlScope { Session = session, ProcessFrame = processFrame, IsTopLevel = forcedHCtrlTarget < 0,
-                Target = target, PreviousTarget = previousTarget, Started = DiagnosticProbe.Start(),
-                Before = sample ? session.DescribeControlState() + " plugin={" + DescribeHCtrlState(__instance) + "}" : null,
-                Method = __originalMethod == null ? "unknown" : __originalMethod.DeclaringType.Name + "." + __originalMethod.Name,
-                IsGui = guiFrame, UiPass = uiPass, CursorLocked = cursorLocked };
+            if (processFrame && Time.realtimeSinceStartup - lastHCtrlLog >= 2f)
+                __state.Before = session.DescribeControlState() + " plugin={" + DescribeHCtrlState(__instance) + "}";
             return true;
         }
 
@@ -670,8 +695,6 @@ namespace MultiTeamH {
             if (IsHCtrlInstance(__instance)) {
                 CaptureHCtrlState(__instance, __state.Target);
             }
-            __state.Session.EndExternalUiPass(__state.Target, __state.UiPass);
-            if (__state.UiPass) TeamSession.RestoreSharedCursorLock(__state.CursorLocked, "background-hctrl");
             double elapsed = DiagnosticProbe.ElapsedMs(__state.Started);
             float now = Time.realtimeSinceStartup;
             if (__state.ProcessFrame && (elapsed >= 20.0 || now - lastHCtrlLog >= 2f)) {
@@ -681,8 +704,11 @@ namespace MultiTeamH {
                 lastHCtrlState = after;
                 lastHCtrlLog = now;
             }
-            __state.Session.PopExternalControlContext(__state.PreviousTarget);
-            if (!__state.ProcessFrame || !__state.IsTopLevel || __originalMethod == null) return;
+            RestoreExternalContext(__state);
+            if (!__state.ProcessFrame || !__state.IsTopLevel || __originalMethod == null) {
+                RestoreExternalPluginState(__state);
+                return;
+            }
             int[] targets = __state.Session.GetHCtrlTargets();
             for (int i = 0; i < targets.Length; i++) {
                 if (targets[i] == __state.Target) continue;
@@ -695,8 +721,7 @@ namespace MultiTeamH {
                     forcedHCtrlTarget = -1;
                 }
             }
-            int restoreTarget = __state.PreviousTarget >= 0 ? __state.PreviousTarget : __state.Session.ActiveTeam;
-            if (IsHCtrlInstance(__instance)) RestoreHCtrlState(__instance, restoreTarget);
+            RestoreExternalPluginState(__state);
         }
 
         private static void RegisterAutoSpeedOwner(object hCtrl) {
@@ -750,24 +775,20 @@ namespace MultiTeamH {
             if (session == null) return true;
             int target = forcedAutoSpeedTarget >= 0 ? forcedAutoSpeedTarget : session.ActiveTeam;
             int previousTarget = session.GetBoundTeamIndex();
-            bool cursorLocked = GameCursor.isLock;
-            session.PushControlContext(target);
-            bool uiPass = session.BeginExternalUiPass(target);
-            RestoreHCtrlState(owner, target);
             __state = new ExternalControlScope { Session = session, Target = target, PreviousTarget = previousTarget,
-                IsTopLevel = forcedAutoSpeedTarget < 0, Method = "AutoSpeed.Update", UiPass = uiPass,
-                CursorLocked = cursorLocked };
+                IsTopLevel = forcedAutoSpeedTarget < 0, Method = "AutoSpeed.Update",
+                CursorLocked = GameCursor.isLock, HCtrlOwner = owner };
+            session.PushControlContext(target);
+            __state.UiPass = session.BeginExternalUiPass(target);
+            RestoreHCtrlState(owner, target);
             return true;
         }
 
         private static void AfterAutoSpeed(object __instance, MethodBase __originalMethod, ExternalControlScope __state) {
             if (__state == null || __state.Session == null) return;
-            object owner;
-            if (!autoSpeedOwners.TryGetValue(__instance, out owner)) return;
+            object owner = __state.HCtrlOwner;
             CaptureHCtrlState(owner, __state.Target);
-            __state.Session.EndExternalUiPass(__state.Target, __state.UiPass);
-            if (__state.UiPass) TeamSession.RestoreSharedCursorLock(__state.CursorLocked, "background-autospeed");
-            __state.Session.PopExternalControlContext(__state.PreviousTarget);
+            RestoreExternalContext(__state);
             if (__state.IsTopLevel && __originalMethod != null) {
                 int[] targets = __state.Session.GetHCtrlTargets();
                 for (int i = 0; i < targets.Length; i++) {
@@ -781,8 +802,42 @@ namespace MultiTeamH {
                     } finally { forcedAutoSpeedTarget = -1; }
                 }
             }
-            int restoreTarget = __state.PreviousTarget >= 0 ? __state.PreviousTarget : __state.Session.ActiveTeam;
-            RestoreHCtrlState(owner, restoreTarget);
+            RestoreExternalPluginState(__state);
+        }
+
+        private static void RestoreExternalContext(ExternalControlScope state) {
+            if (state == null || state.Session == null || state.ContextRestored) return;
+            state.ContextRestored = true;
+            // A failed camera/UI restore must not strand the shared HSceneProc
+            // on the background team. Each subsequent cleanup still runs.
+            try {
+                if (state.Camera != null) state.Camera.Restore();
+            } finally {
+                try { state.Session.EndExternalUiPass(state.Target, state.UiPass); }
+                finally {
+                    try {
+                        if (state.UiPass) TeamSession.RestoreSharedCursorLock(state.CursorLocked, "external-plugin");
+                    } finally { state.Session.PopExternalControlContext(state.PreviousTarget); }
+                }
+            }
+        }
+
+        private static void RestoreExternalPluginState(ExternalControlScope state) {
+            if (state == null || state.Session == null || state.PluginStateRestored) return;
+            state.PluginStateRestored = true;
+            int restoreTarget = state.PreviousTarget >= 0 ? state.PreviousTarget : state.Session.ActiveTeam;
+            if (state.HCtrlOwner != null) RestoreHCtrlState(state.HCtrlOwner, restoreTarget);
+        }
+
+        private static Exception FinalizeExternalControl(Exception __exception, ExternalControlScope __state) {
+            if (__exception != null) ReleaseCyuKissIterator(__state);
+            Exception cleanupError = null;
+            try { RestoreExternalContext(__state); }
+            catch (Exception ex) { cleanupError = ex; }
+            try { RestoreExternalPluginState(__state); }
+            catch (Exception ex) { if (cleanupError == null) cleanupError = ex; }
+            if (cleanupError != null) DiagnosticProbe.Warning("External plugin context cleanup failed: " + cleanupError);
+            return __exception ?? cleanupError;
         }
 
         private static FieldInfo[] FindFields(Type type, string[] names) {
@@ -819,9 +874,18 @@ namespace MultiTeamH {
             cyuKissReadyFrame.Clear();
             cyuExplicitKissUntilFrame.Clear();
             cyuKissBlockUntilFrame.Clear();
+            cyuKissIterators.Clear();
             blockedKissSetPlayFrame.Clear();
             hCtrlSwitchCalls = 0;
             lastHCtrlSwitchProbe = 0f;
+            loggedCyu.Clear();
+            loggedCharacterCompat.Clear();
+        }
+
+        internal static void SessionEnded() {
+            SessionStarted();
+            lastHCtrlState = null;
+            replayingPregnancyEnd = false;
         }
 
         private static void SyncHCtrlConfiguration(object instance, int sourceTeam) {
@@ -880,6 +944,11 @@ namespace MultiTeamH {
             internal bool CursorLocked;
             internal ChaControl Female;
             internal CyuCameraSnapshot Camera;
+            internal object HCtrlOwner;
+            internal object CyuOwner;
+            internal IEnumerator CyuIterator;
+            internal bool ContextRestored;
+            internal bool PluginStateRestored;
         }
 
         private sealed class HCtrlState {

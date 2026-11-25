@@ -25,6 +25,14 @@ namespace MaximumUI {
 
             if (input == null || root == null) return result;
 
+            // A retained view can disable a control (or its containing panel)
+            // between press and release. Old focus must not consume keyboard
+            // input or complete a click after that change.
+            if (!string.IsNullOrEmpty(activePath) && GetInteractiveWidget(root, activePath) == null) activePath = null;
+            if (!string.IsNullOrEmpty(focusedPath) && GetInteractiveWidget(root, focusedPath) == null) focusedPath = null;
+            result.ActivePath = activePath;
+            result.FocusedPath = focusedPath;
+
             LayoutNode hovered = HitTest(root, input.MousePosition);
             if (hovered != null) {
                 result.HoveredPath = hovered.Path;
@@ -51,13 +59,13 @@ namespace MaximumUI {
                 result.ActivePath = null;
             } else if (input.Type == MuiEventType.KeyDown || input.Type == MuiEventType.TextInput) {
                 result.FocusedPath = focusedPath;
-                result.FocusedWidget = string.IsNullOrEmpty(focusedPath) ? null : GetWidget(root, focusedPath);
+                result.FocusedWidget = string.IsNullOrEmpty(focusedPath) ? null : GetInteractiveWidget(root, focusedPath);
                 result.Consumed = result.FocusedWidget != null;
             } else {
                 result.ActivePath = activePath;
                 result.FocusedPath = focusedPath;
-                result.ActiveWidget = string.IsNullOrEmpty(activePath) ? null : GetWidget(root, activePath);
-                result.FocusedWidget = string.IsNullOrEmpty(focusedPath) ? null : GetWidget(root, focusedPath);
+                result.ActiveWidget = string.IsNullOrEmpty(activePath) ? null : GetInteractiveWidget(root, activePath);
+                result.FocusedWidget = string.IsNullOrEmpty(focusedPath) ? null : GetInteractiveWidget(root, focusedPath);
             }
 
             return result;
@@ -71,9 +79,14 @@ namespace MaximumUI {
             focusedPath = null;
         }
 
-        private static Widget GetWidget(LayoutNode root, string path) {
-            LayoutNode node = root.Find(path);
-            return node == null ? null : node.Widget;
+        private static Widget GetInteractiveWidget(LayoutNode root, string path) {
+            if (root == null || root.Widget == null || !root.Widget.Enabled) return null;
+            if (string.Equals(root.Path, path, StringComparison.Ordinal)) return IsInteractive(root.Widget) ? root.Widget : null;
+            for (int i = 0; i < root.Children.Count; i++) {
+                Widget found = GetInteractiveWidget(root.Children[i], path);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static LayoutNode HitTest(LayoutNode node, MuiVec2 point) {
@@ -94,6 +107,7 @@ namespace MaximumUI {
                    widget is ImageButton ||
                    widget is TextLink ||
                    widget is Toggle ||
+                   widget is ToggleSwitch ||
                    widget is Checkbox ||
                    widget is RadioButton ||
                    widget is ISegmentedControlWidget ||
