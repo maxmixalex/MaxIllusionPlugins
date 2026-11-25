@@ -18,10 +18,11 @@ namespace FemboyMode
         [HarmonyPrefix]
         [HarmonyPriority(Priority.First)]
         [HarmonyPatch(typeof(ChaControl), nameof(ChaControl.SetSiruFlags))]
+        // Positional arguments are stable across game assembly builds.
         private static bool BeforeSetSiruFlags(
-            ChaControl __instance, ChaFileDefine.SiruParts _parts, byte _state)
+            ChaControl __instance, ChaFileDefine.SiruParts __0, byte __1)
         {
-            if (__instance == null || _state == 0 ||
+            if (__instance == null || __1 == 0 ||
                 !FemboyModePlugin.IsFemboy(__instance))
                 return true;
 
@@ -44,11 +45,11 @@ namespace FemboyMode
                 ChaControl receiver = proc.male;
                 try
                 {
-                    receiver.SetSiruFlags(_parts, _state);
+                    receiver.SetSiruFlags(__0, __1);
                     if (loggedTransfers++ < 5)
                         FemboyModePlugin.LogOptionalIntegrationProblem(
                             "Reversed Houshi Siru material transferred to male " +
-                            "receiver: part=" + _parts + " intensity=" + _state);
+                            "receiver: part=" + __0 + " intensity=" + __1);
                 }
                 catch (Exception ex)
                 {
