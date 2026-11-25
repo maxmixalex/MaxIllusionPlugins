@@ -412,6 +412,17 @@ internal static class Program {
         SkinEffectsBridge.Refresh(true);
         Assert(SkinEffectsBridge.IsAvailable && SkinEffectsBridge.Effects.Count == 1, "Exact API method signatures resolve despite overloads");
         Assert(SkinEffectsBridge.Effects[0].MaxLevel == 3, "Correct texture count overload");
+        var character = new ChaControl();
+        int level;
+        Assert(!SkinEffectsBridge.TryGetLevel(character, SkinEffectsBridge.Effects[0], out level),
+            "Missing optional controller reports unavailable rather than a zero");
+        character.OptionalComponent = Activator.CreateInstance(controllerType);
+        Assert(SkinEffectsBridge.TryGetLevel(character, SkinEffectsBridge.Effects[0], out level) && level == 1,
+            "Readback uses the exact reflected getter and returns its actual value");
+        character.OptionalComponent = null;
+        Assert(!SkinEffectsBridge.TryGetLevel(character, SkinEffectsBridge.Effects[0], out level),
+            "A disappearing controller cannot produce a successful read");
+
     }
     private static void ConstantMethod(TypeBuilder type, string name, MethodAttributes flags, Type[] parameters, int value) {
         var method = type.DefineMethod(name, flags, typeof(int), parameters);

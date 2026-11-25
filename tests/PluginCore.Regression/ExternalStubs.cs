@@ -58,7 +58,10 @@ public class ChaControl : UnityEngine.MonoBehaviour {
     public void ChangeHohoAkaRate(float value) { fileStatus.hohoAkaRate = value; }
     public void HideEyeHighlight(bool value) { fileStatus.hideEyesHighlight = value; }
     public void ChangeEyesBlinkFlag(bool value) { Blink = value; }
-    public object GetComponent(Type type) { return null; }
+    public object OptionalComponent;
+    public object GetComponent(Type type) {
+        return OptionalComponent != null && type.IsInstanceOfType(OptionalComponent) ? OptionalComponent : null;
+    }
 }
 public class CharacterFile { public readonly CharacterParameter parameter = new CharacterParameter(); }
 public class CharacterParameter { public int sex = 1; public string fullname = "Test Character"; }

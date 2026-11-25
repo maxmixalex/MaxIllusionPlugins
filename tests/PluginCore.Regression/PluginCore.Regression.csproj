@@ -28,6 +28,7 @@
     <Compile Include="../../src/JuiceControl/PresetModels.cs" Link="Production/PresetModels.cs" />
     <Compile Include="../../src/JuiceControl/PresetStore.cs" Link="Production/PresetStore.cs" />
     <Compile Include="../../src/JuiceControl/SkinEffectsBridge.cs" Link="Production/SkinEffectsBridge.cs" />
+    <Compile Include="../../src/JuiceControl/ReadbackState.cs" Link="Production/ReadbackState.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Build ordering only: net9 tests link production model/view sources and
