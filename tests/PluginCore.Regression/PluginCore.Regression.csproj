@@ -30,6 +30,7 @@
     <Compile Include="../../src/JuiceControl/SkinEffectsBridge.cs" Link="Production/SkinEffectsBridge.cs" />
     <Compile Include="../../src/JuiceControl/ReadbackState.cs" Link="Production/ReadbackState.cs" />
     <Compile Include="../../src/ClothingControl/WardrobePresets.cs" Link="Production/WardrobePresets.cs" />
+    <Compile Include="../../src/ClothingControl/WardrobeLoadGate.cs" Link="Production/WardrobeLoadGate.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Build ordering only: net9 tests link production model/view sources and

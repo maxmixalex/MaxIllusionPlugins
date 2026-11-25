@@ -7,7 +7,30 @@ internal static class WardrobePresetRegression {
         if (!condition) throw new InvalidOperationException(message);
     }
 
+    private static void CoordinateLoadBarrier() {
+        WardrobeLoadGate gate = new WardrobeLoadGate(0, 2, 10, 0f);
+        Require(gate.Poll(11, .1f, true, 0, false) == WardrobeLoadResult.Waiting, "Old coordinate is still loading.");
+        gate.NotifyReload(12, 2);
+        Require(gate.Poll(12, .2f, true, 2, false) == WardrobeLoadResult.Waiting, "Reload event alone is not enough.");
+        Require(gate.Poll(13, .3f, true, 2, true) == WardrobeLoadResult.Waiting, "First matching frame is not enough.");
+        Require(gate.Poll(13, .3f, true, 2, true) == WardrobeLoadResult.Waiting, "Repeated read in one frame cannot satisfy the barrier.");
+        Require(gate.Poll(14, .4f, true, 2, true) == WardrobeLoadResult.Ready, "Verified outfit and reload signal release the barrier.");
+        gate = new WardrobeLoadGate(0, 2, 10, 0f);
+        Require(gate.Poll(11, .1f, true, 2, true) == WardrobeLoadResult.Waiting, "A missing event requires sustained matching.");
+        Require(gate.Poll(12, .3f, true, 2, false) == WardrobeLoadResult.Waiting, "Transient match is discarded.");
+        Require(gate.Poll(13, .4f, true, 2, true) == WardrobeLoadResult.Waiting, "Restart stability after mismatch.");
+        Require(gate.Poll(14, .9f, true, 2, true) == WardrobeLoadResult.Waiting, "Do not write too early.");
+        Require(gate.Poll(15, 1.2f, true, 2, true) == WardrobeLoadResult.Ready, "Stable fallback supports versions without reload events.");
+        gate = new WardrobeLoadGate(0, 2, 10, 0f);
+        gate.Poll(11, .1f, true, 2, false);
+        Require(gate.Poll(12, .2f, true, 0, false) == WardrobeLoadResult.Cancelled, "A manual coordinate change cancels a pending operation.");
+        gate = new WardrobeLoadGate(0, 2, 10, 0f);
+        Require(gate.Poll(11, .2f, false, 2, true) == WardrobeLoadResult.Cancelled, "A replaced character is never written.");
+        Require(gate.Poll(12, 8f, true, 0, false) == WardrobeLoadResult.TimedOut, "Timeout leaves the state untouched.");
+    }
+
     internal static void RunAll() {
+        CoordinateLoadBarrier();
         string directory = Path.Combine(Path.GetTempPath(), "wardrobe-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try {
