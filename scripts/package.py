@@ -14,6 +14,7 @@ PLUGINS = (
     "ClothingCompression",
     "ExpressionControl",
     "JuiceControl",
+    "ClothingControl",
 )
 GALLERY = "MaximumUIGallery"
 LIBRARIES = ("Common", "MaximumUI")
@@ -106,7 +107,7 @@ def build_packages(root, output, configuration="Release", revision=None):
 
     output.mkdir(parents=True, exist_ok=True)
     specs = [(name, (name,), f"{name}-{projects[name]['version']}.zip") for name in PLUGINS + (GALLERY,)]
-    specs.append(("MaxIllusionPlugins — all five functional plugins", PLUGINS, "MaxIllusionPlugins-all-plugins.zip"))
+    specs.append(("MaxIllusionPlugins — all functional plugins", PLUGINS, "MaxIllusionPlugins-all-plugins.zip"))
     manifest = {"source_commit": revision, "configuration": configuration, "packages": []}
     for title, roots, filename in specs:
         included = dependency_closure(projects, roots)
@@ -128,7 +129,7 @@ def build_packages(root, output, configuration="Release", revision=None):
 
 {package_list}
 
-`MaxIllusionPlugins-all-plugins.zip` 包含五个功能插件及它们实际引用的 Common / MaximumUI 共享库；Gallery 单独提供。单插件包也带上所需共享库，不必另找依赖 DLL。游戏、BepInEx、KKAPI 等外部运行依赖需已经安装。
+`MaxIllusionPlugins-all-plugins.zip` 包含功能插件及它们实际引用的 Common / MaximumUI 共享库；Gallery 单独提供。单插件包也带上所需共享库，不必另找依赖 DLL。游戏、BepInEx、KKAPI 等外部运行依赖需已经安装。
 
 更新时请移除其它位置的同名旧 DLL，避免加载多份插件。配置和预设不会随包覆盖。ClothingCompression 旧 XML 请自行重命名为 `MaxMixAlex.ClothingCompression.xml`。
 

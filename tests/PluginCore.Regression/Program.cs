@@ -24,6 +24,7 @@ internal static class Program {
         Directory.CreateDirectory(temporary);
         try {
             Run("Atomic XML round trip and backup", AtomicRoundTrip);
+            Run("Wardrobe presets preserve identity and reject corrupt reloads", WardrobePresetRegression.RunAll);
             Run("Failed write preserves old bytes and cleans temporary", FailedWritePreservesFile);
             Run("Failed serialization preserves old document", FailedSerializationPreservesFile);
             Run("Expression XML constructor has no filesystem side effects", ConstructorHasNoSideEffects);
