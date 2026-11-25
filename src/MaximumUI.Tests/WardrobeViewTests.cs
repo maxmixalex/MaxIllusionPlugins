@@ -4,12 +4,14 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 3;
+        internal const int TestCount = 5;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
             SelectorsAndBusyState();
             DisplayEqualityIncludesBusinessIdentity();
+            FiltersAndBatchOperateOnDisplayedRows();
+            GarmentPageDispatchesNativeCommands();
         }
 
         private static WardrobeViewModel Create() {
@@ -75,6 +77,48 @@ namespace MaximumUI.Tests {
             Require(!a.SameDisplayAs(b), "A replacement item invalidates the row even if the label matches.");
             b = Create(); b.Revision++;
             Require(!a.SameDisplayAs(b), "A changed character generation invalidates old callbacks.");
+        }
+
+        private static void FiltersAndBatchOperateOnDisplayedRows() {
+            WardrobeViewModel m = Create();
+            m.Rows[0].Group = 0; m.Rows[1].Group = 1; m.Rows[2].Group = 2;
+            m.AccessoryGroup = 2;
+            Require(m.FilteredAccessories().Count == 1 && m.FilteredAccessories()[0].Slot == 1, "Secondary group filters exact rows.");
+            m.AccessoryQuery = "2";
+            Require(m.FilteredAccessories().Count == 1 && m.FilteredAccessories()[0].Slot == 1, "Search accepts displayed slot number.");
+            int calls = 0;
+            m.SetFilteredAccessories = value => { Require(!value, "Batch hide uses false."); calls++; };
+            WardrobeView view = new WardrobeView { Model = m };
+            Widget root = view.Build(null);
+            Require(((VirtualList)Find(root, "wardrobe-accessories")).ItemCount == 1, "Only filtered rows are rendered.");
+            ((Button)Find(root, "wardrobe-hide-filtered")).OnClick();
+            Require(calls == 1, "Batch action is explicit.");
+            m.AccessoryQuery = "not found";
+            root = view.Build(null);
+            Require(!Find(root, "wardrobe-hide-filtered").Enabled, "Empty filter disables batch writes.");
+        }
+
+        private static void GarmentPageDispatchesNativeCommands() {
+            WardrobeViewModel m = Create();
+            m.Page = 1; m.ShoeMode = 0;
+            int writes = 0, restored = 0, shoe = -1;
+            m.ChangeShoeMode = value => shoe = value;
+            m.RestoreClothing = () => restored++;
+            m.Garments.Add(new WardrobeRow { Slot = 0, Label = "Gloves", Item = 12, Visible = true, Change = value => {
+                Require(!value, "Explicit garment change."); writes++;
+            }});
+            WardrobeView view = new WardrobeView { Model = m };
+            Widget root = view.Build(null);
+            ((SegmentedControl<int>)Find(root, "wardrobe-shoe-mode")).OnChange(1);
+            ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
+            ((Checkbox)((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0)).OnChange(false);
+            Require(shoe == 1 && restored == 1 && writes == 1, "Garment page dispatches all three actions.");
+            m.Busy = true; root = view.Build(null);
+            Require(!Find(root, "wardrobe-restore-clothing").Enabled && !Find(root, "wardrobe-shoe-mode").Enabled,
+                "Pending load blocks garment editing.");
+            ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
+            ((Checkbox)((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0)).OnChange(false);
+            Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
         }
 
         private static Widget Find(Widget root, string key) {

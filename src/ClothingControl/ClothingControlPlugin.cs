@@ -9,6 +9,7 @@ using KKAPI.Maker;
 using MaximumUI;
 using Studio;
 using UnityEngine;
+using UnityEngine.UI;
 
 [assembly: System.Reflection.AssemblyFileVersion(ClothingControl.ClothingControlPlugin.Version)]
 
@@ -20,11 +21,15 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.1.1";
+        public const string Version = "0.2.0";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
         };
+        private static readonly string[] GarmentKinds = { "gloves", "socks", "shoes_inner", "shoes_outer" };
+        private static readonly string[] GarmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+        private int page, accessoryGroup;
+        private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
         private WardrobePresetStore store;
         private WardrobeView view;
@@ -229,6 +234,7 @@ namespace ClothingControl {
                 CoordinateIndex = Coordinate(character), Presets = presets, PresetIndex = presetIndex,
                 Name = draft, Status = status, Error = store.Error, CanWrite = store.CanWrite,
                 Busy = pending != null, HasTarget = character != null && coordinateCount > 0,
+                Page = page, AccessoryGroup = accessoryGroup, AccessoryQuery = accessoryQuery,
                 Close = delegate { if (visible && token == generation) Close(); }
             };
             model.SelectTarget = index => {
@@ -245,6 +251,18 @@ namespace ClothingControl {
                 if (!SessionCurrent(token, character) || pending != null || index < 0 || index >= presets.Length || store.Find(presets[index]) == null) return;
                 if (selectedPreset != presets[index]) generation++;
                 selectedPreset = presets[index]; draft = selectedPreset; Refresh();
+            };
+            model.ChangePage = value => {
+                if (!SessionCurrent(token, character) || pending != null || value < 0 || value > 1) return;
+                page = value; Refresh();
+            };
+            model.ChangeAccessoryGroup = value => {
+                if (!SessionCurrent(token, character) || pending != null || value < 0 || value > 3) return;
+                accessoryGroup = value; Refresh();
+            };
+            model.ChangeAccessoryQuery = value => {
+                if (!SessionCurrent(token, character) || pending != null) return;
+                accessoryQuery = value ?? string.Empty; Refresh();
             };
             model.ChangeName = value => {
                 if (!SessionCurrent(token, character) || pending != null) return;
@@ -268,6 +286,33 @@ namespace ClothingControl {
                 generation++; Refresh();
             };
 
+            int capturedCoordinate = Coordinate(character);
+            if (character != null) {
+                model.ShoeMode = ReadShoeMode(character);
+                model.ChangeShoeMode = value => {
+                    if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                    TryEdit(() => SetShoeMode(character, value), "已切换鞋型。");
+                };
+                model.RestoreClothing = () => {
+                    if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                    TryEdit(() => { character.SetClothesStateAll(0); return true; }, "已恢复完整穿着。");
+                };
+                for (int i = 0; i < GarmentKinds.Length; i++) {
+                    string kind = GarmentKinds[i];
+                    GarmentVisibility entry;
+                    if (!TryReadGarment(character, kind, out entry)) continue;
+                    model.Garments.Add(new WardrobeRow {
+                        Slot = i, Item = entry.Item, Label = GarmentLabels[i], Visible = entry.Visible,
+                        Change = value => {
+                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                            TryEdit(() => SetMatchingGarment(character, new GarmentVisibility {
+                                Kind = entry.Kind, Item = entry.Item, Visible = value
+                            }), "已更新服装状态。");
+                        }
+                    });
+                }
+            }
+
             ChaFileAccessory.PartsInfo[] parts;
             bool[] shown;
             if (ReadAccessories(character, out parts, out shown)) {
@@ -276,21 +321,94 @@ namespace ClothingControl {
                     if (part == null || part.type == 120) continue;
                     int slot = i, type = part.type, item = part.id, coordinate = Coordinate(character);
                     model.Rows.Add(new WardrobeRow {
-                        Slot = slot, Type = type, Item = item, Label = AccessoryName(character, part, slot), Visible = shown[slot],
+                        Slot = slot, Type = type, Item = item, Group = part.hideCategory,
+                        Label = AccessoryName(character, part, slot), Visible = shown[slot],
                         Change = value => {
                             if (!TargetCurrent(token, character) || Coordinate(character) != coordinate) return;
-                            SetMatchingAccessory(character, new AccessoryVisibility {
+                            TryEdit(() => SetMatchingAccessory(character, new AccessoryVisibility {
                                 Slot = slot, Type = type, Item = item, Visible = value
-                            });
-                            Refresh();
+                            }), "已更新饰品状态。");
                         }
                     });
                 }
             }
+            model.SetFilteredAccessories = show => {
+                if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                // Use the displayed set, not a fresh slot-number-only scan. A
+                // replacement item in the meantime must not be changed.
+                List<WardrobeRow> filtered = model.FilteredAccessories();
+                int matched = 0;
+                try {
+                    foreach (WardrobeRow row in filtered)
+                        if (SetMatchingAccessory(character, new AccessoryVisibility {
+                            Slot = row.Slot, Type = row.Type, Item = row.Item, Visible = show
+                        })) matched++;
+                    status = "已处理 " + matched + " 项饰品，跳过 " + (filtered.Count - matched) + " 项。";
+                } catch (Exception ex) { status = ex.GetBaseException().Message; Logger.LogWarning(ex); }
+                Refresh();
+            };
             if (!view.Model.SameDisplayAs(model)) {
                 view.Model = model;
                 MaximumUIRuntime.MarkDirty(view);
             }
+        }
+
+        private void TryEdit(Func<bool> edit, string success) {
+            try { status = edit() ? success : "当前项目已变更或不可用，未应用。"; }
+            catch (Exception ex) { status = ex.GetBaseException().Message; Logger.LogWarning(ex); }
+            Refresh();
+        }
+
+        private static bool TryReadGarment(ChaControl character, string kind, out GarmentVisibility entry) {
+            entry = null;
+            if (!GarmentVisibility.IsSupported(kind) || character == null || character.fileStatus == null ||
+                character.fileStatus.clothesState == null || character.nowCoordinate == null ||
+                character.nowCoordinate.clothes == null || character.nowCoordinate.clothes.parts == null) return false;
+            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), kind);
+            var parts = character.nowCoordinate.clothes.parts;
+            var states = character.fileStatus.clothesState;
+            if (slot < 0 || slot >= parts.Length || slot >= states.Length || parts[slot] == null ||
+                parts[slot].id <= 0 || !character.IsClothesStateKind(slot)) return false;
+            if (states[slot] != 0 && states[slot] != 3) return false;
+            if (!character.IsClothesStateType(slot, 0) || !character.IsClothesStateType(slot, 3)) return false;
+            entry = new GarmentVisibility { Kind = kind, Item = parts[slot].id, Visible = states[slot] == 0 };
+            return true;
+        }
+
+        private static bool SetMatchingGarment(ChaControl character, GarmentVisibility entry) {
+            GarmentVisibility current;
+            if (entry == null || !TryReadGarment(character, entry.Kind, out current) ||
+                !entry.Matches(current.Kind, current.Item)) return false;
+            if (entry.Visible == current.Visible) return true;
+            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), entry.Kind);
+            byte requested = entry.Visible ? (byte)0 : (byte)3;
+            // Both states were explicitly confirmed supported by the actual
+            // garment. No fallback cycling through other clothing states.
+            character.SetClothesState(slot, requested, true);
+            return character.fileStatus.clothesState[slot] == requested;
+        }
+
+        private static Toggle[] ShoeToggles(ChaControl character) {
+            if (!MakerAPI.InsideAndLoaded || !ReferenceEquals(MakerAPI.GetCharacterControl(), character)) return null;
+            var maker = MakerAPI.GetMakerBase();
+            if (maker == null || maker.customCtrl == null || maker.customCtrl.cmpDrawCtrl == null) return null;
+            var toggles = maker.customCtrl.cmpDrawCtrl.tglShoesType;
+            return toggles != null && toggles.Length >= 2 && toggles[0] != null && toggles[1] != null ? toggles : null;
+        }
+
+        private static int ReadShoeMode(ChaControl character) {
+            Toggle[] toggles = ShoeToggles(character);
+            if (toggles == null || toggles[0].isOn == toggles[1].isOn) return -1;
+            return toggles[0].isOn ? 0 : 1;
+        }
+
+        private static bool SetShoeMode(ChaControl character, int value) {
+            if (value < 0 || value > 1) return false;
+            Toggle[] toggles = ShoeToggles(character);
+            if (toggles == null) return false;
+            toggles[value].isOn = true;
+            if (toggles[1 - value].isOn) toggles[1 - value].isOn = false;
+            return ReadShoeMode(character) == value;
         }
 
         private static bool ChangeCoordinate(ChaControl character, int index) {
@@ -316,7 +434,11 @@ namespace ClothingControl {
             ChaFileAccessory.PartsInfo[] parts;
             bool[] shown;
             if (!ReadAccessories(character, out parts, out shown)) return false;
-            WardrobePreset candidate = new WardrobePreset { Coordinate = coordinate };
+            WardrobePreset candidate = new WardrobePreset { Coordinate = coordinate, ShoeMode = ReadShoeMode(character) };
+            foreach (string kind in GarmentKinds) {
+                GarmentVisibility entry;
+                if (TryReadGarment(character, kind, out entry)) candidate.Garments.Add(entry);
+            }
             for (int i = 0; i < parts.Length; i++) {
                 ChaFileAccessory.PartsInfo part = parts[i];
                 if (part == null || part.type == 120) continue;
@@ -439,9 +561,13 @@ namespace ClothingControl {
             int applied = 0;
             try {
                 if (Coordinate(character) != preset.Coordinate) { status = "配装已经变更，未应用。"; Refresh(); return; }
+                int total = preset.Accessories.Count + preset.Garments.Count + (preset.ShoeMode >= 0 ? 1 : 0);
+                if (preset.ShoeMode >= 0 && SetShoeMode(character, preset.ShoeMode)) applied++;
+                foreach (GarmentVisibility entry in preset.Garments)
+                    if (SetMatchingGarment(character, entry)) applied++;
                 foreach (AccessoryVisibility entry in preset.Accessories)
                     if (SetMatchingAccessory(character, entry)) applied++;
-                status = "已应用预设：" + applied + " 项匹配，" + (preset.Accessories.Count - applied) + " 项跳过。";
+                status = "已应用预设：" + applied + " 项匹配，" + (total - applied) + " 项跳过。";
             } catch (Exception ex) { status = "应用中断：" + ex.GetBaseException().Message; Logger.LogWarning(ex); }
             Refresh();
         }

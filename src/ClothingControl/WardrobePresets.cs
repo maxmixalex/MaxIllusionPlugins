@@ -30,6 +30,11 @@ namespace ClothingControl {
     public sealed class WardrobePreset {
         [XmlAttribute] public string Name;
         [XmlAttribute] public int Coordinate;
+        [XmlAttribute] public int ShoeMode = -1;
+        [XmlElement("Garment")]
+        public List<GarmentVisibility> Garments = new List<GarmentVisibility>();
+        public bool ShouldSerializeShoeMode() { return ShoeMode >= 0; }
+
         [XmlElement("Accessory")]
         public List<AccessoryVisibility> Accessories = new List<AccessoryVisibility>();
 
@@ -38,18 +43,39 @@ namespace ClothingControl {
         }
 
         internal WardrobePreset Copy() {
-            WardrobePreset result = new WardrobePreset { Name = Name, Coordinate = Coordinate };
+            WardrobePreset result = new WardrobePreset { Name = Name, Coordinate = Coordinate, ShoeMode = ShoeMode };
+            foreach (GarmentVisibility entry in Garments)
+                result.Garments.Add(new GarmentVisibility { Kind = entry.Kind, Item = entry.Item, Visible = entry.Visible });
             foreach (AccessoryVisibility entry in Accessories)
                 result.Accessories.Add(new AccessoryVisibility { Slot = entry.Slot, Type = entry.Type, Item = entry.Item, Visible = entry.Visible });
             return result;
         }
 
         internal void Validate() {
-            if (Coordinate < 0 || Accessories == null) throw new InvalidDataException("Invalid outfit.");
+            if (Coordinate < 0 || Accessories == null || Garments == null || ShoeMode < -1 || ShoeMode > 1)
+                throw new InvalidDataException("Invalid outfit.");
+            HashSet<string> garmentKinds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GarmentVisibility entry in Garments)
+                if (entry == null || !GarmentVisibility.IsSupported(entry.Kind) || entry.Item <= 0 || !garmentKinds.Add(entry.Kind))
+                    throw new InvalidDataException("Invalid or duplicate garment.");
             HashSet<int> slots = new HashSet<int>();
             foreach (AccessoryVisibility entry in Accessories)
                 if (entry == null || entry.Slot < 0 || entry.Type < 0 || entry.Item < 0 || !slots.Add(entry.Slot))
                     throw new InvalidDataException("Invalid or duplicate accessory slot.");
+        }
+    }
+
+    public sealed class GarmentVisibility {
+        [XmlAttribute] public string Kind;
+        [XmlAttribute] public int Item;
+        [XmlAttribute] public bool Visible;
+
+        internal static bool IsSupported(string kind) {
+            return kind == "gloves" || kind == "socks" || kind == "shoes_inner" || kind == "shoes_outer";
+        }
+
+        internal bool Matches(string kind, int item) {
+            return IsSupported(Kind) && Kind == kind && Item == item;
         }
     }
 

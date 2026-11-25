@@ -21,23 +21,35 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("busy");
         yield return Wardrobe("empty");
         yield return Wardrobe("xml-error");
+        yield return Wardrobe("garments");
+        yield return Wardrobe("filtered");
     }
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.1.1", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.2.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
             SelectTarget = delegate { }, SelectCoordinate = delegate { }, SelectPreset = delegate { },
             ChangeName = delegate { }, Apply = delegate { }, Create = delegate { },
-            Overwrite = delegate { }, Delete = delegate { }, Reload = delegate { }, Close = delegate { }
+            Overwrite = delegate { }, Delete = delegate { }, Reload = delegate { }, Close = delegate { },
+            ChangePage = delegate { }, ChangeAccessoryGroup = delegate { }, ChangeAccessoryQuery = delegate { },
+            ChangeShoeMode = delegate { }, RestoreClothing = delegate { }, SetFilteredAccessories = delegate { }
         };
         string[] names = { "帽子", "眼镜", "围巾", "发夹", "手表", "胸针", "耳饰", "背包" };
         for (int i = 0; i < 32; i++) model.Rows.Add(new WardrobeRow {
-            Slot = i, Type = 121, Item = i + 1, Label = (i + 1) + ". " + names[i % names.Length],
+            Slot = i, Type = 121, Item = i + 1, Group = i % 2, Label = (i + 1) + ". " + names[i % names.Length],
             Visible = i % 3 != 0, Change = delegate { }
         });
+        if (state == "garments") {
+            model.Page = 1; model.ShoeMode = 0;
+            string[] garmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+            for (int i = 0; i < garmentLabels.Length; i++) model.Garments.Add(new WardrobeRow {
+                Slot = i, Item = i + 1, Label = garmentLabels[i], Visible = i % 2 == 0, Change = delegate { }
+            });
+        }
+        if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
         if (state == "busy") { model.Busy = true; model.Status = "正在载入配装…"; }
         if (state == "empty") {
             model.Targets = new string[0]; model.Coordinates = new string[0];
@@ -54,8 +66,10 @@ internal static class PluginPreviewScenes {
             Widget = window, StateId = state == "main" ? "default" : state,
             Width = state == "xml-error" ? window.MinWidth : 0f,
             Height = state == "xml-error" ? window.MinHeight : 0f,
-            RequiredKeys = new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories", "wardrobe-preset",
-                "wardrobe-name", "wardrobe-apply", "wardrobe-reload" }
+            RequiredKeys = state == "garments"
+                ? new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-garments", "wardrobe-shoe-mode", "wardrobe-restore-clothing", "wardrobe-preset" }
+                : new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories", "wardrobe-preset",
+                    "wardrobe-name", "wardrobe-apply", "wardrobe-reload", "wardrobe-accessory-search", "wardrobe-hide-filtered" }
         };
     }
 
