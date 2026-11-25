@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.5";
+        public const string Version = "0.5.6";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -81,7 +81,8 @@ namespace FemboyMode
         private MakerToggle bodyFlagToggle;
         private readonly MakerSlider[,,] geometrySliders = new MakerSlider[2,3,3];
         private readonly MakerSeparator[] geometrySeparators = new MakerSeparator[2];
-        private MakerGeometryScroll geometryScroll;
+        private MakerPageScroll pageScroll;
+        private int pageScrollRequest;
         private readonly MakerToggle[] axisToggles = new MakerToggle[2];
         private readonly MakerDropdown[] axisModeDropdowns = new MakerDropdown[2];
         private readonly bool[] axisVisible = new bool[2];
@@ -208,6 +209,7 @@ namespace FemboyMode
             CharacterApi.RegisterExtraBehaviour<FemboyCharacterController>(Guid);
             MakerAPI.RegisterCustomSubCategories += RegisterMakerControls;
             MakerAPI.MakerFinishedLoading += OnMakerFinishedLoading;
+            MakerAPI.MakerExiting += OnMakerExiting;
             MakerAPI.ReloadCustomInterface += OnReloadCustomInterface;
             harmony = new Harmony(Guid);
             Type[] patchGroups =
@@ -273,6 +275,8 @@ namespace FemboyMode
             Log = null;
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
+            MakerAPI.MakerExiting -= OnMakerExiting;
+            ReleasePageScroll();
             MakerAPI.ReloadCustomInterface -= OnReloadCustomInterface;
         }
 
@@ -287,7 +291,7 @@ namespace FemboyMode
             flagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
             bodyFlagToggle.ValueChanged.Subscribe(OnMakerFlagChanged);
 
-            geometryScroll = null;
+            ReleasePageScroll();
             // Keep controls in the original Body > All panel: no separate tabs.
             // Balls mirror every transform offered to Penis, separated visually.
             MakerCategory page = MakerConstants.Body.All;
@@ -301,8 +305,8 @@ namespace FemboyMode
                     for (int axis = 0; axis < 3; axis++)
                     {
                         int selectedMode = mode, selectedAxis = axis;
-                        string modeLabel = mode == 0 ? "缩放（%）" :
-                            mode == 1 ? "位移（毫米）" : "旋转（°）";
+                        string modeLabel = mode == 0 ? "缩放" :
+                            mode == 1 ? "位移" : "旋转";
                         string axisLabel = axis == 0 ? "X" : axis == 1 ? "Y" : "Z";
                         float min = mode == 0 ? .25f : mode == 1 ? -.30f : -360f;
                         float max = mode == 0 ? 4f : mode == 1 ? .30f : 360f;
@@ -392,7 +396,33 @@ namespace FemboyMode
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
         {
-            InstallGeometryScroll();
+            StartCoroutine(InstallPageScrollWhenReady(++pageScrollRequest));
+        }
+
+        private void OnMakerExiting(object sender, EventArgs e)
+        {
+            ReleasePageScroll();
+        }
+
+        private void ReleasePageScroll()
+        {
+            ++pageScrollRequest;
+            if (pageScroll != null) pageScroll.Uninstall();
+            pageScroll = null;
+        }
+
+        private IEnumerator InstallPageScrollWhenReady(int request)
+        {
+            // KKAPI fires MakerFinishedLoading before InsideAndLoaded becomes true.
+            // Let all registered controls finish creating their native UI objects.
+            yield return null;
+            for (int i = 0; i < 120 && !MakerAPI.InsideAndLoaded; i++)
+            {
+                if (request != pageScrollRequest || !MakerAPI.InsideMaker) yield break;
+                yield return null;
+            }
+            if (request != pageScrollRequest || !MakerAPI.InsideAndLoaded) yield break;
+            InstallPageScroll();
             RefreshMakerToggle();
         }
 
@@ -409,35 +439,20 @@ namespace FemboyMode
             return null;
         }
 
-        private void InstallGeometryScroll()
+        private void InstallPageScroll()
         {
-            if (geometryScroll != null) return;
+            if (pageScroll != null) return;
             GameObject flag = GetMakerWidget(bodyFlagToggle);
             if (flag == null) return;
-
-            // Explicit ownership is essential: never reparent native Maker controls
-            // or rows registered by another plugin, even when they share this page.
-            List<GameObject> rows = new List<GameObject>();
-            for (int part = 0; part < 2; part++)
-            {
-                rows.Add(GetMakerWidget(geometrySeparators[part]));
-                for (int mode = 0; mode < 3; mode++)
-                    for (int axis = 0; axis < 3; axis++)
-                        rows.Add(GetMakerWidget(geometrySliders[part, mode, axis]));
-                rows.Add(GetMakerWidget(axisModeDropdowns[part]));
-                rows.Add(GetMakerWidget(axisToggles[part]));
-            }
-
             try
             {
-                geometryScroll = MakerGeometryScroll.Install(flag.transform, rows);
-                if (geometryScroll != null)
-                    Logger.LogInfo("Maker geometry scroll: " + rows.Count +
-                        " plugin-owned rows, native Body > All hierarchy unchanged.");
+                pageScroll = MakerPageScroll.Install(flag.transform);
+                if (pageScroll != null)
+                    Logger.LogInfo("Maker Body > All: native whole-page scroll installed.");
             }
             catch (Exception ex)
             {
-                Logger.LogWarning("Maker geometry scroll setup failed; original layout retained: " + ex);
+                Logger.LogWarning("Maker page scroll setup failed; original page retained: " + ex);
             }
         }
 
@@ -502,8 +517,7 @@ namespace FemboyMode
                             enabled && EnableMaleGeometryTransforms.Value);
                     }
                 }
-                if (geometryScroll != null)
-                    geometryScroll.SetVisible(enabled && EnableMaleGeometryTransforms.Value);
+                // The native page must remain scrollable regardless of individual row visibility.
             }
             finally
             {
@@ -584,285 +598,6 @@ namespace FemboyMode
         {
             return character == null ? null :
                 character.gameObject.GetComponent<FemboyCharacterController>();
-        }
-    }
-
-    /// <summary>
-    /// A bounded, inline viewport for this plugin's own controls. The native
-    /// page remains the layout host and no existing native component is disabled.
-    /// </summary>
-    internal sealed class MakerGeometryScroll : MonoBehaviour
-    {
-        private const float InitialHeight = 160f;
-        private const float MinimumHeight = 64f;
-        private const float BottomMargin = 8f;
-        private RectTransform host;
-        private RectTransform slot;
-        private RectTransform view;
-        private LayoutElement slotLayout;
-        private VerticalLayoutGroup hostLayout;
-        private ScrollRect scroll;
-        private readonly Vector3[] corners = new Vector3[4];
-        private float appliedHeight;
-        private bool resetPosition = true;
-
-        private sealed class OriginalRow
-        {
-            internal RectTransform Rect;
-            internal int Index;
-            internal Vector2 AnchorMin, AnchorMax, Pivot, SizeDelta, Position;
-            internal Vector3 Scale;
-            internal Quaternion Rotation;
-
-            internal OriginalRow(RectTransform rect)
-            {
-                Rect = rect;
-                Index = rect.GetSiblingIndex();
-                AnchorMin = rect.anchorMin;
-                AnchorMax = rect.anchorMax;
-                Pivot = rect.pivot;
-                SizeDelta = rect.sizeDelta;
-                Position = rect.anchoredPosition;
-                Scale = rect.localScale;
-                Rotation = rect.localRotation;
-            }
-
-            internal void Restore(RectTransform parent)
-            {
-                Rect.SetParent(parent, false);
-                Rect.SetSiblingIndex(Index);
-                Rect.anchorMin = AnchorMin;
-                Rect.anchorMax = AnchorMax;
-                Rect.pivot = Pivot;
-                Rect.sizeDelta = SizeDelta;
-                Rect.anchoredPosition = Position;
-                Rect.localScale = Scale;
-                Rect.localRotation = Rotation;
-            }
-        }
-
-        internal static MakerGeometryScroll Install(Transform flag, List<GameObject> ownedRows)
-        {
-            RectTransform parent = flag.parent as RectTransform;
-            if (parent == null) return null;
-            VerticalLayoutGroup originalLayout = parent.GetComponent<VerticalLayoutGroup>();
-            // MakerAPI appends to the existing vertical layout. Refuse to
-            // restructure an unfamiliar hierarchy rather than break the page.
-            if (originalLayout == null || !originalLayout.enabled)
-                throw new InvalidOperationException("Body page is not a supported vertical layout.");
-
-            List<OriginalRow> rows = new List<OriginalRow>();
-            HashSet<Transform> unique = new HashSet<Transform>();
-            foreach (GameObject row in ownedRows)
-            {
-                RectTransform rect = row == null ? null : row.transform as RectTransform;
-                if (rect == null || rect.parent != parent || rect == flag || !unique.Add(rect))
-                    throw new InvalidOperationException("Expected distinct plugin-owned rows under the original page.");
-                rows.Add(new OriginalRow(rect));
-            }
-            if (rows.Count == 0) return null;
-            rows.Sort((a, b) => a.Index.CompareTo(b.Index));
-
-            // If KKAPI already placed the rows in a working vertical scroll
-            // content with automatic height, leave that structure alone.
-            for (Transform t = parent; t != null; t = t.parent)
-            {
-                ScrollRect nativeScroll = t.GetComponent<ScrollRect>();
-                if (nativeScroll == null || !nativeScroll.vertical ||
-                    nativeScroll.content != parent) continue;
-                ContentSizeFitter nativeFitter = parent.GetComponent<ContentSizeFitter>();
-                if (nativeFitter != null &&
-                    nativeFitter.verticalFit == ContentSizeFitter.FitMode.PreferredSize)
-                    return null;
-            }
-
-            // A slot participates in the original layout, while the viewport
-            // within it has an explicit height (even when the host forces
-            // child expansion). The slot contains ONLY our rows.
-            GameObject holder = null;
-            try
-            {
-                holder = new GameObject("FemboyModeGeometry", typeof(RectTransform), typeof(LayoutElement));
-                holder.SetActive(false);
-                RectTransform slotRect = (RectTransform)holder.transform;
-                slotRect.SetParent(parent, false);
-                slotRect.SetSiblingIndex(rows[0].Index);
-                slotRect.anchorMin = rows[0].AnchorMin;
-                slotRect.anchorMax = rows[0].AnchorMax;
-                slotRect.pivot = rows[0].Pivot;
-                slotRect.sizeDelta = new Vector2(
-                    Mathf.Max(300f, rows[0].Rect.rect.width), InitialHeight);
-
-                LayoutElement element = holder.GetComponent<LayoutElement>();
-                element.minWidth = 0f;
-                element.preferredWidth = Mathf.Max(300f, rows[0].Rect.rect.width);
-                element.flexibleWidth = 1f;
-                element.minHeight = InitialHeight;
-                element.preferredHeight = InitialHeight;
-                element.flexibleHeight = 0f;
-
-                GameObject scrollObject = DefaultControls.CreateScrollView(new DefaultControls.Resources());
-                scrollObject.name = "GeometryScrollView";
-                RectTransform viewRect = (RectTransform)scrollObject.transform;
-                viewRect.SetParent(slotRect, false);
-                viewRect.anchorMin = new Vector2(0f, 1f);
-                viewRect.anchorMax = Vector2.one;
-                viewRect.pivot = new Vector2(.5f, 1f);
-                viewRect.anchoredPosition = Vector2.zero;
-                viewRect.sizeDelta = new Vector2(0f, InitialHeight);
-                Image background = scrollObject.GetComponent<Image>();
-                if (background != null) background.color = Color.clear;
-
-                ScrollRect scrollRect = scrollObject.GetComponent<ScrollRect>();
-                scrollRect.horizontal = false;
-                scrollRect.vertical = true;
-                scrollRect.scrollSensitivity = 40f;
-                scrollRect.movementType = ScrollRect.MovementType.Clamped;
-                scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
-                scrollRect.verticalScrollbarSpacing = 2f;
-                Scrollbar horizontal = scrollRect.horizontalScrollbar;
-                scrollRect.horizontalScrollbar = null;
-                if (horizontal != null) horizontal.gameObject.SetActive(false);
-
-                RectTransform viewport = scrollRect.viewport;
-                RectTransform content = scrollRect.content;
-                if (viewport == null || content == null || scrollRect.verticalScrollbar == null)
-                    throw new InvalidOperationException("Scroll view prefab is incomplete.");
-                viewport.anchorMin = Vector2.zero;
-                viewport.anchorMax = Vector2.one;
-                viewport.offsetMin = Vector2.zero;
-                viewport.offsetMax = Vector2.zero;
-
-                RectTransform bar = (RectTransform)scrollRect.verticalScrollbar.transform;
-                bar.anchorMin = new Vector2(1f, 0f);
-                bar.anchorMax = Vector2.one;
-                bar.offsetMin = new Vector2(-14f, 0f);
-                bar.offsetMax = Vector2.zero;
-
-                content.anchorMin = new Vector2(0f, 1f);
-                content.anchorMax = Vector2.one;
-                content.pivot = new Vector2(.5f, 1f);
-                content.anchoredPosition = Vector2.zero;
-                content.sizeDelta = Vector2.zero;
-                VerticalLayoutGroup innerLayout = content.gameObject.AddComponent<VerticalLayoutGroup>();
-                innerLayout.childAlignment = TextAnchor.UpperLeft;
-                innerLayout.spacing = originalLayout.spacing;
-                innerLayout.childControlWidth = true;
-                innerLayout.childControlHeight = originalLayout.childControlHeight;
-                innerLayout.childForceExpandWidth = true;
-                innerLayout.childForceExpandHeight = false;
-                ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
-                fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-                // Perform all construction before moving a single row.
-                MakerGeometryScroll instance = holder.AddComponent<MakerGeometryScroll>();
-                instance.host = parent;
-                instance.hostLayout = originalLayout;
-                instance.slot = slotRect;
-                instance.slotLayout = element;
-                instance.view = viewRect;
-                instance.scroll = scrollRect;
-                instance.appliedHeight = InitialHeight;
-
-                foreach (OriginalRow row in rows)
-                    row.Rect.SetParent(content, false);
-
-                holder.SetActive(true);
-                // KKAPI sliders normally consume the wheel as value changes.
-                // In the inline scroll view the wheel must scroll the panel.
-                foreach (OriginalRow row in rows)
-                    foreach (Slider slider in row.Rect.GetComponentsInChildren<Slider>(true))
-                    {
-                        ObservableScrollTrigger trigger = slider.GetComponent<ObservableScrollTrigger>();
-                        if (trigger != null) trigger.enabled = false;
-                    }
-
-                return instance;
-            }
-            catch
-            {
-                // Roll back only our rows; do not leave a half-built or empty
-                // Maker page if the UI hierarchy differs between game versions.
-                if (holder != null)
-                {
-                    holder.SetActive(false);
-                    holder.transform.SetAsLastSibling();
-                }
-                foreach (OriginalRow row in rows)
-                    if (row.Rect != null) row.Restore(parent);
-                if (holder != null) Destroy(holder);
-                throw;
-            }
-        }
-
-        internal void SetVisible(bool visible)
-        {
-            if (gameObject.activeSelf == visible) return;
-            resetPosition = true;
-            gameObject.SetActive(visible);
-            if (host != null) LayoutRebuilder.MarkLayoutForRebuild(host);
-        }
-
-        private void OnEnable()
-        {
-            resetPosition = true;
-        }
-
-        private void LateUpdate()
-        {
-            if (host == null || slot == null || view == null ||
-                slotLayout == null || scroll == null) return;
-
-            // Let the original layout settle before measuring the position of
-            // the inline slot. Its top, rather than the full page height,
-            // determines the available area beneath the native controls.
-            slot.GetWorldCorners(corners);
-            float top = host.InverseTransformPoint(corners[1]).y;
-            float bottom = float.NegativeInfinity;
-            for (Transform t = host; t != null; t = t.parent)
-            {
-                RectTransform ancestor = t as RectTransform;
-                ContentSizeFitter fitter = t.GetComponent<ContentSizeFitter>();
-                bool contentSized = fitter != null &&
-                    fitter.verticalFit != ContentSizeFitter.FitMode.Unconstrained;
-                if (ancestor != null && !contentSized && ancestor.rect.height >= MinimumHeight)
-                {
-                    ancestor.GetWorldCorners(corners);
-                    float min = float.PositiveInfinity, max = float.NegativeInfinity;
-                    for (int i = 0; i < corners.Length; i++)
-                    {
-                        float y = host.InverseTransformPoint(corners[i]).y;
-                        min = Mathf.Min(min, y);
-                        max = Mathf.Max(max, y);
-                    }
-                    if (max >= top - 2f && min < top)
-                        bottom = Mathf.Max(bottom, min);
-                }
-                Canvas canvas = t.GetComponent<Canvas>();
-                if (canvas != null && canvas.isRootCanvas) break;
-            }
-
-            float height = float.IsNegativeInfinity(bottom)
-                ? InitialHeight : Mathf.Max(MinimumHeight, top - bottom - BottomMargin);
-            // Explicitly bound the visible content even if the host expands
-            // its children. A preferred-size slot alone is insufficient.
-            if (Mathf.Abs(height - appliedHeight) > 1f)
-            {
-                appliedHeight = height;
-                slotLayout.minHeight = height;
-                slotLayout.preferredHeight = height;
-                if (hostLayout != null && !hostLayout.childControlHeight)
-                    slot.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
-                view.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
-                LayoutRebuilder.MarkLayoutForRebuild(host);
-            }
-            if (resetPosition)
-            {
-                resetPosition = false;
-                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
-                scroll.verticalNormalizedPosition = 1f;
-            }
         }
     }
 

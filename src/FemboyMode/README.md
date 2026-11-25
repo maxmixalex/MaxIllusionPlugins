@@ -1,6 +1,13 @@
-# Femboy Mode for Koikatsu — v0.4.4
+# Femboy Mode for Koikatsu — v0.5.6
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.5.6 Maker page layout
+
+- The Body > All page uses a clone of the game's own `03_ClothesTop/tglSocks/SocksTop/Scroll View`, the same source used by KKAPI's subcategory creation. All existing page rows share one vertical viewport; visibility of individual rows does not hide the original page.
+- The installation waits for Maker loading to finish, preserves sibling order and restores the page and original wheel handlers on uninstall or initialization failure. If the page already has a native scroll container, it is left unchanged. If a compatible template or layout is missing, no partial replacement is installed.
+- Numeric row headings omit redundant unit suffixes. Stored values and numeric conversions are unchanged.
+- The headless suite checks viewport height calculation. Native theme, raycasts, scroll interaction and other Maker mods still require in-game testing.
 
 ## Implemented
 

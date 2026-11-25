@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/FemboyMode/FemboyRules.cs" Link="FemboyRules.cs" />
+    <Compile Include="../../src/FemboyMode/MakerPageScrollMath.cs" Link="MakerPageScrollMath.cs" />
   </ItemGroup>
 </Project>

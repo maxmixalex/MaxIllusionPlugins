@@ -58,6 +58,14 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        Check(MakerPageScrollMath.ResolveHeight(500f, -100f, 952f, 8f) == 592f,
+            "native viewport fits available page height");
+        Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 1f,
+            "small viewport never forces a height outside its boundary");
+        Check(MakerPageScrollMath.ResolveHeight(500f, float.NegativeInfinity, 600f, 8f) == 600f,
+            "unmeasured viewport falls back to the native template height");
+        Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, float.NaN, 8f) == 160f,
+            "invalid measurements use a bounded fallback");
         Check(FemboyRules.FrontInsertStartIndex(false) == 0,
             "normal initiative uses buttons 0/1");
         Check(FemboyRules.FrontInsertStartIndex(true) == 7,
