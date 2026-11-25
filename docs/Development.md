@@ -10,7 +10,7 @@ dotnet build MaxIllusionPlugins.sln -c Release --no-restore
 pwsh -NoProfile -File scripts/Test-MaximumUI.ps1 -NoBuild
 ```
 
-九个项目均在解决方案内。大部分项目继承 `.NET Framework 3.5` 目标；MaximumUI.Tests 使用 `net461`。NuGet 提供框架引用程序集，编译不等于需要本机游戏目录。网络环境需允许访问 nuget.org、IllusionMods 和 BepInExLibs 的仓库中所列源。
+各项目均在解决方案内。大部分项目继承 `.NET Framework 3.5` 目标；MaximumUI.Tests 使用 `net461`。NuGet 提供框架引用程序集，编译不等于需要本机游戏目录。网络环境需允许访问 nuget.org、IllusionMods 和 BepInExLibs 的仓库中所列源。
 
 ClothingCompression 的 KKAPI、Sideloader 编译引用已改为公开 NuGet 包，去除了原先写死的本机游戏路径。运行插件时仍需在游戏中安装对应依赖。
 
