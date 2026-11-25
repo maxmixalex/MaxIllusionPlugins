@@ -24,7 +24,7 @@ namespace JuiceControl {
     [BepInPlugin(GUID, "JuiceControl", Version)]
     public partial class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.2.1";
+        public const string Version = "0.2.2";
 
         private const string DefaultPresetFileName = GUID + ".presets.xml";
         private const int SiruMaxLevel = 3;
@@ -405,10 +405,9 @@ namespace JuiceControl {
             Dictionary<string, int> levels;
             if (!lockedEffectLevels.TryGetValue(cha, out levels)) return;
 
-            List<string> ids = new List<string>(levels.Keys);
-            for (int i = 0; i < ids.Count; i++) {
-                levels[ids[i]] = GetEffectValue(cha, ids[i]);
-            }
+            ReadbackState.RefreshKnown(levels, delegate(string id, out int level) {
+                return TryGetEffectValue(cha, id, out level);
+            });
         }
 
         private bool AreAllEffectsLocked(ChaControl cha) {
@@ -428,12 +427,9 @@ namespace JuiceControl {
             if (cha == null) return;
 
             Dictionary<string, int> levels = GetLockedLevelMap(cha);
-            levels.Clear();
-            List<string> ids = GetAllEffectIds();
-            for (int i = 0; i < ids.Count; i++) {
-                string id = ids[i];
-                levels[id] = GetEffectValue(cha, id);
-            }
+            ReadbackState.CaptureKnown(levels, GetAllEffectIds(), delegate(string id, out int level) {
+                return TryGetEffectValue(cha, id, out level);
+            });
         }
 
         private List<string> GetAllEffectIds() {
@@ -464,7 +460,9 @@ namespace JuiceControl {
                 }
 
                 foreach (KeyValuePair<string, int> level in pair.Value) {
-                    SetEffectValue(cha, level.Key, level.Value);
+                    int current;
+                    if (TryGetEffectValue(cha, level.Key, out current) && current != level.Value)
+                        SetEffectValue(cha, level.Key, level.Value);
                 }
             }
 
@@ -475,22 +473,24 @@ namespace JuiceControl {
             }
         }
 
-        private int GetEffectValue(ChaControl cha, string id) {
-            if (cha == null) return 0;
+        private bool TryGetEffectValue(ChaControl cha, string id, out int level) {
+            level = 0;
+            if (cha == null || string.IsNullOrEmpty(id)) return false;
 
-            if (id == "tear") return cha.tearsLv;
-            if (id == "blush") return GetBlushLevel(cha);
+            if (id == "tear") { level = cha.tearsLv; return true; }
+            if (id == "blush") { level = GetBlushLevel(cha); return true; }
             if (id.StartsWith("siru:", StringComparison.Ordinal)) {
                 ChaFileDefine.SiruParts part = (ChaFileDefine.SiruParts)Enum.Parse(typeof(ChaFileDefine.SiruParts), id.Substring(5));
-                return cha.GetSiruFlags(part);
+                level = cha.GetSiruFlags(part);
+                return true;
             }
             string skinEffectName;
             if (SkinEffectsBridge.TryGetEffectName(id, out skinEffectName)) {
                 SkinEffectInfo effect = SkinEffectsBridge.FindEffect(skinEffectName);
-                return effect == null ? 0 : SkinEffectsBridge.GetLevel(cha, effect);
+                return effect != null && SkinEffectsBridge.TryGetLevel(cha, effect, out level);
             }
 
-            return 0;
+            return false;
         }
 
         private void SetEffectValue(ChaControl cha, string id, int level) {
@@ -512,7 +512,8 @@ namespace JuiceControl {
             string skinEffectName;
             if (SkinEffectsBridge.TryGetEffectName(id, out skinEffectName)) {
                 SkinEffectInfo effect = SkinEffectsBridge.FindEffect(skinEffectName);
-                if (effect != null) SkinEffectsBridge.SetLevel(cha, effect, level);
+                if (effect != null && level >= 0 && level <= effect.MaxLevel)
+                    SkinEffectsBridge.SetLevel(cha, effect, level);
             }
         }
 

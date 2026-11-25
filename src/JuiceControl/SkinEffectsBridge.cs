@@ -81,19 +81,27 @@ namespace JuiceControl {
             return null;
         }
 
-        public static int GetLevel(ChaControl cha, SkinEffectInfo effect) {
-            object controller = GetController(cha);
-            if (controller == null || effect == null) return 0;
-
+        // A failed read is not evidence that the underlying value is zero.
+        public static bool TryGetLevel(ChaControl cha, SkinEffectInfo effect, out int level) {
+            level = 0;
             try {
+                object controller = GetController(cha);
+                if (controller == null || effect == null) return false;
                 object value = effect.LevelProperty != null
                     ? effect.LevelProperty.GetValue(controller, null)
                     : getEffectLevelMethod.Invoke(controller, new[] { effect.EnumValue });
-                return Mathf.Clamp(Convert.ToInt32(value), 0, effect.MaxLevel);
+                return ReadbackState.TryConvert(value, effect.MaxLevel, out level);
             } catch (Exception ex) {
                 JuiceControl.LogDebug("Failed to read SkinEffects level: " + ex);
-                return 0;
+                return false;
             }
+        }
+
+        // Retained for the existing explicit preset-capture format; automatic
+        // synchronization and lock operations must use TryGetLevel instead.
+        public static int GetLevel(ChaControl cha, SkinEffectInfo effect) {
+            int level;
+            return TryGetLevel(cha, effect, out level) ? level : 0;
         }
 
         public static void SetLevel(ChaControl cha, SkinEffectInfo effect, int level) {

@@ -5,7 +5,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class JuiceParityTests {
-        internal const int TestCount = 6;
+        internal const int TestCount = 8;
 
         internal static void RunAll() {
             MainWindowPreservesLegacyOrderAndWords();
@@ -14,6 +14,8 @@ namespace MaximumUI.Tests {
             NameDialogKeepsPromptConfirmAndEnter();
             EmptySceneDisablesOnlyUnavailableActions();
             PresetToolbarsRemainOutsideTheEffectScroll();
+            ReadbackDoesNotOverwriteKnownValuesOnFailure();
+            UnavailableRowsAreReadOnlyDuringBuildAndInteraction();
         }
 
         private static JuiceEditorView Create() {
@@ -90,6 +92,52 @@ namespace MaximumUI.Tests {
             effect.Maximum = 0; effect.Value = 8;
             row = Find<VirtualList>(view.Build(null), "juice-effects").BuildItem(0);
             Find<Button>(row, "value-blush").OnClick(); Require(calls == 2, "a zero-range effect cannot divide by zero or emit an invalid edit");
+        }
+
+        private static void ReadbackDoesNotOverwriteKnownValuesOnFailure() {
+            int value;
+            Require(!ReadbackState.TryConvert(null, 4, out value), "null is not zero");
+            Require(!ReadbackState.TryConvert("invalid", 4, out value), "invalid reflection result is not zero");
+            Require(!ReadbackState.TryConvert(7, 4, out value), "out-of-range read must not be truncated");
+            Require(ReadbackState.TryConvert(0, 4, out value) && value == 0, "actual zero remains valid");
+
+            Dictionary<string, int> levels = new Dictionary<string, int> {
+                { "known", 3 }, { "zero", 2 }, { "removed", 1 }
+            };
+            ReadLevel read = delegate(string id, out int level) {
+                level = 0;
+                return id == "zero";
+            };
+            ReadbackState.RefreshKnown(levels, read);
+            Require(levels["known"] == 3 && levels["zero"] == 0, "refresh preserves unreadable state and accepts real zero");
+            ReadbackState.CaptureKnown(levels, new[] { "known", "zero", "unavailable" }, read);
+            Require(levels.Count == 2 && levels["known"] == 3 && levels["zero"] == 0 &&
+                !levels.ContainsKey("unavailable"), "capture cannot manufacture a zero lock for an unreadable row");
+        }
+
+        private static void UnavailableRowsAreReadOnlyDuringBuildAndInteraction() {
+            JuiceEditorView view = Create();
+            int writes = 0;
+            JuiceEffectRow rowModel = new JuiceEffectRow {
+                Id = "external", Name = "External", Value = 0, Maximum = 4, Available = false,
+                Change = delegate { writes++; }, Lock = delegate { writes++; }
+            };
+            view.Model.Effects.Add(rowModel);
+            for (int i = 0; i < 2; i++) {
+                Widget row = Find<VirtualList>(view.Build(null), "juice-effects").BuildItem(0);
+                Button current = Find<Button>(row, "value-external");
+                Button increase = Find<Button>(row, "increase-external");
+                Checkbox locked = Find<Checkbox>(row, "lock-external");
+                Require(!current.Enabled && !increase.Enabled && !locked.Enabled && current.Text == "—", "unknown state is displayed without a fabricated numeric value");
+                current.OnClick(); increase.OnClick(); locked.OnChange(true);
+            }
+            Require(writes == 0, "mount/rebuild and stale callbacks cannot write an unavailable value");
+            rowModel.Locked = true;
+            Widget lockedRow = Find<VirtualList>(view.Build(null), "juice-effects").BuildItem(0);
+            Checkbox unlock = Find<Checkbox>(lockedRow, "lock-external");
+            Require(unlock.Enabled, "an existing lock can still be released while its data source is unavailable");
+            unlock.OnChange(false);
+            Require(writes == 1, "only explicit unlock is allowed");
         }
 
         private static void NameDialogKeepsPromptConfirmAndEnter() {

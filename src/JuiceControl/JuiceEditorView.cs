@@ -15,6 +15,7 @@ namespace JuiceControl {
         public int Value;
         public int Maximum;
         public bool Locked;
+        public bool Available = true;
         public string DisplayValue;
         public Action<int> Change;
         public Action<bool> Lock;
@@ -93,18 +94,20 @@ namespace JuiceControl {
                 int value = Math.Max(0, Math.Min(effect.Value, maximum));
                 return new HStack(4f, "effect-" + effect.Id) {
                     new Label(effect.Name).Width(120f),
-                    new Button("−", delegate { Change(effect, value, Math.Max(0, value - 1)); }, "decrease-" + effect.Id).Width(32f),
-                    new Button(effect.DisplayValue ?? value.ToString(), delegate {
+                    new Button("−", delegate { Change(effect, value, Math.Max(0, value - 1)); }, "decrease-" + effect.Id).Enabled(effect.Available).Width(32f),
+                    new Button(effect.Available ? (effect.DisplayValue ?? value.ToString()) : "—", delegate {
                         Change(effect, value, value >= maximum ? 0 : value + 1);
-                    }, "value-" + effect.Id).ExpandWidth(),
-                    new Button("+", delegate { Change(effect, value, Math.Min(maximum, value + (value < maximum ? 1 : 0))); }, "increase-" + effect.Id).Width(32f),
-                    new Checkbox(string.Empty, effect.Locked, effect.Lock, "lock-" + effect.Id).Width(24f)
+                    }, "value-" + effect.Id).Enabled(effect.Available).ExpandWidth(),
+                    new Button("+", delegate { Change(effect, value, Math.Min(maximum, value + (value < maximum ? 1 : 0))); }, "increase-" + effect.Id).Enabled(effect.Available).Width(32f),
+                    new Checkbox(string.Empty, effect.Locked, delegate(bool locked) {
+                        if (effect.Lock != null && (effect.Available || (!locked && effect.Locked))) effect.Lock(locked);
+                    }, "lock-" + effect.Id).Enabled(effect.Available || effect.Locked).Width(24f)
                 }.Height(32f);
             }, "juice-effects") { Height = 0f }.MinHeight(120f);
         }
 
         private static void Change(JuiceEffectRow effect, int previous, int next) {
-            if (next != previous && effect.Change != null) effect.Change(next);
+            if (effect.Available && next != previous && effect.Change != null) effect.Change(next);
         }
 
         private static Widget BuildPresets(JuiceEditorModel m) {

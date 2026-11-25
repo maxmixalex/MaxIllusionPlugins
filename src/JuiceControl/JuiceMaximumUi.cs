@@ -73,16 +73,19 @@ namespace JuiceControl {
             if (m.Effects.Count != expected) return true;
             for (int i = 0; i < m.Effects.Count; i++) {
                 JuiceEffectRow row = m.Effects[i];
-                if (row.Value != CurrentEffectValue(i) || row.Locked != IsEffectLocked(selectedCharacter, row.Id)) return true;
+                int value;
+                bool readable = TryCurrentEffectValue(i, out value);
+                if (row.Available != readable || (readable && row.Value != value) ||
+                    row.Locked != IsEffectLocked(selectedCharacter, row.Id)) return true;
             }
             return false;
         }
 
-        private int CurrentEffectValue(int i) {
-            if (i < SiruParts.Length) return selectedCharacter.GetSiruFlags(SiruParts[i].Part);
-            if (i == SiruParts.Length) return selectedCharacter.tearsLv;
-            if (i == SiruParts.Length + 1) return GetBlushLevel(selectedCharacter);
-            return SkinEffectsBridge.GetLevel(selectedCharacter, SkinEffectsBridge.Effects[i - SiruParts.Length - 2]);
+        private bool TryCurrentEffectValue(int i, out int value) {
+            if (i < SiruParts.Length) { value = selectedCharacter.GetSiruFlags(SiruParts[i].Part); return true; }
+            if (i == SiruParts.Length) { value = selectedCharacter.tearsLv; return true; }
+            if (i == SiruParts.Length + 1) { value = GetBlushLevel(selectedCharacter); return true; }
+            return SkinEffectsBridge.TryGetLevel(selectedCharacter, SkinEffectsBridge.Effects[i - SiruParts.Length - 2], out value);
         }
 
         private void RefreshEditor() { RefreshEditor(GetCharacters()); }
@@ -147,10 +150,12 @@ namespace JuiceControl {
                 if (SkinEffectsBridge.IsAvailable) {
                     for (int i = 0; i < SkinEffectsBridge.Effects.Count; i++) {
                         SkinEffectInfo effect = SkinEffectsBridge.Effects[i];
+                        int value;
+                        bool available = SkinEffectsBridge.TryGetLevel(character, effect, out value);
                         AddEditorEffect(m, character, SkinEffectsBridge.GetEffectId(effect),
                             SkinEffectsBridge.DisplayPrefix + " " + effect.DisplayName,
-                            SkinEffectsBridge.GetLevel(character, effect), effect.MaxLevel,
-                            delegate(int level) { SkinEffectsBridge.SetLevel(character, effect, level); });
+                            value, effect.MaxLevel,
+                            delegate(int level) { SkinEffectsBridge.SetLevel(character, effect, level); }, available);
                     }
                 }
                 m.AllLocked = AreAllEffectsLocked(character);
@@ -176,20 +181,27 @@ namespace JuiceControl {
             MaximumUIRuntime.MarkDirty(editorView);
         }
 
-        private void AddEditorEffect(JuiceEditorModel model, ChaControl character, string id, string name, int value, int maximum, Action<int> change) {
+        private void AddEditorEffect(JuiceEditorModel model, ChaControl character, string id, string name, int value, int maximum, Action<int> change, bool available = true) {
             model.Effects.Add(new JuiceEffectRow {
                 Id = id, Name = name, Value = value, Maximum = maximum, Locked = IsEffectLocked(character, id),
-                DisplayValue = id == "blush" ? FormatBlushLevel(value) : value.ToString(),
+                Available = available,
+                DisplayValue = !available ? "—" : (id == "blush" ? FormatBlushLevel(value) : value.ToString()),
                 Change = delegate(int next) {
-                    if (character == null || character != selectedCharacter) return;
+                    if (!available || character == null || character != selectedCharacter) return;
+                    int current;
+                    if (!TryGetEffectValue(character, id, out current)) { RefreshEditor(); return; }
                     next = Mathf.Clamp(next, 0, maximum);
-                    change(next);
-                    UpdateLockedEffectValue(character, id, next);
+                    if (current != next) change(next);
+                    int accepted;
+                    if (TryGetEffectValue(character, id, out accepted))
+                        UpdateLockedEffectValue(character, id, accepted);
                     RefreshEditor();
                 },
                 Lock = delegate(bool locked) {
                     if (character == null || character != selectedCharacter) return;
-                    SetEffectLocked(character, id, locked, value);
+                    int current = 0;
+                    if (locked && (!available || !TryGetEffectValue(character, id, out current))) { RefreshEditor(); return; }
+                    SetEffectLocked(character, id, locked, current);
                     RefreshEditor();
                 }
             });
