@@ -159,8 +159,27 @@ namespace JuiceControl {
         }
 
         public int GetSkinEffectLevel(string name) {
-            NamedLevel level = Find(SkinEffects, name);
-            return level == null ? 0 : level.Level;
+            int value;
+            return TryResolveSkinEffectLevel(name, false, out value) ? value : 0;
+        }
+
+        // Presets may omit optional fields because the plugin or the target
+        // was unavailable during capture. Missing is not the same as zero.
+        internal bool TryResolveSkinEffectLevel(string name, bool clearMissing, out int value) {
+            value = 0;
+            if (string.IsNullOrEmpty(name)) return false;
+            NamedLevel known = Find(SkinEffects, name);
+            if (known == null) return clearMissing;
+            if (known.Level < 0) return false;
+            value = known.Level;
+            return true;
+        }
+
+        internal void InheritKnownSkinEffects(CharaSkinState previous) {
+            if (previous == null || previous.SkinEffects == null) return;
+            foreach (NamedLevel entry in previous.SkinEffects)
+                if (entry != null && !string.IsNullOrEmpty(entry.Name) && entry.Level >= 0)
+                    SetSkinEffectLevel(entry.Name, entry.Level);
         }
 
         public void SetSkinEffectLevel(string name, int level) {

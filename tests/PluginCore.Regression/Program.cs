@@ -45,6 +45,7 @@ internal static class Program {
             Run("Normal transition reaches its final value exactly once", NormalTransitionCompletes);
             Run("Character scan handles missing manager and invalid entries", CharacterScan);
             Run("Juice XML round trips Unicode, effects and role mapping", JuiceRoundTrip);
+            Run("Optional preset fields distinguish missing, zero and failed readback", OptionalPresetReadback);
             Run("Juice XML normalizes null preset entries", JuiceNormalization);
             Run("Malformed Juice XML is reported and never reset on disk", JuiceMalformedIsPreserved);
             Run("Failed Juice path switch keeps old presets read-only until recovery", JuiceFailedPathSwitch);
@@ -352,6 +353,30 @@ internal static class Program {
         Assert(Utl.GetFemaleAll().Count == 1, "Ignore null, low-poly and duplicate characters");
         Assert(manager.Female.Count == 3 && manager.Male.Count == 1, "Do not mutate game-owned collections");
     }
+    private static void OptionalPresetReadback() {
+        CharaSkinState previous = new CharaSkinState();
+        previous.SetSkinEffectLevel("WetFace", 3);
+        previous.SetSkinEffectLevel("WetBody", 2);
+        CharaSkinState current = new CharaSkinState();
+        int value;
+        Assert(!current.TryResolveSkinEffectLevel("WetFace", false, out value), "Absent optional field is not an explicit zero.");
+        Assert(current.TryResolveSkinEffectLevel("WetFace", true, out value) && value == 0, "Explicit reset can clear absent fields.");
+        current.InheritKnownSkinEffects(previous);
+        current.SetSkinEffectLevel("WetFace", 0);
+        Assert(current.TryResolveSkinEffectLevel("wetface", false, out value) && value == 0, "Successful zero observation replaces the prior value.");
+        Assert(current.TryResolveSkinEffectLevel("WetBody", false, out value) && value == 2, "Unobserved field retains its previous known value.");
+        Assert(previous.GetSkinEffectLevel("WetFace") == 3, "Capture does not mutate the original preset.");
+        current.SetSkinEffectLevel("Invalid", -1);
+        Assert(!current.TryResolveSkinEffectLevel("Invalid", false, out value), "Invalid saved value never becomes zero.");
+        string path = FilePath("juice-optional-readback.xml");
+        var xml = new PresetXml();
+        xml.CharacterPresets.Add(new CharacterPreset { Name = "Optional", State = current });
+        xml.Save(path);
+        CharaSkinState loaded = PresetXml.Load(path).FindCharacterPreset("Optional").State;
+        Assert(loaded.TryResolveSkinEffectLevel("WetFace", false, out value) && value == 0 &&
+            !loaded.TryResolveSkinEffectLevel("Uninstalled", false, out value), "XML preserves missing vs explicit zero.");
+    }
+
     private static void JuiceRoundTrip() {
         string path = FilePath("juice.xml");
         CharaSkinState state = new CharaSkinState { TearLevel = 2, BlushLevel = 3 };
