@@ -1,4 +1,5 @@
 using System;
+using System.Reflection.Metadata;
 using FemboyMode;
 
 internal static class Program
@@ -12,8 +13,51 @@ internal static class Program
         Console.Error.WriteLine("FAIL: " + description);
     }
 
+    private static void CheckPatchArgumentMetadata()
+    {
+        string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            AppContext.BaseDirectory, "..", "FemboyMode", "KK_FemboyMode.dll"));
+        if (!System.IO.File.Exists(path))
+        {
+            if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true",
+                    StringComparison.OrdinalIgnoreCase))
+                Check(false, "CI must inspect the built plugin assembly");
+            else
+                Console.WriteLine("Plugin assembly absent; skipping compiled metadata check.");
+            return;
+        }
+        using var stream = System.IO.File.OpenRead(path);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(stream);
+        var metadata = pe.GetMetadataReader();
+        bool found = false;
+        foreach (var typeHandle in metadata.TypeDefinitions)
+        {
+            var type = metadata.GetTypeDefinition(typeHandle);
+            if (metadata.GetString(type.Name) != "FemboyReversedSiruHooks") continue;
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var method = metadata.GetMethodDefinition(methodHandle);
+                if (metadata.GetString(method.Name) != "BeforeSetSiruFlags") continue;
+                found = true;
+                var names = new System.Collections.Generic.List<string>();
+                foreach (var parameterHandle in method.GetParameters())
+                {
+                    var parameter = metadata.GetParameter(parameterHandle);
+                    if (parameter.SequenceNumber != 0)
+                        names.Add(metadata.GetString(parameter.Name));
+                }
+                Check(names.Count == 3 && names[0] == "__instance" &&
+                    names[1] == "__0" && names[2] == "__1",
+                    "compiled Harmony prefix uses positional arguments");
+            }
+        }
+        Check(found, "expected Harmony prefix exists");
+        Console.WriteLine("Checked compiled Harmony argument metadata.");
+    }
+
     private static int Main()
     {
+        CheckPatchArgumentMetadata();
         Check(FemboyRules.FrontInsertStartIndex(false) == 0,
             "normal initiative uses buttons 0/1");
         Check(FemboyRules.FrontInsertStartIndex(true) == 7,
@@ -471,7 +515,7 @@ internal static class Program
             return 1;
         }
 
-        Console.WriteLine("All 188 FemboyMode rules assertions passed.");
+        Console.WriteLine("All FemboyMode regression assertions passed.");
         return 0;
     }
 }
