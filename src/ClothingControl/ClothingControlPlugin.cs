@@ -50,6 +50,7 @@ namespace ClothingControl {
         private bool shiftTabWasHeld;
         private Coroutine makerRestoreCoroutine;
         private bool runtimeLoopLogged;
+        private bool lifecycleHooksRegistered;
         private ConfigEntry<bool> showInMaker;
         private SidebarToggle makerToggle;
         private IDisposable makerSubscription;
@@ -106,18 +107,46 @@ namespace ClothingControl {
             showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
+            // The stable AccessoryBatchManager and ClothingCompression plugins
+            // subscribe to KKAPI in Awake. ClothingControl previously used
+            // OnEnable/OnDisable, and RX18 logged OnDisable immediately after
+            // Awake during the loader transition. This could silently drop
+            // Maker registration before the window was ever created.
+            BindLifecycleHooks();
         }
 
-        private void OnEnable() {
-            Logger.LogInfo("ClothingControl Unity OnEnable; enabled=" + enabled +
-                ", activeInHierarchy=" + gameObject.activeInHierarchy + ".");
+        private void BindLifecycleHooks() {
+            if (lifecycleHooksRegistered) return;
             CharacterApi.CharacterReloaded += OnCharacterReloaded;
             CharacterApi.CoordinateLoaded += OnCoordinateLoaded;
             MakerAPI.RegisterCustomSubCategories += OnRegisterMaker;
             MakerAPI.MakerFinishedLoading += OnMakerLoaded;
             MakerAPI.MakerExiting += OnMakerExiting;
             if (showInMaker != null) showInMaker.SettingChanged += OnMakerPreferenceChanged;
+            lifecycleHooksRegistered = true;
             pendingMakerPreference = MakerAPI.InsideAndLoaded;
+            Logger.LogInfo("ClothingControl KKAPI lifecycle hooks registered in Awake.");
+        }
+
+        private void UnbindLifecycleHooks() {
+            if (!lifecycleHooksRegistered) return;
+            lifecycleHooksRegistered = false;
+            CharacterApi.CharacterReloaded -= OnCharacterReloaded;
+            CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
+            MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
+            MakerAPI.MakerFinishedLoading -= OnMakerLoaded;
+            MakerAPI.MakerExiting -= OnMakerExiting;
+            if (showInMaker != null) showInMaker.SettingChanged -= OnMakerPreferenceChanged;
+        }
+
+        private void OnEnable() {
+            Logger.LogInfo("ClothingControl Unity OnEnable; enabled=" + enabled +
+                ", activeInHierarchy=" + gameObject.activeInHierarchy + ".");
+            BindLifecycleHooks();
+            // If BepInEx reactivated the component after Maker's registration
+            // phase, use the same direct restoration path as MakerLoaded.
+            if (MakerAPI.InsideAndLoaded && showInMaker != null && showInMaker.Value && !visible)
+                Open();
         }
 
         private void OnRegisterMaker(object sender, RegisterSubCategoriesEvent e) {
@@ -266,12 +295,10 @@ namespace ClothingControl {
                 StopCoroutine(makerRestoreCoroutine);
                 makerRestoreCoroutine = null;
             }
-            CharacterApi.CharacterReloaded -= OnCharacterReloaded;
-            CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
-            MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
-            MakerAPI.MakerFinishedLoading -= OnMakerLoaded;
-            MakerAPI.MakerExiting -= OnMakerExiting;
-            if (showInMaker != null) showInMaker.SettingChanged -= OnMakerPreferenceChanged;
+            // OnDisable can occur during the BepInEx loader's initial
+            // activation transition. Do not unsubscribe from KKAPI here:
+            // subscriptions are tied to the plugin's lifetime, not the
+            // temporary Unity Behaviour enabled state.
             pendingMakerPreference = false;
             Close(false);
             ReleaseMakerToggle();
@@ -281,7 +308,10 @@ namespace ClothingControl {
             previousCharacters.Clear();
         }
 
-        private void OnDestroy() { OnDisable(); }
+        private void OnDestroy() {
+            UnbindLifecycleHooks();
+            OnDisable();
+        }
 
         private static bool IsStudio() { return UnityEngine.Object.FindObjectOfType<StudioScene>() != null; }
 
