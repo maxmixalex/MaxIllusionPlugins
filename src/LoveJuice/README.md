@@ -17,7 +17,7 @@ Inspected the original game's `abdata/studio/info/00.unity3d` in the authorized 
 
 Runtime loads through the *same native* `CommonLib.LoadAsset<GameObject>(bundle, name, true, manifest)` API used by the game's Studio `AddObjectItem`, then pools the GameObjects.
 
-**Important native asset inspection:** the installed `studio/00.unity3d` contains a Unity 5.6.2 `ParticleSystem` (class ID 198) and `ParticleSystemRenderer` (class ID 199) on each of these prefabs. All six examined liquid systems have `loop=true` and `playOnAwake=true`. Version 0.2.1 accordingly disables automatic loops before activation and calls `ParticleSystem.Emit(EmitParams, 1)` on a small pooled set of the **original emitters**; it no longer clones the complete stream once per drop. Unity's native particle physics retains the authored renderer and performs simulation/collision. No original assets are copied into the source tree or installer.
+**Important native asset inspection:** the installed `studio/00.unity3d` contains a Unity 5.6.2 `ParticleSystem` (class ID 198) and `ParticleSystemRenderer` (class ID 199) on each of these prefabs. All six examined liquid systems have `loop=true` and `playOnAwake=true`. Version 0.2.1 accordingly disables native loop flags, zeroes burst/time/distance auto-emission while keeping the EmissionModule enabled for explicit Emit, and calls `ParticleSystem.Emit(EmitParams, 1)` on a small pooled set of the **original emitters**; it no longer clones the complete stream once per drop. Unity's native particle physics retains the authored renderer and performs simulation/collision. No original assets are copied into the source tree or installer.
 
 ## 0.2.2: legacy SkinEffects integration
 
