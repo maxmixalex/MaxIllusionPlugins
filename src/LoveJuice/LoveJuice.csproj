@@ -6,10 +6,11 @@
     <Company>MaxMixAlex</Company>
     <Product>LoveJuice</Product>
     <AssemblyTitle>LoveJuice</AssemblyTitle>
-    <Version>0.2.2</Version>
-    <AssemblyVersion>0.2.2.0</AssemblyVersion>
+    <Version>0.3.0</Version>
+    <AssemblyVersion>0.3.0.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\\MaximumUI\\MaximumUI.csproj" />
     <PackageReference Include="BepInEx.Core" />
     <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
     <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
