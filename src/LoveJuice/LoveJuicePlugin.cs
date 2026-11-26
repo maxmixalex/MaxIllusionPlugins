@@ -50,6 +50,8 @@ namespace LoveJuice {
         private sealed class Actor {
             internal ChaControl Character;
             internal Transform Mouth, Torso, ChestLeft, ChestRight, Alternate;
+            internal Transform TrackedTop, TrackedHeadRoot, TrackedBodyRoot;
+            internal int LastBoneProbe;
             internal bool ChestLeftIsFallback, ChestRightIsFallback;
             internal float FaceTime, BodyTime, MilkTime, ShowerTime, SpecialTime;
             internal int FaceLevel, BodyLevel, SpecialLevel;
@@ -115,22 +117,52 @@ namespace LoveJuice {
             return null;
         }
 
-        private Actor DiscoverActor(ChaControl cha) {
-            if (cha == null) return null;
-            Transform faceRoot = cha.objHeadBone != null ? cha.objHeadBone.transform :
+        private static Transform HeadRoot(ChaControl cha) {
+            return cha.objHeadBone != null ? cha.objHeadBone.transform :
                 cha.objHead != null ? cha.objHead.transform : cha.transform;
-            Transform bodyRoot = cha.objBodyBone != null ? cha.objBodyBone.transform : cha.transform;
+        }
+
+        private static Transform BodyRoot(ChaControl cha) {
+            return cha.objBodyBone != null ? cha.objBodyBone.transform : cha.transform;
+        }
+
+        private static void RebindActorBones(Actor actor) {
+            ChaControl cha = actor.Character;
+            if (cha == null) return;
+            Transform headRoot = HeadRoot(cha), bodyRoot = BodyRoot(cha);
             Transform left = Bone(cha, "cf_J_Bust01_L", "cf_J_Bust00_L", "cf_s_bust03_L");
             Transform right = Bone(cha, "cf_J_Bust01_R", "cf_J_Bust00_R", "cf_s_bust03_R");
-            return new Actor {
-                Character = cha,
-                Mouth = Bone(cha, "cf_J_MouthBase", "cf_J_Mouth", "cf_J_MouthMove", "cf_J_Head") ?? faceRoot,
-                Torso = Bone(cha, "cf_J_Spine03", "cf_J_Spine02", "cf_J_Hips") ?? bodyRoot,
-                ChestLeft = left ?? bodyRoot,
-                ChestRight = right ?? bodyRoot,
-                ChestLeftIsFallback = left == null, ChestRightIsFallback = right == null,
-                Alternate = Bone(cha, "cm_j_dan100", "cm_J_dan100", "cm_J_dan100_00")
-            };
+            actor.TrackedTop = cha.objTop == null ? null : cha.objTop.transform;
+            actor.TrackedHeadRoot = headRoot;
+            actor.TrackedBodyRoot = bodyRoot;
+            actor.Mouth = Bone(cha, "cf_J_MouthBase", "cf_J_Mouth", "cf_J_MouthMove", "cf_J_Head") ?? headRoot;
+            actor.Torso = Bone(cha, "cf_J_Spine03", "cf_J_Spine02", "cf_J_Hips") ?? bodyRoot;
+            actor.ChestLeft = left ?? bodyRoot;
+            actor.ChestRight = right ?? bodyRoot;
+            actor.ChestLeftIsFallback = left == null;
+            actor.ChestRightIsFallback = right == null;
+            actor.Alternate = Bone(cha, "cm_j_dan100", "cm_J_dan100", "cm_J_dan100_00");
+            actor.LastBoneProbe = Time.frameCount;
+        }
+
+        private static void EnsureActorBones(Actor actor) {
+            ChaControl cha = actor == null ? null : actor.Character;
+            if (cha == null) return;
+            Transform top = cha.objTop == null ? null : cha.objTop.transform;
+            bool rigChanged = !ReferenceEquals(actor.TrackedTop, top) ||
+                !ReferenceEquals(actor.TrackedHeadRoot, HeadRoot(cha)) ||
+                !ReferenceEquals(actor.TrackedBodyRoot, BodyRoot(cha));
+            bool unresolved = ReferenceEquals(actor.Mouth, actor.TrackedHeadRoot) ||
+                actor.Alternate == null || actor.ChestLeftIsFallback || actor.ChestRightIsFallback;
+            if (rigChanged || unresolved && Time.frameCount - actor.LastBoneProbe >= 180)
+                RebindActorBones(actor);
+        }
+
+        private Actor DiscoverActor(ChaControl cha) {
+            if (cha == null) return null;
+            Actor actor = new Actor { Character = cha };
+            RebindActorBones(actor);
+            return actor;
         }
 
         private bool HasActiveSceneCharacter(ChaControl character) {
@@ -197,7 +229,9 @@ namespace LoveJuice {
         private void AddActorToRoster(ChaControl cha, HashSet<ChaControl> seen, List<ChaControl> order) {
             if (cha == null || !cha.visibleAll || !cha.hiPoly || !seen.Add(cha)) return;
             order.Add(cha);
-            if (!actors.ContainsKey(cha)) actors.Add(cha, DiscoverActor(cha));
+            Actor existing;
+            if (!actors.TryGetValue(cha, out existing)) actors.Add(cha, DiscoverActor(cha));
+            else EnsureActorBones(existing);
         }
 
         private void RefreshRoster() {
