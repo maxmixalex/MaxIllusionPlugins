@@ -262,7 +262,8 @@ namespace HSControl
                     if (kind == 3 || kind == 4) flags.gaugeFemale = Math.Max(flags.gaugeFemale, 70f);
                     if (kind >= 5) {
                         if (kind == 6 || kind == 7) {
-                            if (!autoFemaleFinish.Value || (int)flags.mode != 2) return;
+                            if (!autoFemaleFinish.Value ||
+                                ((int)flags.mode != 2 && (int)flags.mode != 7)) return;
                             flags.gaugeFemale = 100f;
                         }
                         if (kind == 5 || kind == 7) {
@@ -296,7 +297,8 @@ namespace HSControl
                 SceneMode = flags == null ? -1 : (int)flags.mode,
                 CanForceLoop = master.Value && CanNativeCommands(flags, false),
                 CanStage = master.Value && CanNativeCommands(flags, true),
-                CanFemaleFinish = master.Value && flags != null && (int)flags.mode == 2 &&
+                CanFemaleFinish = master.Value && flags != null &&
+                    ((int)flags.mode == 2 || (int)flags.mode == 7) &&
                     autoFemaleFinish.Value && CanNativeCommands(flags, true),
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,

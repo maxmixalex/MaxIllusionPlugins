@@ -12,12 +12,22 @@ internal static class Program
 
     private static void EngineTests() {
         Check(HSControlActionRules.CanStartLoop(1, false, true) &&
-            HSControlActionRules.CanStartLoop(2, false, true), "native loop actions supported in Houshi/Sonyu");
+            HSControlActionRules.CanStartLoop(2, false, true) &&
+            HSControlActionRules.CanStartLoop(6, false, true) &&
+            HSControlActionRules.CanStartLoop(7, false, true),
+            "native loop actions supported in two-person and 3P Houshi/Sonyu");
         Check(!HSControlActionRules.CanStartLoop(1, true, true) &&
-            !HSControlActionRules.CanStartLoop(7, false, true) &&
-            !HSControlActionRules.CanStartLoop(1, false, false), "native loop guard rejects rely, unsupported modes or missing action");
+            !HSControlActionRules.CanStartLoop(6, true, true) &&
+            !HSControlActionRules.CanStartLoop(7, true, true) &&
+            !HSControlActionRules.CanStartLoop(5, false, true) &&
+            !HSControlActionRules.CanStartLoop(6, false, false),
+            "native loop guard rejects rely, unsupported modes or missing action");
         Check(HSControlActionRules.LoopName(2, true, true) == "A_SLoop" &&
-            HSControlActionRules.LoopName(1, false, false) == "WLoop", "native loop state name uses the original action family");
+            HSControlActionRules.LoopName(7, true, false) == "A_WLoop" &&
+            HSControlActionRules.LoopName(6, false, true) == "SLoop" &&
+            HSControlActionRules.LoopName(1, false, false) == "WLoop" &&
+            HSControlActionRules.LoopName(5, false, true) == null,
+            "native loop state names match installed original two-person and 3P action families");
         Check(HSControlActionRules.IsLoop("A_WLoop") &&
             !HSControlActionRules.IsLoop("Stop_Idle"), "only loop animations accept gated finish actions");
         Check(HSControlMotionEngine.CanDrive(0, "M_Idle", false), "native Aibu idle is supported");
