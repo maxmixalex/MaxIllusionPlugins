@@ -24,7 +24,7 @@ namespace HSControl
             flags.finish = HFlag.FinishKind.none;
             flags.voiceWait = false;
             flags.isInsideFinish = false;
-            if (mode == 1) {
+            if (mode == 1 || mode == 6) {
                 flags.speedHoushi = 0;
                 if (flags.gaugeMale >= 70f) flags.gaugeMale = 35f;
                 flags.SetHoushiPlay();

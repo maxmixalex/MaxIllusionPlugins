@@ -9,7 +9,11 @@ namespace HSControl
     internal static class HSControlActionRules
     {
         internal static bool CanStartLoop(int mode, bool rely, bool hasAnimation) {
-            return !rely && hasAnimation && (mode == 1 || mode == 2);
+            // The installed KK_HCtrl.dll uses the same native WLoop/SLoop
+            // action names for the 3P Houshi/Sonyu states (modes 6/7).
+            // Rely-controlled scenes retain ownership of their own loops.
+            return !rely && hasAnimation &&
+                (mode == 1 || mode == 2 || mode == 6 || mode == 7);
         }
 
         internal static bool IsLoop(string state) {
@@ -19,8 +23,8 @@ namespace HSControl
         }
 
         internal static string LoopName(int mode, bool anal, bool strong) {
-            if (mode == 1) return strong ? "SLoop" : "WLoop";
-            if (mode == 2) return (anal ? "A_" : "") + (strong ? "SLoop" : "WLoop");
+            if (mode == 1 || mode == 6) return strong ? "SLoop" : "WLoop";
+            if (mode == 2 || mode == 7) return (anal ? "A_" : "") + (strong ? "SLoop" : "WLoop");
             return null;
         }
     }
