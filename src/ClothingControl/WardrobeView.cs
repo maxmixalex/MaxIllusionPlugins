@@ -127,7 +127,7 @@ namespace ClothingControl {
                     if (!m.Busy && m.ChangeScope != null) m.ChangeScope(1 - m.Scope);
                 }, "wardrobe-preset-scope").Enabled(!m.Busy).Width(96f) : null;
             Window window = new Window("ClothingControl " + m.Version, 430f, 900f, "clothing-window",
-                minWidth: 370f, minHeight: 700f, closable: true,
+                minWidth: 370f, minHeight: 900f, closable: true,
                 onVisibleChange: value => { if (!value && m.Close != null) m.Close(); });
             VStack body = new VStack(6f) {
                 Selector("角色", "wardrobe-target", m.Targets, m.TargetIndex, m.SelectTarget, !m.Busy),
