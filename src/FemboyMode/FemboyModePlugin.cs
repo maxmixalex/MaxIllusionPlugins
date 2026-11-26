@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.8";
+        public const string Version = "0.5.9";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -113,8 +113,8 @@ namespace FemboyMode
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableBodyAllNativeScroll = Config.Bind("Maker", "Enable Body All native scrolling", true,
-                "Wrap the whole native Body > All page in a game-native scrolling viewport. " +
-                "Turn off to immediately restore the original page without disabling other Femboy features.");
+                "Scroll only the additional Femboy geometry controls inside Body > All. " +
+                "Native Maker rows and other plugins are not moved. Can be disabled immediately.");
             EnableBodyAllNativeScroll.SettingChanged += OnNativeMakerScrollSettingChanged;
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
@@ -450,21 +450,55 @@ namespace FemboyMode
             return null;
         }
 
+        private List<Transform> GetExtendedMakerRows(Transform originalParent)
+        {
+            var result = new List<Transform>(24);
+            for (int part = 0; part < 2; part++)
+            {
+                // Only controls registered by THIS plugin may be moved.
+                // Native Body > All rows and other plugins' widgets stay put.
+                BaseGuiEntry[] extras = { geometrySeparators[part],
+                    axisModeDropdowns[part], axisToggles[part] };
+                foreach (BaseGuiEntry entry in extras)
+                {
+                    GameObject widget = GetMakerWidget(entry);
+                    if (widget == null || widget.transform.parent != originalParent) return null;
+                    result.Add(widget.transform);
+                }
+                for (int mode = 0; mode < 3; mode++)
+                    for (int axis = 0; axis < 3; axis++)
+                    {
+                        GameObject widget = GetMakerWidget(geometrySliders[part, mode, axis]);
+                        if (widget == null || widget.transform.parent != originalParent) return null;
+                        result.Add(widget.transform);
+                    }
+            }
+            if (result.Count != 24) return null;
+            result.Sort((left, right) => left.GetSiblingIndex().CompareTo(right.GetSiblingIndex()));
+            return result;
+        }
+
         private void InstallPageScroll()
         {
             if (pageScroll != null || EnableBodyAllNativeScroll == null ||
                 !EnableBodyAllNativeScroll.Value) return;
             GameObject flag = GetMakerWidget(bodyFlagToggle);
             if (flag == null) return;
+            List<Transform> pluginRows = GetExtendedMakerRows(flag.transform.parent);
+            if (pluginRows == null)
+            {
+                Logger.LogWarning("Maker scroll skipped: own extension controls not fully initialized; original page untouched.");
+                return;
+            }
             try
             {
-                pageScroll = MakerPageScroll.Install(flag.transform);
+                pageScroll = MakerPageScroll.Install(flag.transform, pluginRows);
                 if (pageScroll != null)
-                    Logger.LogInfo("Maker Body > All: native whole-page scroll installed.");
+                    Logger.LogInfo("Maker Body > All: Femboy extension-only scroll installed; original Maker rows preserved.");
             }
             catch (Exception ex)
             {
-                Logger.LogWarning("Maker page scroll setup failed; original page retained: " + ex);
+                Logger.LogWarning("Maker extension scroll setup failed; original page retained: " + ex);
             }
         }
 
