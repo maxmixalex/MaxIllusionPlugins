@@ -8,5 +8,6 @@
     <Compile Include="../../src/LoveJuice/StudioLiquidCatalog.cs" Link="StudioLiquidCatalog.cs" />
     <Compile Include="../../src/LoveJuice/SkinEffectValueReader.cs" Link="SkinEffectValueReader.cs" />
     <Compile Include="../../src/LoveJuice/LiveActorRoster.cs" Link="LiveActorRoster.cs" />
+    <Compile Include="../../src/LoveJuice/LiquidLevelEvents.cs" Link="LiquidLevelEvents.cs" />
   </ItemGroup>
 </Project>

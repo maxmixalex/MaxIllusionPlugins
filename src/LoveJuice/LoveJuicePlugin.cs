@@ -29,7 +29,7 @@ namespace LoveJuice {
             BindingFlags.Instance | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
-        private ConfigEntry<bool> enabled, face, body, milk, shower, special, collision;
+        private ConfigEntry<bool> masterEnabled, face, body, milk, shower, special, collision;
         private ConfigEntry<int> maxActive, previewChannel;
         private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold;
         private ConfigEntry<KeyboardShortcut> preview, panelShortcut;
@@ -53,14 +53,15 @@ namespace LoveJuice {
             internal bool ChestLeftIsFallback, ChestRightIsFallback;
             internal float FaceTime, BodyTime, MilkTime, ShowerTime, SpecialTime;
             internal int FaceLevel, BodyLevel, SpecialLevel;
+            internal readonly LiquidLevelEvents LevelChanges = new LiquidLevelEvents();
         }
 
-        public bool IsEnabled { get { return enabled != null && enabled.Value; } }
+        public bool IsEnabled { get { return enabled != null && masterEnabled.Value; } }
         public static int ActiveDrops { get { return instance != null && instance.visuals != null ? instance.visuals.ActiveCount : 0; } }
 
         private void Awake() {
             instance = this;
-            enabled = Config.Bind("General", "Enabled", false,
+            masterEnabled = Config.Bind("General", "Enabled", false,
                 "Enable native Studio liquid drips in active H scenes. Off by default until selected by the user.");
             preview = Config.Bind("General", "Preview key", new KeyboardShortcut(KeyCode.F9),
                 "Emit native Studio particles from the first active H scene actor.");
@@ -255,6 +256,17 @@ namespace LoveJuice {
             actor.FaceLevel = Math.Max(fromFace, Math.Max(0, SkinLevel(cha, "DroolFace", "SalivaFace")));
             actor.BodyLevel = Math.Max(fromBody, Math.Max(0, SkinLevel(cha, "WetBody")));
             actor.SpecialLevel = special.Value && integrations.IsMarked(cha) ? actor.BodyLevel : 0;
+
+            LiquidLevelBursts bursts = actor.LevelChanges.Observe(
+                actor.FaceLevel, actor.BodyLevel, actor.SpecialLevel);
+            // Match the currently selected effect sources; one readback rise
+            // produces a bounded native burst before the periodic drips.
+            if (face.Value) for (int i = 0; i < bursts.Face; i++)
+                EmitFrom(actor, LoveJuiceChannel.Saliva, i);
+            if (body.Value) for (int i = 0; i < bursts.Body; i++)
+                EmitFrom(actor, LoveJuiceChannel.Body, i);
+            if (special.Value) for (int i = 0; i < bursts.Special; i++)
+                EmitFrom(actor, LoveJuiceChannel.Special, i);
         }
 
         private void TickSource(Actor actor, LoveJuiceChannel kind, int level,
@@ -378,7 +390,7 @@ namespace LoveJuice {
                 MilkThreshold = milkThreshold.Value,
                 Close = () => { if (live()) ClosePanel(); }
             };
-            m.ChangeEnabled = value => { if (live()) { enabled.Value = value; RefreshPanel(); } };
+            m.ChangeEnabled = value => { if (live()) { masterEnabled.Value = value; RefreshPanel(); } };
             m.ChangeFace = value => { if (live()) { face.Value = value; RefreshPanel(); } };
             m.ChangeBody = value => { if (live()) { body.Value = value; RefreshPanel(); } };
             m.ChangeMilk = value => { if (live()) { milk.Value = value; RefreshPanel(); } };

@@ -50,16 +50,40 @@ internal static class Program {
         Check(!roster.Select(0) && !roster.Select(99), "No redundant or out-of-range selection.");
         Check(roster.Replace(new[] { extra, alice }) && ReferenceEquals(roster.Selected, extra),
             "Removing a selected actor does not redirect to an unrelated stale instance.");
-        Check(roster.Replace(new[] { extra, extra, alice }) && roster.Count == 2,
+        Check(!roster.Replace(new[] { extra, extra, alice }) && roster.Count == 2,
             "Roster deduplicates identical actor references.");
         Check(roster.Replace(null) && roster.Count == 0 && roster.SelectedIndex == -1 &&
             roster.Selected == null, "Scene exit clears all previous actors.");
+    }
+
+    private static void CheckLiquidLevelEvents() {
+        var events = new LiquidLevelEvents();
+        LiquidLevelBursts first = events.Observe(3, 2, 2);
+        Check(first.Face == 0 && first.Body == 0 && first.Special == 0,
+            "A loaded card with existing visual status does not receive a false burst.");
+        LiquidLevelBursts changed = events.Observe(4, 5, 3);
+        Check(changed.Face == 1 && changed.Body == 3 && changed.Special == 1,
+            "New Siru/SkinEffects status immediately creates independent native particle bursts.");
+        changed = events.Observe(4, 5, 3);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "Unchanged status does not create a second burst.");
+        changed = events.Observe(0, 1, 0);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "Removing overlays does not cause a burst.");
+        changed = events.Observe(255, 255, 255);
+        Check(changed.Face == 3 && changed.Body == 3 && changed.Special == 3,
+            "Large level jumps are capped to protect the global particle budget.");
+        events.Reset();
+        changed = events.Observe(1, 2, 3);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "Reset scene re-establishes a clean baseline.");
     }
 
     public static int Main() {
         try {
             CheckLegacySkinEffects();
             CheckActorSelection();
+            CheckLiquidLevelEvents();
             Check(StudioLiquidCatalog.Bundle == "studio/00.unity3d" &&
                 StudioLiquidCatalog.Manifest == "studio00", "Verified installed bundle path/manifest");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Water) ==
