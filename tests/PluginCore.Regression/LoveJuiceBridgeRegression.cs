@@ -30,6 +30,7 @@ internal static class LoveJuiceBridgeRegression {
         SimulatedPlugin.Values.Add("Face", true);
         SimulatedPlugin.Values.Add("Body", true);
         SimulatedPlugin.Values.Add("Intimate", false);
+        SimulatedPlugin.Values.Add("MalePre", false);
         SimulatedPlugin.Values.Add("Milk", false);
         SimulatedPlugin.Values.Add("Shower", false);
         SimulatedPlugin.Values.Add("Special", false);
@@ -38,9 +39,10 @@ internal static class LoveJuiceBridgeRegression {
         LoveJuiceSettings state = bridge.Snapshot();
         Check(state.Available && !state.Enabled && state.Face && state.Body && !state.Milk,
             "Complete snapshot is available when the effect is switched off.");
-        Check(bridge.TrySet("Enabled", true) && bridge.TrySet("Milk", true) && bridge.TrySet("Intimate", true),
+        Check(bridge.TrySet("Enabled", true) && bridge.TrySet("Milk", true) && bridge.TrySet("Intimate", true) &&
+            bridge.TrySet("MalePre", true),
             "Master and individual source switches must be writable.");
-        Check(bridge.Snapshot().Enabled && bridge.Snapshot().Milk && bridge.Snapshot().Intimate,
+        Check(bridge.Snapshot().Enabled && bridge.Snapshot().Milk && bridge.Snapshot().Intimate && bridge.Snapshot().MalePre,
             "Switches must be confirmed with a fresh readback.");
         Check(!bridge.TrySet("InjectedConfig", true),
             "Unknown keys cannot reach an optional plugin.");

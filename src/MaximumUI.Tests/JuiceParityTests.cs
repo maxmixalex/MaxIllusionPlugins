@@ -59,13 +59,16 @@ namespace MaximumUI.Tests {
             string lastSource = string.Empty;
             view.Model.LoveJuice = new LoveJuiceSettings {
                 Available = true, Enabled = false, Face = true, Body = true,
-                Intimate = true, Milk = false, Shower = false, Special = false
+                Intimate = true, MalePre = false, Milk = false, Shower = false, Special = false
             };
             view.Model.ChangeLoveJuiceEnabled = delegate(bool value) {
                 edits++; lastSource = "Enabled";
             };
             view.Model.ChangeLoveJuiceIntimate = delegate(bool value) {
                 edits++; lastSource = "Intimate";
+            };
+            view.Model.ChangeLoveJuiceMalePre = delegate(bool value) {
+                edits++; lastSource = "MalePre";
             };
             view.Model.OpenLoveJuice = delegate { opened++; };
             Widget ready = view.Build(null);
@@ -82,6 +85,9 @@ namespace MaximumUI.Tests {
             Find<Button>(ready, "juice-love-open").OnClick();
             Require(edits == 2 && lastSource == "Enabled" && opened == 1,
                 "master switch and detail panel have independent actions");
+            Find<Checkbox>(ready, "juice-love-male-pre").OnChange(true);
+            Require(edits == 3 && lastSource == "MalePre",
+                "optional male pre-fluid switch dispatches independently");
         }
 
         private static void ArrowSelectorsWrapWithoutApplyingPresets() {

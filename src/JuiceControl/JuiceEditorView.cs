@@ -30,7 +30,8 @@ namespace JuiceControl {
         public bool AllLocked;
         public LoveJuiceSettings LoveJuice;
         public Action<bool> ChangeLoveJuiceEnabled, ChangeLoveJuiceFace, ChangeLoveJuiceBody,
-            ChangeLoveJuiceIntimate, ChangeLoveJuiceMilk, ChangeLoveJuiceShower, ChangeLoveJuiceSpecial;
+            ChangeLoveJuiceIntimate, ChangeLoveJuiceMalePre, ChangeLoveJuiceMilk,
+            ChangeLoveJuiceShower, ChangeLoveJuiceSpecial;
         public Action OpenLoveJuice;
         public string[] CharacterPresets = new string[0];
         public string[] GroupPresets = new string[0];
@@ -107,7 +108,8 @@ namespace JuiceControl {
                     new Checkbox("爱液", m.LoveJuice.Intimate, m.ChangeLoveJuiceIntimate, "juice-love-intimate").ExpandWidth(),
                     new Checkbox("乳液", m.LoveJuice.Milk, m.ChangeLoveJuiceMilk, "juice-love-milk").ExpandWidth(),
                     new Checkbox("淋浴", m.LoveJuice.Shower, m.ChangeLoveJuiceShower, "juice-love-shower").ExpandWidth(),
-                    new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth()
+                    new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth(),
+                    new Checkbox("前液", m.LoveJuice.MalePre, m.ChangeLoveJuiceMalePre, "juice-love-male-pre").ExpandWidth()
                 }.Height(32f)
             }.ExpandWidth();
         }

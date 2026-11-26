@@ -135,6 +135,7 @@ namespace JuiceControl {
             m.ChangeLoveJuiceFace = value => ChangeLoveJuiceSetting(m, "Face", value);
             m.ChangeLoveJuiceBody = value => ChangeLoveJuiceSetting(m, "Body", value);
             m.ChangeLoveJuiceIntimate = value => ChangeLoveJuiceSetting(m, "Intimate", value);
+            m.ChangeLoveJuiceMalePre = value => ChangeLoveJuiceSetting(m, "MalePre", value);
             m.ChangeLoveJuiceMilk = value => ChangeLoveJuiceSetting(m, "Milk", value);
             m.ChangeLoveJuiceShower = value => ChangeLoveJuiceSetting(m, "Shower", value);
             m.ChangeLoveJuiceSpecial = value => ChangeLoveJuiceSetting(m, "Special", value);
