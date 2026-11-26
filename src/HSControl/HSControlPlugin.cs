@@ -101,12 +101,12 @@ namespace HSControl
             HSControlSettings config = Settings();
             int hmode = (int)flags.mode;
             string state = flags.nowAnimStateName ?? string.Empty;
-            bool canDrive = motion.Step(Time.deltaTime, hmode, state, flags.rely != null,
+            bool canDrive = motion.Step(Time.deltaTime, hmode, state, flags.rely,
                 flags.gaugeMale, flags.gaugeFemale, config);
             if (canDrive && hmode == 0) flags.speed = motion.Current;
             if (!config.AutoFemaleFinish && flags.gaugeFemale > 99f) flags.gaugeFemale = 99f;
             if (motion.StrengthToggleRequested && flags.click == HFlag.ClickKind.none &&
-                hmode != 0 && HSControlMotionEngine.CanDrive(hmode, state, flags.rely != null)) {
+                hmode != 0 && HSControlMotionEngine.CanDrive(hmode, state, flags.rely)) {
                 flags.click = HFlag.ClickKind.motionchange;
                 strengthPending = true;
             }
@@ -143,7 +143,7 @@ namespace HSControl
             if (flags.gaugeMale < 95f) didMaleFinish = false;
             if (!settings.AutoMaleFinish || didMaleFinish || flags.gaugeMale < 100f ||
                 flags.click != HFlag.ClickKind.none ||
-                !HSControlMotionEngine.CanDrive((int)flags.mode, flags.nowAnimStateName, flags.rely != null) ||
+                !HSControlMotionEngine.CanDrive((int)flags.mode, flags.nowAnimStateName, flags.rely) ||
                 scene.sprite == null) return;
             string method = null;
             int kind = (int)flags.mode;
