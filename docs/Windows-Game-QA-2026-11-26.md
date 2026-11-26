@@ -36,12 +36,12 @@ The shortcut entries can be changed with F1 or in their corresponding `BepInEx/c
 
 Version 0.5.8 sometimes left the original Maker Body > All panel blank. 0.5.9 therefore **keeps every native and third-party control in place** and only wraps the 24 FemboyMode geometry controls in an independent scrollable section under the same tab. Full-page native scrolling is deliberately not claimed. Verify that the Femboy marker and all vanilla rows are still present.
 
-## Blocked acceptance checkpoint: FemboyMode 0.6.1 only
+## Blocked acceptance checkpoint: FemboyMode 0.6.2 only
 
 Everything after the Maker test remains blocked until these three findings pass together:
 
 1. Original Body > All single scrollbar matches stock SocksTop thickness/artwork, and still reaches the last Balls row.
-2. Wheel input follows each actual detent promptly even while the pointer is over a native slider. Tune `F1 > Femboy Mode > Maker > Whole-page wheel step` only if necessary (112 UI units per notch default).
+2. Wheel input follows each actual detent promptly even while the pointer is over a native slider. The wheel step now comes directly from the native SocksTop `ScrollRect.scrollSensitivity`; there is no independent manual sensitivity setting.
 3. "显示轴" uses the game's original `CustomUtility.CustomGuideObject` arrows/rotation rings rather than an overlay. Verify actual pointer drag updates the native character model and Maker card values; verify changing accessory slots does not change or reset an accessory.
 
 Do not proceed to LoveJuice, HSControl, clothing, or other QA until the user accepts this checkpoint. No runtime Windows acceptance is claimed from compiler/CI alone.
