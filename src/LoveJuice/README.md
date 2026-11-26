@@ -2,6 +2,10 @@
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
+## Native asset ownership fix
+
+Studio asset-bundle prefabs are borrowed references. LoveJuice now instantiates the emitter **before** changing active state, hierarchy, name or settings; only the owned instance is parented to its scene pool. This avoids mutating or destroying an asset shared with Studio or another mod. Partially initialized emitters and their material copies are cleaned up on failure.
+
 ## Native source assets
 
 Inspected the original game's `abdata/studio/info/00.unity3d` in the authorized Koikatsu installation. This inventory identifies bundle `studio/00.unity3d` and manifest `studio00` with the following exact names:

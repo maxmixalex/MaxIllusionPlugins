@@ -65,47 +65,49 @@ namespace LoveJuice {
         }
 
         private Emitter GetEmitter(LoveJuiceChannel kind) {
-            Emitter emitter;
+            Emitter cached;
             if (host == null || unavailable.Contains(kind)) return null;
-            if (emitters.TryGetValue(kind, out emitter) && emitter.Node != null) return emitter;
+            if (emitters.TryGetValue(kind, out cached) && cached.Node != null) return cached;
             string name = StudioLiquidCatalog.Prefab(kind);
             if (name == null) return null;
+
+            GameObject node = null;
+            Emitter pending = null;
             try {
-                // This API is used by the actual Studio AddObjectItem, with
-                // the exact asset key recorded in the installed info bundle.
-                GameObject source = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle,
-                    name, true, StudioLiquidCatalog.Manifest);
-                if (source == null)
-                    source = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle,
-                        name, true, string.Empty);
-                if (source == null) throw new InvalidOperationException("Cannot load Studio prefab: " + name);
-                source.name = "LoveJuice.NativeTemplate." + name;
-                source.SetActive(false);
-                source.transform.SetParent(host.transform, false);
-                GameObject node = UnityEngine.Object.Instantiate(source);
-                if (node == null) throw new InvalidOperationException("Cannot instantiate Studio prefab: " + name);
+                // LoadAsset returns a BORROWED asset-bundle prefab, not an
+                // instance owned by this plugin. Do not SetActive, rename,
+                // reparent or Destroy it: Studio/other mods may share it.
+                GameObject template = CommonLib.LoadAsset<GameObject>(
+                    StudioLiquidCatalog.Bundle, name, true, StudioLiquidCatalog.Manifest);
+                if (template == null)
+                    template = CommonLib.LoadAsset<GameObject>(
+                        StudioLiquidCatalog.Bundle, name, true, string.Empty);
+                if (template == null)
+                    throw new InvalidOperationException("Cannot load Studio prefab: " + name);
+
+                node = UnityEngine.Object.Instantiate(template);
+                if (node == null)
+                    throw new InvalidOperationException("Cannot instantiate Studio prefab: " + name);
+                node.SetActive(false);
                 node.name = "LoveJuice.NativeEmitter." + kind;
                 node.transform.SetParent(host.transform, false);
-                node.SetActive(false);
-                emitter = new Emitter {
-                    Source = source, Node = node,
+                pending = new Emitter {
+                    Source = template, Node = node,
                     Systems = node.GetComponentsInChildren<ParticleSystem>(true),
                     Available = true
                 };
-                if (emitter.Systems == null || emitter.Systems.Length == 0)
+                if (pending.Systems == null || pending.Systems.Length == 0)
                     throw new InvalidOperationException("Studio prefab has no native ParticleSystem: " + name);
-                foreach (ParticleSystem system in emitter.Systems) {
+
+                foreach (ParticleSystem system in pending.Systems) {
                     if (system == null) continue;
-                    // Source prefab metadata: loop=true/playOnAwake=true. Turn
-                    // off automatic spray *before* activating the clone.
+                    // Disable native looping emissions, keeping explicit Emit
+                    // supported by Unity's EmissionModule.
                     var main = system.main;
                     main.loop = false;
                     main.playOnAwake = false;
                     main.simulationSpace = ParticleSystemSimulationSpace.World;
                     var emission = system.emission;
-                    // Keep the module enabled for explicit Emit(EmitParams, 1).
-                    // Turn every automatic stream/burst off instead; a disabled
-                    // EmissionModule is not a reliable manual-emission contract.
                     emission.rateOverTime = new ParticleSystem.MinMaxCurve(0f);
                     emission.rateOverDistance = new ParticleSystem.MinMaxCurve(0f);
                     emission.SetBursts(new ParticleSystem.Burst[0]);
@@ -113,17 +115,20 @@ namespace LoveJuice {
                     system.Stop();
                     system.Clear();
                 }
-                if (kind == LoveJuiceChannel.Milk) TintMilk(emitter);
+                if (kind == LoveJuiceChannel.Milk) TintMilk(pending);
                 node.SetActive(true);
-                emitters[kind] = emitter;
-                return emitter;
+                emitters[kind] = pending;
+                return pending;
             } catch (Exception ex) {
                 unavailable.Add(kind);
-                if (emitter != null) {
-                    if (emitter.Node != null) UnityEngine.Object.Destroy(emitter.Node);
-                    if (emitter.Source != null) UnityEngine.Object.Destroy(emitter.Source);
-                }
-                if (warn != null) warn("Native Studio emitter unavailable (" + name + "): " + ex.Message);
+                // A partially initialized clone and its material copies are
+                // ours to destroy. The borrowed template is never destroyed.
+                if (pending != null)
+                    foreach (Material material in pending.OwnedMaterials)
+                        if (material != null) UnityEngine.Object.Destroy(material);
+                if (node != null) UnityEngine.Object.Destroy(node);
+                if (warn != null)
+                    warn("Native Studio emitter unavailable (" + name + "): " + ex.Message);
                 return null;
             }
         }
