@@ -24,6 +24,7 @@ namespace FemboyMode
         private LayoutElement slotLayout;
         private ScrollRect scroll;
         private bool oldForceExpand, installed, resetPosition = true;
+        private bool missingStableViewportReported;
         private float templateHeight, appliedHeight;
 
         private sealed class Row
@@ -269,13 +270,23 @@ namespace FemboyMode
             slot.GetWorldCorners(corners);
             float top = host.InverseTransformPoint(corners[1]).y;
             float bottom = float.NegativeInfinity;
-            for (Transform t = host; t != null; t = t.parent)
+            // The host is itself sized by the scroll slot. Treating the
+            // host as a viewport creates a height = height - margin feedback
+            // loop every frame, ultimately collapsing the entire Maker page.
+            // Only use an actual stable clipping ancestor outside that host.
+            for (Transform t = host.parent; t != null; t = t.parent)
             {
                 RectTransform rect = t as RectTransform;
+                RectMask2D rectMask = t.GetComponent<RectMask2D>();
+                Mask mask = t.GetComponent<Mask>();
+                bool activeClip = (rectMask != null && rectMask.enabled) ||
+                    (mask != null && mask.enabled);
                 ContentSizeFitter fitter = t.GetComponent<ContentSizeFitter>();
-                bool contentSized = fitter != null && fitter.enabled &&
-                    fitter.verticalFit != ContentSizeFitter.FitMode.Unconstrained;
-                if (rect != null && !contentSized && rect.rect.height > 1f)
+                bool contentDriven = (fitter != null && fitter.enabled &&
+                    fitter.verticalFit != ContentSizeFitter.FitMode.Unconstrained) ||
+                    t.GetComponent<LayoutGroup>() != null;
+                if (rect != null && MakerPageScrollMath.IsStableViewport(
+                    activeClip, contentDriven, rect.rect.height))
                 {
                     rect.GetWorldCorners(corners);
                     float min = float.PositiveInfinity, max = float.NegativeInfinity;
@@ -289,6 +300,12 @@ namespace FemboyMode
                 }
                 Canvas canvas = t.GetComponent<Canvas>();
                 if (canvas != null && canvas.isRootCanvas) break;
+            }
+            if (float.IsNegativeInfinity(bottom) && !missingStableViewportReported)
+            {
+                missingStableViewportReported = true;
+                Debug.LogWarning("Femboy Mode: Maker Body > All has no stable masked viewport; " +
+                    "keeping the native scroll template height instead of measuring itself.");
             }
             float height = MakerPageScrollMath.ResolveHeight(top, bottom, templateHeight, 8f);
             if (Mathf.Abs(height - appliedHeight) > 1f)
