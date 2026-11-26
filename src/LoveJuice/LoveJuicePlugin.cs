@@ -21,12 +21,14 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.0";
+        public const string Version = "0.3.1";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
-            BindingFlags.Instance | BindingFlags.NonPublic);
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static readonly FieldInfo MaleField = typeof(HSceneProc).GetField("male",
-            BindingFlags.Instance | BindingFlags.NonPublic);
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        private static readonly FieldInfo Male1Field = typeof(HSceneProc).GetField("male1",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
         private ConfigEntry<bool> masterEnabled, face, body, milk, shower, special, collision;
@@ -58,8 +60,49 @@ namespace LoveJuice {
             internal readonly LiquidLevelEvents LevelChanges = new LiquidLevelEvents();
         }
 
-        public bool IsEnabled { get { return enabled != null && masterEnabled.Value; } }
+        public bool IsEnabled { get { return isActiveAndEnabled && masterEnabled != null && masterEnabled.Value; } }
         public static int ActiveDrops { get { return instance != null && instance.visuals != null ? instance.visuals.ActiveCount : 0; } }
+
+        // Optional readback/write interface used by JuiceControl. Exact keys only:
+        // the adapter never touches game overlays or another plugin's state.
+        private ConfigEntry<bool> FindToggle(string key) {
+            switch (key) {
+                case "Enabled": return masterEnabled;
+                case "Face": return face;
+                case "Body": return body;
+                case "Milk": return milk;
+                case "Shower": return shower;
+                case "Special": return special;
+                default: return null;
+            }
+        }
+
+        public static bool TryGetSetting(string key, out bool value) {
+            value = false;
+            LoveJuicePlugin plugin = instance;
+            if (plugin == null || !plugin.isActiveAndEnabled) return false;
+            ConfigEntry<bool> setting = plugin.FindToggle(key);
+            if (setting == null) return false;
+            value = setting.Value;
+            return true;
+        }
+
+        public static bool TrySetSetting(string key, bool value) {
+            LoveJuicePlugin plugin = instance;
+            if (plugin == null || !plugin.isActiveAndEnabled) return false;
+            ConfigEntry<bool> setting = plugin.FindToggle(key);
+            if (setting == null) return false;
+            setting.Value = value;
+            if (plugin.panelVisible) plugin.RefreshPanel();
+            return setting.Value == value;
+        }
+
+        public static bool ShowControlPanel() {
+            LoveJuicePlugin plugin = instance;
+            if (plugin == null || !plugin.isActiveAndEnabled) return false;
+            plugin.OpenPanel();
+            return true;
+        }
 
         private void Awake() {
             instance = this;
@@ -246,6 +289,9 @@ namespace LoveJuice {
                 foreach (object entry in female) AddActorToRoster(entry as ChaControl, seen, order);
             ChaControl male = MaleField == null ? null : MaleField.GetValue(scene) as ChaControl;
             AddActorToRoster(male, seen, order);
+            // Optional second male performer in 3P/MMF scenes.
+            ChaControl male1 = Male1Field == null ? null : Male1Field.GetValue(scene) as ChaControl;
+            AddActorToRoster(male1, seen, order);
             List<ChaControl> stale = null;
             foreach (ChaControl cha in actors.Keys)
                 if (!seen.Contains(cha)) {

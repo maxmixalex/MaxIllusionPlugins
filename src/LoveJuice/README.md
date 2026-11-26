@@ -1,4 +1,4 @@
-# LoveJuice — 0.3.0 (Native Studio liquids)
+# LoveJuice — 0.3.1 (Native Studio liquids)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
@@ -36,6 +36,10 @@ The installed `KK_SkinEffects.dll` exposes `DroolLevel`, `SalivaLevel`, and `Swe
 - Separate optional milk/shower channels (disabled by default). Milk uses an independent female-gauge threshold during native loop states and reuses the water prefab with a white particle start color and owned material copies for `_Color` / legacy `_TintColor` shaders. A public `LoveJuicePlugin.Emit(character, channel, count)` API supports other mods.
 - Real world-space liquid motion: gravity, damping, source direction, native `ParticleSystem` collision, lifetime, hard emitted-particle limit, and no cross-scene effect leaks. Same-frame reservations enforce the global particle cap even when Unity's native `particleCount` readback has not caught up with just-issued `Emit()` calls. Only one reusable native emitter is instantiated per visual channel; material copies for the optional milk tint are created once and explicitly disposed.
 - Missing assets produce a warning and disable only that visual channel, rather than falling back to generated effects. `Enabled=false` tears down the active pool.
+
+## 0.3.1: JuiceControl interface and MMF roster
+
+JuiceControl can toggle the master effect and five independent sources and open the full settings window via an explicit optional interface. The public `TryGetSetting` / `TrySetSetting` / `ShowControlPanel` API accepts only six whitelisted keys. The active roster reads public or private `lstFemale`, `male`, and optional `male1` fields so the second male in supported MMF scenes is no longer omitted.
 
 ## Configuration
 

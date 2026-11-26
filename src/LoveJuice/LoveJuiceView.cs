@@ -3,7 +3,7 @@ using MaximumUI;
 
 namespace LoveJuice {
     internal sealed class LoveJuiceViewModel {
-        internal string Version = "0.3.0", Status = "就绪", Integration = "未连接";
+        internal string Version = "0.3.1", Status = "就绪", Integration = "未连接";
         internal bool Enabled, HasScene, Face, Body, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
         internal string[] ActorNames = new string[0];
