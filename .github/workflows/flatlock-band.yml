@@ -1,0 +1,29 @@
+name: FlatLock Band build
+on:
+  push:
+    branches: [feat/femboy-character-flag]
+    paths:
+      - 'src/FlatLockBand/**'
+      - '.github/workflows/flatlock-band.yml'
+  pull_request:
+    paths:
+      - 'src/FlatLockBand/**'
+      - '.github/workflows/flatlock-band.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - run: dotnet restore src/FlatLockBand/FlatLockBand.csproj
+      - run: dotnet build src/FlatLockBand/FlatLockBand.csproj -c Release --no-restore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KK_FlatLockBand
+          path: bin/Release/FlatLockBand/KK_FlatLockBand.dll
+          if-no-files-found: error

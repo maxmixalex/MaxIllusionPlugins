@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_FemboyMode</AssemblyName>
+    <RootNamespace>FemboyMode</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>Femboy Mode</Product>
+    <AssemblyTitle>Femboy Mode</AssemblyTitle>
+    <Version>0.6.4</Version>
+    <AssemblyVersion>0.6.4.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.TextMeshPro" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionLibs.Koikatu.Sirenix.Serialization" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+    <PackageReference Include="ExtensibleSaveFormat.Koikatu" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,116 @@
+using System;
+
+namespace FemboyMode
+{
+    internal static class MakerPageScrollMath
+    {
+        internal const float DefaultViewportHeight = 520f;
+
+        internal static float ViewportFromScreen(float topPixels, float screenHeight,
+            float scaleFactor, float bottomMarginPixels)
+        {
+            if (!Finite(topPixels) || !Finite(screenHeight) || !Finite(scaleFactor) ||
+                !Finite(bottomMarginPixels) || screenHeight <= 0f ||
+                topPixels <= 0f || topPixels > screenHeight * 1.5f ||
+                scaleFactor < .25f || bottomMarginPixels < 0f)
+                return DefaultViewportHeight;
+            float height = (topPixels - bottomMarginPixels) / scaleFactor;
+            if (!Finite(height) || height < 160f) return DefaultViewportHeight;
+            return Clamp(height, 160f, 900f);
+        }
+
+        // Use the actual game's scrollbar art width instead of a hard-coded
+        // skinny 14px rail. Only fall back when the stock RectTransform has
+        // not yet received a valid layout pass (inactive Maker tab).
+        internal static float NativeScrollbarWidth(float rectWidth,
+            float sizeDeltaWidth, float parentScaleRatio)
+        {
+            float candidate = Math.Abs(rectWidth);
+            if (!Finite(candidate) || candidate < 12f || candidate > 64f)
+                candidate = Math.Abs(sizeDeltaWidth);
+            if (!Finite(candidate) || candidate < 12f || candidate > 64f)
+                candidate = 26f;
+            if (!Finite(parentScaleRatio) || parentScaleRatio <= 0f)
+                parentScaleRatio = 1f;
+            return Clamp(candidate * parentScaleRatio, 18f, 64f);
+        }
+
+        // Convert a point in CvsMenuTree LOCAL coordinates to the anchored
+        // position of the cloned root Scrollbar. In Unity, anchoredPosition
+        // is measured relative to the parent RECT's anchor reference corner,
+        // not the parent's world position or local coordinate origin.
+        internal static float OutsideBarAnchorCoordinate(float localPoint, float parentAnchorPoint)
+        {
+            if (float.IsNaN(localPoint) || float.IsInfinity(localPoint) ||
+                float.IsNaN(parentAnchorPoint) || float.IsInfinity(parentAnchorPoint))
+                return 0f;
+            return localPoint - parentAnchorPoint;
+        }
+
+        // The original scrollbar is a sibling of the stock viewport.
+        // Keep that visual separation even if the template used overlapping
+        // anchors or has not been laid out during inactive Maker loading.
+        internal static float OutsideScrollbarGap(float nativeGap)
+        {
+            if (float.IsNaN(nativeGap) || float.IsInfinity(nativeGap)) return 2f;
+            return Math.Max(2f, Math.Min(24f, nativeGap));
+        }
+
+        // Unity ScrollRect.OnScroll applies eventData.scrollDelta directly
+        // multiplied by its serialized scrollSensitivity. Honor that exact
+        // native value; don't impose artificial detent/step bounds.
+        internal static float NativeWheelDistance(float wheelDelta, float nativeSensitivity)
+        {
+            if (!Finite(wheelDelta) || !Finite(nativeSensitivity) ||
+                nativeSensitivity < 0f) return 0f;
+            float distance = wheelDelta * nativeSensitivity;
+            return Finite(distance) ? distance : 0f;
+        }
+
+        internal static float MaxOffset(float preferredContentHeight, float viewportHeight)
+        {
+            if (!Finite(preferredContentHeight) || !Finite(viewportHeight) ||
+                preferredContentHeight < 0f || preferredContentHeight > 100000f ||
+                viewportHeight < 1f)
+                return 0f;
+            return Math.Max(0f, preferredContentHeight - viewportHeight);
+        }
+
+        internal static bool Intersects(float minA, float maxA, float minB, float maxB)
+        {
+            if (!Finite(minA) || !Finite(maxA) || !Finite(minB) || !Finite(maxB) ||
+                minA > maxA || minB > maxB) return false;
+            return maxA > minB && maxB > minA;
+        }
+
+        internal static float ClampOffset(float offset, float maximumOffset)
+        {
+            if (!Finite(offset) || !Finite(maximumOffset) || maximumOffset <= 0f) return 0f;
+            return Clamp(offset, 0f, maximumOffset);
+        }
+
+        internal static float ScrollbarSize(float viewportHeight, float maxOffset)
+        {
+            if (!Finite(viewportHeight) || !Finite(maxOffset) || viewportHeight < 1f ||
+                maxOffset <= .01f) return 1f;
+            return Clamp(viewportHeight / (viewportHeight + maxOffset), 0f, 1f);
+        }
+
+        internal static float ScrollbarValue(float offset, float maximumOffset)
+        {
+            if (!Finite(maximumOffset) || maximumOffset <= .01f) return 1f;
+            return 1f - ClampOffset(offset, maximumOffset) / maximumOffset;
+        }
+
+        internal static float FromScrollbar(float value, float maximumOffset)
+        {
+            if (!Finite(value) || !Finite(maximumOffset) || maximumOffset <= 0f) return 0f;
+            return (1f - Clamp(value, 0f, 1f)) * maximumOffset;
+        }
+
+        private static bool Finite(float v) { return !float.IsNaN(v) && !float.IsInfinity(v); }
+        private static float Clamp(float v, float min, float max) {
+            return Math.Max(min, Math.Min(max, v));
+        }
+    }
+}

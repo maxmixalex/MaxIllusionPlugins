@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>FemboyMode.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/FemboyMode/FemboyRules.cs" Link="FemboyRules.cs" />
+    <Compile Include="../../src/FemboyMode/MakerPageScrollMath.cs" Link="MakerPageScrollMath.cs" />
+    <Compile Include="../../src/FemboyMode/FemboyMakerAxisMath.cs" Link="FemboyMakerAxisMath.cs" />
+    <Compile Include="../../src/FemboyMode/FemboyNativeAxisMath.cs" Link="FemboyNativeAxisMath.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,145 @@
+name: FemboyMode build
+
+on:
+  pull_request:
+    paths:
+      - 'src/FemboyMode/**'
+      - 'tests/FemboyMode.Tests/**'
+      - 'scripts/Collect-KoikatsuBinaries.ps1'
+      - '.github/workflows/femboy-mode.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/FemboyMode/**'
+      - 'tests/FemboyMode.Tests/**'
+      - 'scripts/Collect-KoikatsuBinaries.ps1'
+      - '.github/workflows/femboy-mode.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A pull request already builds every update to the feature branch. Avoid a
+# second push build and cancel obsolete runs after rapid source changes.
+concurrency:
+  group: femboy-mode-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build KK_FemboyMode (.NET Framework 3.5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore src/FemboyMode/FemboyMode.csproj
+
+      - name: Build
+        run: dotnet build src/FemboyMode/FemboyMode.csproj -c Release --no-restore
+
+      - name: Restore headless test harness
+        run: dotnet restore tests/FemboyMode.Tests/FemboyMode.Tests.csproj
+
+      - name: Run FemboyMode regression assertions
+        run: dotnet run --project tests/FemboyMode.Tests/FemboyMode.Tests.csproj -c Release --no-restore
+
+      - name: Validate Windows collector PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile('scripts/Collect-KoikatsuBinaries.ps1', [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) {
+            $parseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Output 'Collector PowerShell syntax OK'
+
+      - name: Smoke test collector with mock game layout
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'kk-mock-root'
+          $managed = Join-Path $root 'Koikatu_Data/Managed'
+          $assetDir = Join-Path $root 'abdata/h/list'
+          New-Item -ItemType Directory -Path $managed -Force | Out-Null
+          New-Item -ItemType Directory -Path $assetDir -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $managed 'Assembly-CSharp.dll') -Value 'test-assembly'
+          Set-Content -LiteralPath (Join-Path $assetDir 'demo.unity3d') -Value 'asset-not-to-copy'
+          $zip = Join-Path $env:RUNNER_TEMP 'koikatsu-mock.zip'
+          ./scripts/Collect-KoikatsuBinaries.ps1 -GameRoot $root -OutputZip $zip -IncludeAssetInventory
+          $extract = Join-Path $env:RUNNER_TEMP 'kk-mock-extracted'
+          Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+          foreach ($required in @('Koikatu_Data/Managed/Assembly-CSharp.dll', '_files.csv', '_asset_inventory.csv')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $extract $required))) {
+              throw "Collector missing expected zip entry: $required"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $extract 'abdata/h/list/demo.unity3d')) {
+            throw 'Collector leaked asset bundle bytes into default archive'
+          }
+          # The next incremental request must include only the selected bundle,
+          # not a repeat of all previously submitted game/Unity DLLs.
+          $incrementalZip = Join-Path $env:RUNNER_TEMP 'koikatsu-lists-only.zip'
+          ./scripts/Collect-KoikatsuBinaries.ps1 -GameRoot $root `
+            -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d') `
+            -OutputZip $incrementalZip
+          $incrementalOut = Join-Path $env:RUNNER_TEMP 'kk-lists-only-extracted'
+          Expand-Archive -LiteralPath $incrementalZip -DestinationPath $incrementalOut -Force
+          if (-not (Test-Path -LiteralPath (Join-Path $incrementalOut 'abdata/h/list/demo.unity3d'))) {
+            throw 'Incremental collector failed to include the requested asset'
+          }
+          if (Test-Path -LiteralPath (Join-Path $incrementalOut 'Koikatu_Data/Managed/Assembly-CSharp.dll')) {
+            throw 'Incremental collector unexpectedly included the default game DLLs'
+          }
+          Write-Output 'Collector mock archive and incremental only-extra mode verified.'
+          # Regression: running from HOME must still write beside the script.
+          $scriptFile = Join-Path $env:GITHUB_WORKSPACE 'scripts/Collect-KoikatsuBinaries.ps1'
+          $expectedRelative = Join-Path $env:GITHUB_WORKSPACE 'scripts/kk-relative-output-test.zip'
+          $wrongRelative = Join-Path $env:RUNNER_TEMP 'kk-relative-output-test.zip'
+          $defaultOut = Join-Path $env:GITHUB_WORKSPACE 'scripts/Koikatsu-debug-binaries.zip'
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $scriptFile -GameRoot $root -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d') -OutputZip './kk-relative-output-test.zip'
+            if (-not (Test-Path -LiteralPath $expectedRelative)) {
+              throw 'Relative output did not resolve beside the script'
+            }
+            if (Test-Path -LiteralPath $wrongRelative) {
+              throw 'Relative output unexpectedly appeared in current shell directory'
+            }
+            & $scriptFile -GameRoot $root -OnlyExtraFiles -ExtraRelativeFiles @('abdata/h/list/demo.unity3d')
+            if (-not (Test-Path -LiteralPath $defaultOut)) {
+              throw 'Default output did not resolve beside the script'
+            }
+          }
+          finally {
+            Pop-Location
+            Remove-Item -LiteralPath $expectedRelative,$defaultOut -Force -ErrorAction SilentlyContinue
+          }
+          Write-Output 'Collector relative/default output locations verified.'
+
+
+      - name: Package plugin
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: KK_FemboyMode
+          path: bin/Release/FemboyMode/KK_FemboyMode.dll
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,31 @@
+name: FlatLock native accessory build
+on:
+  push:
+    branches:
+      - feat/femboy-character-flag
+    paths:
+      - 'src/FlatLockBand/**'
+      - '.github/workflows/flatlock-accessory.yml'
+  pull_request:
+    paths:
+      - 'src/FlatLockBand/**'
+      - '.github/workflows/flatlock-accessory.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Compile FlatLock plugin against KK game APIs
+        run: dotnet build src/FlatLockBand/FlatLockBand.csproj -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KK_FlatLockBand_v6
+          path: bin/Release/FlatLockBand/KK_FlatLockBand.dll
+          if-no-files-found: error
