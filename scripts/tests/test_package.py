@@ -58,9 +58,9 @@ class PackageTests(unittest.TestCase):
                 "INSTALL.md", "LICENSE"})
             self.assertEqual(archive.read(package.INSTALL_PREFIX + "Common.dll"), b"compiled:Common")
 
-    def test_combined_package_contains_five_plugins_and_no_gallery(self):
+    def test_combined_package_contains_all_plugins_and_no_gallery(self):
         result = self.build()
-        self.assertEqual(len(result["packages"]), 7)
+        self.assertEqual(len(result["packages"]), len(package.PLUGINS) + 2)
         with zipfile.ZipFile(self.output / "MaxIllusionPlugins-all-plugins.zip") as archive:
             dlls = {Path(name).name for name in archive.namelist() if name.endswith(".dll")}
             self.assertEqual(dlls, {name + ".dll" for name in package.PLUGINS + package.LIBRARIES})

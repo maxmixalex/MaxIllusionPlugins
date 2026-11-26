@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_ClothingControl</AssemblyName>
+    <RootNamespace>ClothingControl</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>ClothingControl</Product>
+    <AssemblyTitle>ClothingControl</AssemblyTitle>
+    <Version>0.5.5</Version>
+    <AssemblyVersion>0.5.5.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common.csproj" />
+    <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp-firstpass" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+  </ItemGroup>
+</Project>

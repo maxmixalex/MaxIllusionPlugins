@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using AccessoryBatchManager;
+using ClothingControl;
 using JuiceControl;
 using MaximumUI;
 
@@ -16,6 +17,88 @@ internal static class PluginPreviewScenes {
         yield return Accessory(1);
         yield return Accessory(2);
         yield return Accessory(0, true);
+        yield return Wardrobe("main");
+        yield return Wardrobe("busy");
+        yield return Wardrobe("empty");
+        yield return Wardrobe("xml-error");
+        yield return Wardrobe("garments");
+        yield return Wardrobe("free-h");
+        yield return Wardrobe("filtered");
+        yield return Wardrobe("scene");
+        yield return Wardrobe("scene-applying");
+    }
+
+    private static PreviewScene Wardrobe(string state) {
+        var model = new WardrobeViewModel {
+            Version = "0.5.5", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
+            Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
+            Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
+            SelectTarget = delegate { }, SelectCoordinate = delegate { }, SelectPreset = delegate { },
+            ChangeName = delegate { }, Apply = delegate { }, Create = delegate { },
+            Overwrite = delegate { }, Delete = delegate { }, Reload = delegate { }, Close = delegate { },
+            ChangePage = delegate { }, ChangeAccessoryGroup = delegate { }, ChangeAccessoryQuery = delegate { },
+            ChangeShoeMode = delegate { }, RestoreClothing = delegate { }, SetFilteredAccessories = delegate { }
+        };
+        string[] names = { "帽子", "眼镜", "围巾", "发夹", "手表", "胸针", "耳饰", "背包" };
+        for (int i = 0; i < 32; i++) model.Rows.Add(new WardrobeRow {
+            Slot = i, Type = 121, Item = i + 1, Group = i % 2, Label = (i + 1) + ". " + names[i % names.Length],
+            Visible = i % 3 != 0, Change = delegate { }
+        });
+        // Clothing is now tab 0; accessory-heavy previews use tab 1.
+        model.Page = state == "main" || state == "garments" ||
+            state == "free-h" ? 0 : 1;
+        if (state == "free-h") {
+            model.CanChangeCoordinate = false;
+            model.Targets = new[] { "1. 活动角色 A", "2. 活动角色 B", "3. 活动角色 C" };
+            model.HasTarget = true;
+            model.Status = "Free H：当前配装的服装状态可编辑，配装重载已禁用。";
+        }
+        if (state == "main" || state == "garments" || state == "free-h") {
+            model.ShoeMode = 0;
+            string[] garmentLabels = {
+                "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
+            };
+            for (int i = 0; i < garmentLabels.Length; i++) model.Garments.Add(new WardrobeRow {
+                Slot = i, Item = i + 1, Label = garmentLabels[i],
+                State = i < 4 ? i % 4 : i % 2 == 0 ? 0 : 3,
+                AllowedStates = i < 4 ? new[] { 0, 1, 2, 3 } : new[] { 0, 3 },
+                ChangeState = delegate { }
+            });
+        }
+        if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
+        if (state == "scene" || state == "scene-applying") {
+            model.Scope = 1; model.CanScenePresets = true; model.HasSceneTargets = true;
+            model.Presets = new[] { "旅行组合", "舞台配装" }; model.Name = "旅行组合";
+            model.ChangeScope = delegate { }; model.Cancel = delegate { };
+            if (state == "scene-applying") {
+                model.Busy = true; model.Status = "场景预设 旅行组合：1/2（成功 1，部分 0，跳过 0）";
+            }
+        }
+        if (state == "busy") { model.Busy = true; model.Status = "正在载入配装…"; }
+        if (state == "empty") {
+            model.Targets = new string[0]; model.Coordinates = new string[0];
+            model.TargetIndex = -1; model.CoordinateIndex = -1; model.HasTarget = false;
+            model.Rows.Clear(); model.Status = "当前场景中没有可用角色。";
+        }
+        if (state == "xml-error") {
+            model.CanWrite = false; model.Error = "example.xml: Invalid XML at line 8. Expected closing element. Reload after repairing the source file.";
+        }
+        Window window = (Window)new WardrobeView { Model = model }.Build(new BuildContext());
+        return new PreviewScene {
+            Slug = "clothingcontrol-" + state + "-preview", Title = "ClothingControl",
+            Source = "ClothingControl.WardrobeView.Build", Detail = "Synthetic wardrobe fixture; " + state,
+            Widget = window, StateId = state == "main" ? "default" : state,
+            Width = state == "xml-error" ? window.MinWidth : 0f,
+            Height = state == "xml-error" ? window.MinHeight : 0f,
+            RequiredKeys = state == "main" || state == "garments" || state == "free-h"
+                ? new[] { "wardrobe-target-current", "wardrobe-coordinate-current",
+                    "wardrobe-garment-rows", "garment-state-0-current", "wardrobe-shoe-mode",
+                    "wardrobe-restore-clothing", "wardrobe-preset-current" }
+                : new[] { "wardrobe-target-current", "wardrobe-coordinate-current", "wardrobe-accessories",
+                    "wardrobe-preset-current", "wardrobe-name", "wardrobe-apply", "wardrobe-reload",
+                    "wardrobe-accessory-search", "wardrobe-accessory-group-current", "wardrobe-hide-filtered" }
+        };
     }
 
     private static PreviewScene Juice(string state) {
