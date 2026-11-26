@@ -16,13 +16,15 @@ namespace ClothingControl {
         internal string Version = string.Empty, Name = string.Empty, Status = string.Empty, Error;
         internal int Revision, Page, AccessoryGroup, ShoeMode = -1;
         internal string AccessoryQuery = string.Empty;
-        internal bool Busy, CanWrite, HasTarget;
+        internal bool Busy, CanWrite, HasTarget, CanScenePresets, HasSceneTargets;
+        internal int Scope;
         internal readonly List<WardrobeRow> Rows = new List<WardrobeRow>();
         internal readonly List<WardrobeRow> Garments = new List<WardrobeRow>();
         internal Action<int> SelectTarget, SelectCoordinate, SelectPreset, ChangePage, ChangeAccessoryGroup, ChangeShoeMode;
         internal Action<string> ChangeName, ChangeAccessoryQuery;
         internal Action<bool> SetFilteredAccessories;
-        internal Action Apply, Create, Overwrite, Delete, Reload, Close, RestoreClothing;
+        internal Action Apply, Create, Overwrite, Delete, Reload, Close, RestoreClothing, Cancel;
+        internal Action<int> ChangeScope;
 
         internal List<WardrobeRow> FilteredAccessories() {
             List<WardrobeRow> result = new List<WardrobeRow>();
@@ -58,6 +60,7 @@ namespace ClothingControl {
             if (other == null || Revision != other.Revision || Version != other.Version ||
                 Name != other.Name || Status != other.Status || Error != other.Error ||
                 Busy != other.Busy || CanWrite != other.CanWrite || HasTarget != other.HasTarget ||
+                Scope != other.Scope || CanScenePresets != other.CanScenePresets || HasSceneTargets != other.HasSceneTargets ||
                 TargetIndex != other.TargetIndex || CoordinateIndex != other.CoordinateIndex || PresetIndex != other.PresetIndex ||
                 Page != other.Page || ShoeMode != other.ShoeMode || AccessoryGroup != other.AccessoryGroup ||
                 AccessoryQuery != other.AccessoryQuery ||
@@ -70,13 +73,13 @@ namespace ClothingControl {
     internal sealed class WardrobeView : View {
         internal WardrobeViewModel Model = new WardrobeViewModel();
 
-        private static Widget Selector(string label, string key, string[] values, int selected, Action<int> changed, bool enabled) {
+        private static Widget Selector(string label, string key, string[] values, int selected, Action<int> changed, bool enabled, Widget prefix = null) {
             int[] ids = new int[values.Length];
             for (int i = 0; i < ids.Length; i++) ids[i] = i;
             bool active = enabled && values.Length > 0 && changed != null;
             Action<int> choose = i => { if (active && i >= 0 && i < values.Length) changed(i); };
             return new HStack(4f, key + "-row") {
-                new Label(label).Width(60f),
+                prefix ?? new Label(label).Width(60f),
                 new ArrowButton(ArrowDirection.Left, () => choose(selected <= 0 ? values.Length - 1 : selected - 1), key + "-previous").Enabled(active).Width(28f),
                 new ComboBox<int>(string.Empty, selected, ids, i => i >= 0 && i < values.Length ? values[i] : "无",
                     choose, key).Enabled(active).ExpandWidth(),
@@ -88,6 +91,11 @@ namespace ClothingControl {
             WardrobeViewModel m = Model;
             bool canEdit = m.HasTarget && !m.Busy;
             bool hasPreset = m.PresetIndex >= 0 && m.PresetIndex < m.Presets.Length;
+            bool canPreset = !m.Busy && (m.Scope == 1 ? m.CanScenePresets && m.HasSceneTargets : m.HasTarget);
+            Widget scope = m.CanScenePresets ? new ComboBox<int>(string.Empty, m.Scope, new[] { 0, 1 },
+                i => i == 0 ? "角色预设" : "场景预设", i => {
+                    if (!m.Busy && m.ChangeScope != null && i >= 0 && i <= 1) m.ChangeScope(i);
+                }, "wardrobe-preset-scope").Enabled(!m.Busy).Width(96f) : null;
             Window window = new Window("ClothingControl " + m.Version, 430f, 720f, "clothing-window",
                 minWidth: 370f, minHeight: 700f, closable: true,
                 onVisibleChange: value => { if (!value && m.Close != null) m.Close(); });
@@ -99,24 +107,33 @@ namespace ClothingControl {
                     value => { if (!m.Busy && m.ChangePage != null) m.ChangePage(value); }, "wardrobe-page").Enabled(!m.Busy).Height(32f),
                 m.Page == 1 ? BuildGarments(m, canEdit) : BuildAccessories(m, canEdit),
                 new Separator(),
-                Selector("预设", "wardrobe-preset", m.Presets, m.PresetIndex, m.SelectPreset, !m.Busy),
+                Selector("预设", "wardrobe-preset", m.Presets, m.PresetIndex, m.SelectPreset, !m.Busy, scope),
                 new TextField(m.Name, m.ChangeName, "wardrobe-name") { Placeholder = "新预设名称", MaxLength = 80 }.Enabled(m.CanWrite && !m.Busy).Height(32f),
                 new HStack(4f) {
-                    new Button("应用选中", m.Apply, "wardrobe-apply").Enabled(canEdit && hasPreset).ExpandWidth(),
-                    new Button("新建保存", m.Create, "wardrobe-create").Enabled(canEdit && m.CanWrite).ExpandWidth()
+                    new Button("应用选中", m.Apply, "wardrobe-apply").Enabled(canPreset && hasPreset).ExpandWidth(),
+                    new Button("新建保存", m.Create, "wardrobe-create").Enabled(canPreset && m.CanWrite).ExpandWidth()
                 }.Height(32f),
                 new HStack(4f) {
-                    new Button("覆盖保存", m.Overwrite, "wardrobe-overwrite").Enabled(canEdit && hasPreset && m.CanWrite).ExpandWidth(),
+                    new Button("覆盖保存", m.Overwrite, "wardrobe-overwrite").Enabled(canPreset && hasPreset && m.CanWrite).ExpandWidth(),
                     new Button("删除选中", m.Delete, "wardrobe-delete").Enabled(!m.Busy && hasPreset && m.CanWrite).ExpandWidth(),
                     new Button("重载 XML", m.Reload, "wardrobe-reload").Enabled(!m.Busy).ExpandWidth()
                 }.Height(32f),
-                new Label(m.Status ?? string.Empty, "wardrobe-status") { WordWrap = true }.MinHeight(20f)
+                BuildStatus(m)
             };
             if (!string.IsNullOrEmpty(m.Error)) body.Add(new ScrollView("wardrobe-error-scroll") {
                 new HelpBox("XML: " + m.Error, HelpBoxType.Error, "wardrobe-error").ExpandWidth()
             }.Height(72f));
             window.Add(body.ExpandHeight());
             return window;
+        }
+
+        private static Widget BuildStatus(WardrobeViewModel m) {
+            Widget label = new Label(m.Status ?? string.Empty, "wardrobe-status") { WordWrap = true }.MinHeight(20f);
+            if (!m.Busy || m.Cancel == null) return label;
+            return new HStack(4f) {
+                label.ExpandWidth(),
+                new Button("取消", () => { if (m.Busy) m.Cancel(); }, "wardrobe-cancel").Width(68f).Height(32f)
+            };
         }
 
         private static Widget BuildAccessories(WardrobeViewModel m, bool canEdit) {

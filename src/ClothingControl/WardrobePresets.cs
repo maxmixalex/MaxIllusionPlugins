@@ -9,10 +9,13 @@ namespace ClothingControl {
     public sealed class WardrobePresetLibrary {
         [XmlElement("Preset")]
         public List<WardrobePreset> Presets = new List<WardrobePreset>();
+        [XmlElement("ScenePreset")]
+        public List<WardrobeScenePreset> Scenes = new List<WardrobeScenePreset>();
 
         internal WardrobePresetLibrary Copy() {
             WardrobePresetLibrary result = new WardrobePresetLibrary();
             foreach (WardrobePreset preset in Presets) result.Presets.Add(preset.Copy());
+            foreach (WardrobeScenePreset scene in Scenes) result.Scenes.Add(scene.Copy());
             return result;
         }
 
@@ -24,6 +27,88 @@ namespace ClothingControl {
                     throw new InvalidDataException("Invalid or duplicate preset name.");
                 preset.Validate();
             }
+            if (Scenes == null) throw new InvalidDataException("Missing scene preset list.");
+            names.Clear();
+            foreach (WardrobeScenePreset scene in Scenes) {
+                if (scene == null || !WardrobePreset.ValidName(scene.Name) || !names.Add(scene.Name))
+                    throw new InvalidDataException("Invalid or duplicate scene preset name.");
+                scene.Validate();
+            }
+        }
+    }
+
+    public sealed class WardrobeScenePreset {
+        [XmlAttribute] public string Name;
+        [XmlElement("Character")]
+        public List<WardrobeSceneMember> Members = new List<WardrobeSceneMember>();
+
+        internal WardrobeScenePreset Copy() {
+            WardrobeScenePreset result = new WardrobeScenePreset { Name = Name };
+            foreach (WardrobeSceneMember entry in Members) result.Members.Add(entry.Copy());
+            return result;
+        }
+
+        internal void Validate() {
+            if (Members == null || Members.Count == 0) throw new InvalidDataException("Empty scene preset.");
+            HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (WardrobeSceneMember entry in Members) {
+                if (entry == null || string.IsNullOrEmpty(entry.Key) || entry.Key.Length > 1024 ||
+                    entry.State == null || !keys.Add(entry.Key))
+                    throw new InvalidDataException("Invalid or ambiguous character identity.");
+                entry.State.Validate();
+            }
+        }
+    }
+
+    public sealed class WardrobeSceneMember {
+        [XmlAttribute] public string Key;
+        [XmlAttribute] public string DisplayName;
+        [XmlElement("State")] public WardrobePreset State;
+
+        internal WardrobeSceneMember Copy() {
+            return new WardrobeSceneMember { Key = Key, DisplayName = DisplayName, State = State.Copy() };
+        }
+    }
+
+    internal sealed class WardrobeSceneMatch<T> where T : class {
+        internal T Target;
+        internal WardrobeSceneMember Member;
+    }
+
+    internal static class WardrobeSceneIdentity {
+        // Studio object numbers change across scene loads. Use card name plus
+        // basename where present, never the user's absolute card path.
+        internal static string Key(string name, string cardFile) {
+            name = (name ?? string.Empty).Trim();
+            if (name.Length == 0) return null;
+            string file = (cardFile ?? string.Empty).Replace('\\', '/');
+            int slash = file.LastIndexOf('/');
+            if (slash >= 0) file = file.Substring(slash + 1);
+            file = file.Trim().ToUpperInvariant();
+            string key = name.Length + ":" + name + "|" + file;
+            return key.Length <= 1024 ? key : null;
+        }
+
+        internal static T FindUnique<T>(IEnumerable<T> targets, string key, Func<T, string> identity) where T : class {
+            if (string.IsNullOrEmpty(key)) return null;
+            T result = null;
+            foreach (T target in targets) {
+                if (target == null || !string.Equals(identity(target), key, StringComparison.Ordinal)) continue;
+                if (result != null && !ReferenceEquals(result, target)) return null;
+                result = target;
+            }
+            return result;
+        }
+
+        internal static List<WardrobeSceneMatch<T>> Match<T>(WardrobeScenePreset preset,
+            IEnumerable<T> targets, Func<T, string> identity) where T : class {
+            List<WardrobeSceneMatch<T>> result = new List<WardrobeSceneMatch<T>>();
+            if (preset == null) return result;
+            foreach (WardrobeSceneMember member in preset.Members) {
+                T target = FindUnique(targets, member.Key, identity);
+                if (target != null) result.Add(new WardrobeSceneMatch<T> { Target = target, Member = member.Copy() });
+            }
+            return result;
         }
     }
 
@@ -155,6 +240,52 @@ namespace ClothingControl {
             int index = IndexOf(next, name);
             if (index < 0) { message = "预设已不存在。"; return false; }
             next.Presets.RemoveAt(index);
+            return Write(next, out message);
+        }
+
+        internal string[] SceneNames() {
+            List<string> names = new List<string>();
+            foreach (WardrobeScenePreset entry in library.Scenes) names.Add(entry.Name);
+            return names.ToArray();
+        }
+
+        private static int SceneIndex(WardrobePresetLibrary source, string name) {
+            for (int i = 0; i < source.Scenes.Count; i++)
+                if (string.Equals(source.Scenes[i].Name, name, StringComparison.OrdinalIgnoreCase)) return i;
+            return -1;
+        }
+
+        internal WardrobeScenePreset FindScene(string name) {
+            int index = SceneIndex(library, name);
+            return index < 0 ? null : library.Scenes[index].Copy();
+        }
+
+        internal bool SaveScene(WardrobeScenePreset snapshot, string name, bool overwrite, out string message) {
+            if (!CanWrite) { message = Error; return false; }
+            name = (name ?? string.Empty).Trim();
+            if (!WardrobePreset.ValidName(name) || snapshot == null) { message = "场景预设名称或数据无效。"; return false; }
+            try {
+                WardrobePresetLibrary next = library.Copy();
+                int index = SceneIndex(next, name);
+                if (overwrite != (index >= 0)) {
+                    message = overwrite ? "场景预设已不存在。" : "场景预设名称已存在。";
+                    return false;
+                }
+                snapshot.Validate();
+                WardrobeScenePreset copy = snapshot.Copy();
+                copy.Name = name;
+                if (index >= 0) next.Scenes[index] = copy; else next.Scenes.Add(copy);
+                next.Validate();
+                return Write(next, out message);
+            } catch (Exception ex) { message = ex.GetBaseException().Message; return false; }
+        }
+
+        internal bool DeleteScene(string name, out string message) {
+            if (!CanWrite) { message = Error; return false; }
+            WardrobePresetLibrary next = library.Copy();
+            int index = SceneIndex(next, name);
+            if (index < 0) { message = "场景预设已不存在。"; return false; }
+            next.Scenes.RemoveAt(index);
             return Write(next, out message);
         }
 

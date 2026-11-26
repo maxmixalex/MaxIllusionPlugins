@@ -9,6 +9,7 @@ using KKAPI.Maker;
 using MaximumUI;
 using Studio;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Toggle = UnityEngine.UI.Toggle;
 
 [assembly: System.Reflection.AssemblyFileVersion(ClothingControl.ClothingControlPlugin.Version)]
@@ -21,7 +22,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -37,8 +38,26 @@ namespace ClothingControl {
         private bool visible;
         private int generation;
         private float nextPoll;
-        private string selectedPreset, draft = string.Empty, status = "就绪。";
+        private string status = "就绪。";
+        private int presetScope;
+        private readonly string[] presetSelections = new string[2];
+        private readonly string[] presetDrafts = { string.Empty, string.Empty };
+        private string selectedPreset { get { return presetSelections[presetScope]; } set { presetSelections[presetScope] = value; } }
+        private string draft { get { return presetDrafts[presetScope]; } set { presetDrafts[presetScope] = value; } }
         private PendingApply pending;
+        private SceneBatch batch;
+        private bool Busy { get { return pending != null || batch != null; } }
+
+        private sealed class SceneBatch {
+            internal string Name;
+            internal int SceneHandle, Next, Completed, Partial, Skipped;
+            internal List<WardrobeSceneMatch<ChaControl>> Matches;
+            internal int Total;
+            internal string Progress {
+                get { return "场景预设 " + Name + "：" + (Completed + Partial + Skipped) + "/" + Total +
+                    "（成功 " + Completed + "，部分 " + Partial + "，跳过 " + Skipped + "）"; }
+            }
+        }
         private List<ChaControl> previousCharacters = new List<ChaControl>();
 
         private sealed class PendingApply {
@@ -46,6 +65,7 @@ namespace ClothingControl {
             internal WardrobePreset Preset;
             internal int Coordinate;
             internal WardrobeLoadGate Gate;
+            internal string SceneKey;
         }
 
         private void Awake() {
@@ -68,10 +88,11 @@ namespace ClothingControl {
         }
 
         private void ObserveReload(ChaControl character) {
-            if (character == null || !ReferenceEquals(character, target)) return;
+            if (character == null) return;
             if (pending != null && ReferenceEquals(pending.Target, character))
                 pending.Gate.NotifyReload(Time.frameCount, Coordinate(character));
-            else generation++;
+            else if (ReferenceEquals(character, target)) generation++;
+            else return;
             nextPoll = 0f;
         }
 
@@ -137,9 +158,18 @@ namespace ClothingControl {
             return parts != null && shown != null;
         }
 
-        private static string CharacterName(ChaControl character, int index) {
-            string name = character.chaFile != null && character.chaFile.parameter != null
+        private static string CardName(ChaControl character) {
+            return character != null && character.chaFile != null && character.chaFile.parameter != null
                 ? character.chaFile.parameter.fullname : null;
+        }
+
+        private static string CharacterIdentity(ChaControl character) {
+            if (character == null || character.chaFile == null) return null;
+            return WardrobeSceneIdentity.Key(CardName(character), character.chaFile.charaFileName);
+        }
+
+        private static string CharacterName(ChaControl character, int index) {
+            string name = CardName(character);
             return (index + 1) + ". " + (string.IsNullOrEmpty(name) ? character.name : name);
         }
 
@@ -158,7 +188,10 @@ namespace ClothingControl {
                 else if (SupportedScene()) Open();
             }
             if (!visible) return;
+            if (batch != null && (!IsStudio() || SceneManager.GetActiveScene().handle != batch.SceneHandle))
+                CancelOperations("场景已变更，停止预设应用。");
             if (pending != null) AdvancePending();
+            else if (batch != null) AdvanceSceneBatch();
             if (Time.unscaledTime < nextPoll) return;
             nextPoll = Time.unscaledTime + .25f;
             if (!SupportedScene()) { Close(); return; }
@@ -184,7 +217,7 @@ namespace ClothingControl {
         private void Close() {
             visible = false;
             generation++;
-            pending = null;
+            if (Busy) CancelOperations("已取消剩余操作。");
             if (view != null) MaximumUIRuntime.SetVisible(MountId, false);
         }
 
@@ -193,11 +226,13 @@ namespace ClothingControl {
         }
 
         private bool TargetCurrent(int token, ChaControl character) {
-            return SessionCurrent(token, character) && pending == null && HasCharacter(Characters(), character);
+            return SessionCurrent(token, character) && !Busy && HasCharacter(Characters(), character);
         }
 
         private void Refresh() {
             if (!visible || view == null) return;
+            bool sceneSupported = IsStudio() && !MakerAPI.InsideAndLoaded;
+            if (!sceneSupported && presetScope != 0) { presetScope = 0; generation++; }
             List<ChaControl> characters = Characters();
             bool rosterChanged = previousCharacters.Count != characters.Count;
             if (!rosterChanged)
@@ -209,7 +244,7 @@ namespace ClothingControl {
                 if (!ReferenceEquals(next, target)) {
                     target = next;
                     generation++;
-                    pending = null;
+                    if (batch == null) pending = null;
                 }
             }
             ChaControl character = target;
@@ -221,7 +256,7 @@ namespace ClothingControl {
             string[] coordinates = new string[coordinateCount];
             for (int i = 0; i < coordinates.Length; i++)
                 coordinates[i] = i < CoordinateNames.Length ? CoordinateNames[i] : "配装 " + (i + 1);
-            string[] presets = store.Names();
+            string[] presets = presetScope == 0 ? store.Names() : store.SceneNames();
             int presetIndex = Array.IndexOf(presets, selectedPreset);
             if (presetIndex < 0 && presets.Length > 0) {
                 presetIndex = 0;
@@ -233,12 +268,16 @@ namespace ClothingControl {
                 Targets = names, TargetIndex = characters.IndexOf(character), Coordinates = coordinates,
                 CoordinateIndex = Coordinate(character), Presets = presets, PresetIndex = presetIndex,
                 Name = draft, Status = status, Error = store.Error, CanWrite = store.CanWrite,
-                Busy = pending != null, HasTarget = character != null && coordinateCount > 0,
+                Busy = Busy, HasTarget = character != null && coordinateCount > 0,
+                Scope = presetScope, CanScenePresets = sceneSupported, HasSceneTargets = characters.Count > 0,
                 Page = page, AccessoryGroup = accessoryGroup, AccessoryQuery = accessoryQuery,
-                Close = delegate { if (visible && token == generation) Close(); }
+                Close = delegate { if (visible && token == generation) Close(); },
+                Cancel = delegate {
+                    if (visible && token == generation && Busy) { CancelOperations("已取消剩余操作。"); Refresh(); }
+                }
             };
             model.SelectTarget = index => {
-                if (!SessionCurrent(token, character) || pending != null || index < 0 || index >= characters.Count ||
+                if (!SessionCurrent(token, character) || Busy || index < 0 || index >= characters.Count ||
                     !HasCharacter(Characters(), characters[index])) return;
                 if (!ReferenceEquals(target, characters[index])) { target = characters[index]; generation++; }
                 Refresh();
@@ -247,41 +286,63 @@ namespace ClothingControl {
                 if (!TargetCurrent(token, character)) return;
                 if (Coordinate(character) != index) BeginCoordinateChange(character, index, null);
             };
+            int capturedScope = presetScope;
+            model.ChangeScope = value => {
+                if (!SessionCurrent(token, character) || Busy || !sceneSupported || value < 0 || value > 1 || value == presetScope) return;
+                presetScope = value; generation++; Refresh();
+            };
             model.SelectPreset = index => {
-                if (!SessionCurrent(token, character) || pending != null || index < 0 || index >= presets.Length || store.Find(presets[index]) == null) return;
-                if (selectedPreset != presets[index]) generation++;
-                selectedPreset = presets[index]; draft = selectedPreset; Refresh();
+                if (!SessionCurrent(token, character) || Busy || capturedScope != presetScope ||
+                    index < 0 || index >= presets.Length) return;
+                string name = presets[index];
+                if (capturedScope == 0 ? store.Find(name) == null : store.FindScene(name) == null) return;
+                if (selectedPreset != name) generation++;
+                selectedPreset = name; draft = selectedPreset; Refresh();
             };
             model.ChangePage = value => {
-                if (!SessionCurrent(token, character) || pending != null || value < 0 || value > 1) return;
+                if (!SessionCurrent(token, character) || Busy || value < 0 || value > 1) return;
                 page = value; Refresh();
             };
             model.ChangeAccessoryGroup = value => {
-                if (!SessionCurrent(token, character) || pending != null || value < 0 || value > 3) return;
+                if (!SessionCurrent(token, character) || Busy || value < 0 || value > 3) return;
                 accessoryGroup = value; Refresh();
             };
             model.ChangeAccessoryQuery = value => {
-                if (!SessionCurrent(token, character) || pending != null) return;
+                if (!SessionCurrent(token, character) || Busy) return;
                 accessoryQuery = value ?? string.Empty; Refresh();
             };
             model.ChangeName = value => {
-                if (!SessionCurrent(token, character) || pending != null) return;
+                if (!SessionCurrent(token, character) || Busy) return;
                 draft = value ?? string.Empty;
                 view.Model.Name = draft;
                 MaximumUIRuntime.MarkDirty(view);
             };
-            model.Create = () => { if (TargetCurrent(token, character)) Save(character, draft, false); };
             string capturedPreset = selectedPreset;
-            model.Overwrite = () => { if (TargetCurrent(token, character) && capturedPreset == selectedPreset) Save(character, capturedPreset, true); };
-            model.Apply = () => { if (TargetCurrent(token, character) && capturedPreset == selectedPreset) Apply(character, store.Find(capturedPreset)); };
+            Func<bool> presetSession = () => SessionCurrent(token, character) && !Busy && capturedScope == presetScope;
+            model.Create = () => {
+                if (!presetSession()) return;
+                if (capturedScope == 1 && IsStudio()) SaveScene(draft, false);
+                else if (TargetCurrent(token, character)) Save(character, draft, false);
+            };
+            model.Overwrite = () => {
+                if (!presetSession() || capturedPreset != selectedPreset) return;
+                if (capturedScope == 1 && IsStudio()) SaveScene(capturedPreset, true);
+                else if (TargetCurrent(token, character)) Save(character, capturedPreset, true);
+            };
+            model.Apply = () => {
+                if (!presetSession() || capturedPreset != selectedPreset) return;
+                if (capturedScope == 1 && IsStudio()) ApplyScene(store.FindScene(capturedPreset));
+                else if (TargetCurrent(token, character)) Apply(character, store.Find(capturedPreset));
+            };
             model.Delete = () => {
-                if (!SessionCurrent(token, character) || pending != null || capturedPreset != selectedPreset) return;
+                if (!presetSession() || capturedPreset != selectedPreset) return;
                 string message;
-                status = store.Delete(capturedPreset, out message) ? "已删除预设。" : message;
+                bool deleted = capturedScope == 1 ? store.DeleteScene(capturedPreset, out message) : store.Delete(capturedPreset, out message);
+                status = deleted ? "已删除预设。" : message;
                 generation++; Refresh();
             };
             model.Reload = () => {
-                if (!SessionCurrent(token, character) || pending != null) return;
+                if (!SessionCurrent(token, character) || Busy) return;
                 status = store.Reload() ? "已重载 XML。" : "XML 读取失败。";
                 generation++; Refresh();
             };
@@ -472,23 +533,24 @@ namespace ClothingControl {
             BeginCoordinateChange(character, preset.Coordinate, preset);
         }
 
-        private void BeginCoordinateChange(ChaControl character, int destination, WardrobePreset preset) {
+        private bool BeginCoordinateChange(ChaControl character, int destination, WardrobePreset preset, string sceneKey = null) {
             int source = Coordinate(character);
-            if (destination < 0 || destination >= CoordinateCount(character) || source < 0 || pending != null) return;
+            if (destination < 0 || destination >= CoordinateCount(character) || source < 0 || pending != null) return false;
             // Register the operation BEFORE invoking the native API: a
             // synchronous reload callback must not be lost.
             pending = new PendingApply {
-                Target = character, Preset = preset, Coordinate = destination,
+                Target = character, Preset = preset, Coordinate = destination, SceneKey = sceneKey,
                 Gate = new WardrobeLoadGate(source, destination, Time.frameCount, Time.unscaledTime)
             };
             generation++;
-            status = "正在载入配装…";
+            status = batch == null ? "正在载入配装…" : batch.Progress + " · 载入 " + CardName(character);
             try {
                 if (!ChangeCoordinate(character, destination)) { pending = null; status = "配装切换失败。"; }
             } catch (Exception ex) {
                 pending = null; status = ex.GetBaseException().Message; Logger.LogWarning(ex);
             }
             Refresh();
+            return pending != null;
         }
 
         private static bool SameAccessory(ChaFileAccessory.PartsInfo left, ChaFileAccessory.PartsInfo right) {
@@ -531,14 +593,25 @@ namespace ClothingControl {
 
         private void AdvancePending() {
             PendingApply operation = pending;
-            bool current = SupportedScene() && ReferenceEquals(target, operation.Target) &&
-                HasCharacter(Characters(), operation.Target);
+            bool forScene = operation.SceneKey != null;
+            bool current = forScene
+                ? SceneTargetCurrent(operation.Target, operation.SceneKey)
+                : SupportedScene() && ReferenceEquals(target, operation.Target) && HasCharacter(Characters(), operation.Target);
             int coordinate = current ? Coordinate(operation.Target) : -1;
             bool ready = current && OutfitReady(operation.Target, operation.Coordinate);
             WardrobeLoadResult result = operation.Gate.Poll(Time.frameCount, Time.unscaledTime, current, coordinate, ready);
             if (result == WardrobeLoadResult.Waiting) return;
             pending = null;
             generation++;
+            if (forScene) {
+                if (batch == null) return;
+                if (result == WardrobeLoadResult.Ready && SceneTargetCurrent(operation.Target, operation.SceneKey))
+                    ApplySceneMember(operation.Target, operation.Preset);
+                else batch.Skipped++;
+                status = batch.Progress;
+                Refresh();
+                return;
+            }
             if (result == WardrobeLoadResult.Cancelled) status = "目标或配装已变更，取消操作。";
             else if (result == WardrobeLoadResult.TimedOut) status = "配装载入超时，未修改饰品。";
             else if (operation.Preset != null) { ApplyAccessories(operation.Target, operation.Preset); return; }
@@ -554,21 +627,113 @@ namespace ClothingControl {
                 slot >= shown.Length || parts[slot] == null || parts[slot].type == 120 ||
                 !entry.Matches(slot, parts[slot].type, parts[slot].id)) return false;
             if (shown[slot] != entry.Visible) character.SetAccessoryState(slot, entry.Visible);
-            return true;
+            return ReadAccessories(character, out parts, out shown) && slot < parts.Length && slot < shown.Length &&
+                parts[slot] != null && entry.Matches(slot, parts[slot].type, parts[slot].id) && shown[slot] == entry.Visible;
         }
 
-        private void ApplyAccessories(ChaControl character, WardrobePreset preset) {
-            int applied = 0;
+        private void SaveScene(string name, bool overwrite) {
+            if (!IsStudio() || Busy) return;
             try {
-                if (Coordinate(character) != preset.Coordinate) { status = "配装已经变更，未应用。"; Refresh(); return; }
-                int total = preset.Accessories.Count + preset.Garments.Count + (preset.ShoeMode >= 0 ? 1 : 0);
+                WardrobeScenePreset snapshot = new WardrobeScenePreset();
+                List<ChaControl> characters = Characters();
+                HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
+                foreach (ChaControl character in characters) {
+                    string key = CharacterIdentity(character);
+                    WardrobePreset state;
+                    if (string.IsNullOrEmpty(key) || !keys.Add(key)) {
+                        status = "角色身份重复或不可识别，未保存场景预设。"; Refresh(); return;
+                    }
+                    if (!Capture(character, out state)) {
+                        status = "角色配装尚未准备好，未保存场景预设。"; Refresh(); return;
+                    }
+                    snapshot.Members.Add(new WardrobeSceneMember { Key = key, DisplayName = CardName(character), State = state });
+                }
+                string message;
+                if (store.SaveScene(snapshot, name, overwrite, out message)) {
+                    selectedPreset = name.Trim(); draft = selectedPreset;
+                    generation++;
+                    status = "已保存场景预设：" + selectedPreset + "（" + snapshot.Members.Count + " 名角色）";
+                } else status = message;
+            } catch (Exception ex) { status = ex.GetBaseException().Message; Logger.LogWarning(ex); }
+            Refresh();
+        }
+
+        private void ApplyScene(WardrobeScenePreset preset) {
+            if (!IsStudio() || Busy || preset == null) return;
+            List<WardrobeSceneMatch<ChaControl>> matches = WardrobeSceneIdentity.Match(preset, Characters(), CharacterIdentity);
+            if (matches.Count == 0) { status = "没有可唯一匹配的角色，未应用场景预设。"; Refresh(); return; }
+            batch = new SceneBatch {
+                Name = preset.Name, SceneHandle = SceneManager.GetActiveScene().handle, Matches = matches,
+                Total = preset.Members.Count, Skipped = preset.Members.Count - matches.Count
+            };
+            generation++;
+            status = batch.Progress;
+            Refresh();
+        }
+
+        private bool SceneTargetCurrent(ChaControl character, string key) {
+            return batch != null && character != null && IsStudio() &&
+                SceneManager.GetActiveScene().handle == batch.SceneHandle &&
+                ReferenceEquals(WardrobeSceneIdentity.FindUnique(Characters(), key, CharacterIdentity), character);
+        }
+
+        private void AdvanceSceneBatch() {
+            SceneBatch current = batch;
+            if (current == null || pending != null) return;
+            if (current.Next >= current.Matches.Count) {
+                status = current.Progress + " · 完成";
+                batch = null; generation++; Refresh(); return;
+            }
+            WardrobeSceneMatch<ChaControl> match = current.Matches[current.Next++];
+            ChaControl character = match.Target;
+            WardrobePreset preset = match.Member.State;
+            if (!SceneTargetCurrent(character, match.Member.Key) || preset.Coordinate < 0 ||
+                preset.Coordinate >= CoordinateCount(character)) current.Skipped++;
+            else if (Coordinate(character) == preset.Coordinate) ApplySceneMember(character, preset);
+            else if (BeginCoordinateChange(character, preset.Coordinate, preset, match.Member.Key)) return;
+            else current.Skipped++;
+            status = current.Progress;
+            Refresh();
+        }
+
+        private void CancelOperations(string reason) {
+            if (batch != null) {
+                // Count the pending character and all not-yet-started members.
+                batch.Skipped += batch.Total - batch.Completed - batch.Partial - batch.Skipped;
+                status = batch.Progress + " · " + reason;
+            } else status = reason;
+            pending = null; batch = null; generation++;
+        }
+
+        private bool TryApplySnapshot(ChaControl character, WardrobePreset preset, out int applied, out int total, out string error) {
+            applied = 0; total = preset.Accessories.Count + preset.Garments.Count + (preset.ShoeMode >= 0 ? 1 : 0);
+            error = null;
+            try {
+                if (character == null || Coordinate(character) != preset.Coordinate) {
+                    error = "配装已经变更，未应用。"; return false;
+                }
                 if (preset.ShoeMode >= 0 && SetShoeMode(character, preset.ShoeMode)) applied++;
                 foreach (GarmentVisibility entry in preset.Garments)
                     if (SetMatchingGarment(character, entry)) applied++;
                 foreach (AccessoryVisibility entry in preset.Accessories)
                     if (SetMatchingAccessory(character, entry)) applied++;
-                status = "已应用预设：" + applied + " 项匹配，" + (total - applied) + " 项跳过。";
-            } catch (Exception ex) { status = "应用中断：" + ex.GetBaseException().Message; Logger.LogWarning(ex); }
+                return true;
+            } catch (Exception ex) { error = ex.GetBaseException().Message; Logger.LogWarning(ex); return false; }
+        }
+
+        private void ApplySceneMember(ChaControl character, WardrobePreset preset) {
+            int applied, total; string error;
+            bool success = TryApplySnapshot(character, preset, out applied, out total, out error);
+            if (success && applied == total) batch.Completed++;
+            else if (applied > 0) batch.Partial++;
+            else batch.Skipped++;
+        }
+
+        private void ApplyAccessories(ChaControl character, WardrobePreset preset) {
+            int applied, total; string error;
+            bool success = TryApplySnapshot(character, preset, out applied, out total, out error);
+            status = (success ? "已应用预设：" : "应用中断：" + error + " · ") +
+                applied + " 项匹配，" + (total - applied) + " 项跳过。";
             Refresh();
         }
     }

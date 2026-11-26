@@ -4,7 +4,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 5;
+        internal const int TestCount = 6;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
@@ -12,6 +12,7 @@ namespace MaximumUI.Tests {
             DisplayEqualityIncludesBusinessIdentity();
             FiltersAndBatchOperateOnDisplayedRows();
             GarmentPageDispatchesNativeCommands();
+            SceneScopeAndCancelAreIndependent();
         }
 
         private static WardrobeViewModel Create() {
@@ -119,6 +120,32 @@ namespace MaximumUI.Tests {
             ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
             ((Checkbox)((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0)).OnChange(false);
             Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
+        }
+
+        private static void SceneScopeAndCancelAreIndependent() {
+            WardrobeViewModel model = Create();
+            model.CanScenePresets = true; model.HasSceneTargets = true; model.HasTarget = false;
+            model.Scope = 1;
+            int scope = -1, cancelled = 0;
+            model.ChangeScope = value => scope = value;
+            model.Cancel = () => cancelled++;
+            WardrobeView view = new WardrobeView { Model = model };
+            Widget root = view.Build(null);
+            Require(Find(root, "wardrobe-apply").Enabled && Find(root, "wardrobe-create").Enabled,
+                "Scene presets do not depend on a selected character.");
+            ((ComboBox<int>)Find(root, "wardrobe-preset-scope")).OnChange(0);
+            Require(scope == 0, "Scope selection has its own callback.");
+            model.Busy = true;
+            root = view.Build(null);
+            Require(!Find(root, "wardrobe-preset-scope").Enabled && !Find(root, "wardrobe-apply").Enabled,
+                "Batch blocks scope and preset changes.");
+            ((ComboBox<int>)Find(root, "wardrobe-preset-scope")).OnChange(1);
+            ((Button)Find(root, "wardrobe-cancel")).OnClick();
+            Require(scope == 0 && cancelled == 1, "Cancellation remains available while other commands are blocked.");
+            model.Busy = false; model.HasSceneTargets = false;
+            root = view.Build(null);
+            Require(!Find(root, "wardrobe-create").Enabled && Find(root, "wardrobe-delete").Enabled,
+                "Empty scenes allow preset maintenance but not application.");
         }
 
         private static Widget Find(Widget root, string key) {

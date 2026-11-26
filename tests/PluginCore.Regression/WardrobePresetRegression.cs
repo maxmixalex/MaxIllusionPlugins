@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using ClothingControl;
 
 internal static class WardrobePresetRegression {
@@ -27,6 +28,44 @@ internal static class WardrobePresetRegression {
         gate = new WardrobeLoadGate(0, 2, 10, 0f);
         Require(gate.Poll(11, .2f, false, 2, true) == WardrobeLoadResult.Cancelled, "A replaced character is never written.");
         Require(gate.Poll(12, 8f, true, 0, false) == WardrobeLoadResult.TimedOut, "Timeout leaves the state untouched.");
+    }
+
+    private sealed class Actor {
+        internal string Key;
+        internal Actor(string key) { Key = key; }
+    }
+
+    private static void SceneRoundTrip(string path, WardrobePresetStore store) {
+        string alice = WardrobeSceneIdentity.Key("Alice", "C:/cards/ALICE.png");
+        string bob = WardrobeSceneIdentity.Key("Bob", "D:/cards/bob.png");
+        Require(alice == WardrobeSceneIdentity.Key("Alice", @"D:\other\alice.png"), "Card basenames survive relocation.");
+        Require(alice != WardrobeSceneIdentity.Key("Other", "alice.png"), "Same card basename with another name does not match.");
+        Require(WardrobeSceneIdentity.Key("", "alice.png") == null, "Unnamed characters have no guessed identity.");
+        WardrobeScenePreset scene = new WardrobeScenePreset();
+        scene.Members.Add(new WardrobeSceneMember { Key = alice, DisplayName = "Alice", State = new WardrobePreset { Coordinate = 1 } });
+        scene.Members.Add(new WardrobeSceneMember { Key = bob, DisplayName = "Bob", State = new WardrobePreset { Coordinate = 2 } });
+        string error;
+        Require(store.SaveScene(scene, "Legacy", false, out error), "Scene namespace permits same name as role preset.");
+        scene.Members[0].State.Coordinate = 4;
+        Require(store.FindScene("Legacy").Members[0].State.Coordinate == 1, "Saved scene is isolated from the caller.");
+        Require(!store.SaveScene(scene, "legacy", false, out error), "Scene names are unique case-insensitively.");
+        var a = new Actor(alice); var b = new Actor(bob); var unknown = new Actor("unknown");
+        WardrobeScenePreset loaded = store.FindScene("Legacy");
+        List<WardrobeSceneMatch<Actor>> matches = WardrobeSceneIdentity.Match(loaded, new[] { b, unknown, a }, x => x.Key);
+        Require(matches.Count == 2 && ReferenceEquals(matches[0].Target, a) && ReferenceEquals(matches[1].Target, b),
+            "Reordering or adding a character does not alter identity matches.");
+        matches = WardrobeSceneIdentity.Match(loaded, new[] { a, new Actor(alice), b }, x => x.Key);
+        Require(matches.Count == 1 && ReferenceEquals(matches[0].Target, b), "Ambiguous duplicate character is skipped.");
+        matches = WardrobeSceneIdentity.Match(loaded, new[] { unknown }, x => x.Key);
+        Require(matches.Count == 0, "Missing characters are not assigned by index.");
+        WardrobeScenePreset invalid = loaded.Copy(); invalid.Members.Add(invalid.Members[0].Copy());
+        Require(!store.SaveScene(invalid, "Duplicate", false, out error), "Duplicate saved identity rejected before writing.");
+        Require(store.SaveScene(scene, "Legacy", true, out error), "Scene overwrite works.");
+        WardrobePresetStore reopened = new WardrobePresetStore(path);
+        Require(reopened.Reload() && reopened.Find("Legacy") != null &&
+            reopened.FindScene("Legacy").Members[0].State.Coordinate == 4, "Both preset namespaces survive XML reload.");
+        Require(reopened.DeleteScene("Legacy", out error) && reopened.Find("Legacy") != null && reopened.SceneNames().Length == 0,
+            "Deleting a scene never deletes the character preset with the same name.");
     }
 
     internal static void RunAll() {
@@ -73,6 +112,8 @@ internal static class WardrobePresetRegression {
             Require(reloaded.Reload(), "Legacy XML without garment or shoe fields is valid.");
             WardrobePreset legacy = reloaded.Find("Legacy");
             Require(legacy.ShoeMode == -1 && legacy.Garments.Count == 0, "Legacy preset does not manufacture garment settings.");
+            Require(reloaded.SceneNames().Length == 0, "Old XML loads without scene presets.");
+            SceneRoundTrip(path, reloaded);
         } finally { Directory.Delete(directory, true); }
     }
 }

@@ -23,11 +23,13 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("xml-error");
         yield return Wardrobe("garments");
         yield return Wardrobe("filtered");
+        yield return Wardrobe("scene");
+        yield return Wardrobe("scene-applying");
     }
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.2.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.3.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -50,6 +52,14 @@ internal static class PluginPreviewScenes {
             });
         }
         if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
+        if (state == "scene" || state == "scene-applying") {
+            model.Scope = 1; model.CanScenePresets = true; model.HasSceneTargets = true;
+            model.Presets = new[] { "旅行组合", "舞台配装" }; model.Name = "旅行组合";
+            model.ChangeScope = delegate { }; model.Cancel = delegate { };
+            if (state == "scene-applying") {
+                model.Busy = true; model.Status = "场景预设 旅行组合：1/2（成功 1，部分 0，跳过 0）";
+            }
+        }
         if (state == "busy") { model.Busy = true; model.Status = "正在载入配装…"; }
         if (state == "empty") {
             model.Targets = new string[0]; model.Coordinates = new string[0];
