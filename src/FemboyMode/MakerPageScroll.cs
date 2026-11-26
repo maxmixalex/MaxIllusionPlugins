@@ -52,6 +52,7 @@ namespace FemboyMode
         private float nativeScrollSensitivity;
         private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
         private int wheelHandledFrame = -1;
+        private bool hitRegionAudited;
 
         private static Transform FindMenu(Transform from)
         {
@@ -210,6 +211,13 @@ namespace FemboyMode
                 if (instance.scrollbar == null || instance.scrollbar.handleRect == null)
                     throw new InvalidOperationException("Cloned native scrollbar is missing a handle.");
                 instance.scrollbar.direction = Scrollbar.Direction.BottomToTop;
+                // Keep the native Scrollbar's actual visual root and handle
+                // as UI raycast targets. This is a real Scrollbar, not a
+                // disconnected invisible click proxy.
+                Graphic trackGraphic = barObject.GetComponent<Graphic>();
+                if (trackGraphic != null) trackGraphic.raycastTarget = true;
+                Graphic handleGraphic = instance.scrollbar.handleRect.GetComponent<Graphic>();
+                if (handleGraphic != null) handleGraphic.raycastTarget = true;
                 instance.scrollbar.onValueChanged = new Scrollbar.ScrollEvent();
                 instance.scrollbar.onValueChanged.AddListener(instance.OnScrollbarChanged);
                 barObject.SetActive(true);
@@ -363,6 +371,39 @@ namespace FemboyMode
                 bar.anchoredPosition = anchored;
         }
 
+        private void AuditScrollbarHitRegion()
+        {
+            if (scrollbar == null || ownedBar == null || scrollbar.handleRect == null ||
+                EventSystem.current == null) return;
+            hitRegionAudited = true;
+            Canvas canvas = ownedBar.GetComponentInParent<Canvas>();
+            Camera eventCamera = canvas == null ||
+                canvas.renderMode == RenderMode.ScreenSpaceOverlay ?
+                null : canvas.worldCamera;
+            scrollbar.handleRect.GetWorldCorners(corners);
+            Vector3 center = (corners[0] + corners[2]) * .5f;
+            Vector2 screenCenter = RectTransformUtility.WorldToScreenPoint(
+                eventCamera, center);
+            var pointer = new PointerEventData(EventSystem.current);
+            pointer.position = screenCenter;
+            var raycasts = new List<RaycastResult>();
+            EventSystem.current.RaycastAll(pointer, raycasts);
+            bool hitOwnScrollbar = raycasts.Count > 0 &&
+                raycasts[0].gameObject != null &&
+                raycasts[0].gameObject.transform.IsChildOf(ownedBar.transform);
+            if (!hitOwnScrollbar)
+                Debug.LogWarning("Femboy Mode: native external scrollbar handle hit-test is blocked. " +
+                    "Handle screen center=" + screenCenter +
+                    "; top raycast=" + (raycasts.Count > 0 && raycasts[0].gameObject != null ?
+                        raycasts[0].gameObject.name : "<none>") +
+                    "; parent=" + (scrollbarParent == null ? "<missing>" :
+                        scrollbarParent.name) +
+                    ". The actual scrollbar is outside tglAll; inspect UI raycast occlusion.");
+            else
+                Debug.Log("Femboy Mode: native external scrollbar visual handle and " +
+                    "EventSystem raycast agree at " + screenCenter + ".");
+        }
+
         private void DisableNativeWheelHandlers()
         {
             // Sliders keep their drag/keyboard interaction. Wheel events
@@ -429,6 +470,7 @@ namespace FemboyMode
             SetViewportHeight(MeasureViewportHeight());
             nextRefresh = 0f;
             scrollOffset = 0f;
+            hitRegionAudited = false;
             PositionExternalScrollbar();
         }
 
@@ -474,6 +516,11 @@ namespace FemboyMode
             if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
                 SetViewportHeight(MeasureViewportHeight());
             PositionExternalScrollbar();
+            // Test the actual Unity EventSystem hit at the *rendered* handle
+            // center, not merely the cloned object's local RectTransform.
+            if (!hitRegionAudited && PageVisiblySelected() &&
+                Time.frameCount >= installedFrame + 4)
+                AuditScrollbarHitRegion();
             if (Time.unscaledTime >= nextRefresh || page.childCount != lastChildCount)
             {
                 nextRefresh = Time.unscaledTime + .25f;
