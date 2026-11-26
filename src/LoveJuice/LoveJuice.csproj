@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>LoveJuice</Product>
     <AssemblyTitle>LoveJuice</AssemblyTitle>
-    <Version>0.3.2</Version>
-    <AssemblyVersion>0.3.2.0</AssemblyVersion>
+    <Version>0.3.3</Version>
+    <AssemblyVersion>0.3.3.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\\MaximumUI\\MaximumUI.csproj" />

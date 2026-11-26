@@ -113,6 +113,17 @@ internal static class Program {
                 "p_koi_syu_LiquidSiru_00_00", "Real Studio viscous-liquid item");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Intimate) ==
                 "p_koi_syu_LiquidSiru_00_00", "Independent pelvis source reuses Studio viscous-liquid asset");
+            Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.MalePre) ==
+                "p_koi_syu_LiquidWater_00_00", "Male pre-fluid reuses native transparent Studio water asset");
+            Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 65f, 45f) == 2,
+                "Active primary male with sufficient gauge emits at a bounded level");
+            Check(LiquidSourceTriggers.MalePreLevel(1, true, true, 100f, 0f) == 0 &&
+                LiquidSourceTriggers.MalePreLevel(0, false, true, 100f, 0f) == 0 &&
+                LiquidSourceTriggers.MalePreLevel(0, true, false, 100f, 0f) == 0,
+                "Female roles, stopped animations and secondary performers do not auto-emit");
+            Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 25f, 45f) == 0 &&
+                LiquidSourceTriggers.MalePreLevel(0, true, true, float.NaN, 0f) == 0,
+                "Below-threshold and invalid gauge values never trigger emission");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Special) ==
                 "p_koi_syu_LiquidKancho_00_00", "Real Studio heavy-liquid item");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Shower) ==

@@ -3,17 +3,17 @@ using MaximumUI;
 
 namespace LoveJuice {
     internal sealed class LoveJuiceViewModel {
-        internal string Version = "0.3.2", Status = "就绪", Integration = "未连接";
-        internal bool Enabled, HasScene, Face, Body, Intimate, Milk, Shower, Special, Collision;
+        internal string Version = "0.3.3", Status = "就绪", Integration = "未连接";
+        internal bool Enabled, HasScene, Face, Body, Intimate, MalePre, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
         internal string[] ActorNames = new string[0];
         internal int SelectedActorIndex = -1;
-        internal float Interval, Gravity, Damping, Lifetime, Scale, LaunchSpeed, MilkThreshold;
-        internal Action<bool> ChangeEnabled, ChangeFace, ChangeBody, ChangeIntimate, ChangeMilk,
+        internal float Interval, Gravity, Damping, Lifetime, Scale, LaunchSpeed, MilkThreshold, MalePreThreshold;
+        internal Action<bool> ChangeEnabled, ChangeFace, ChangeBody, ChangeIntimate, ChangeMalePre, ChangeMilk,
             ChangeShower, ChangeSpecial, ChangeCollision;
         internal Action<int> ChangeMaximum, ChangePreviewChannel, SelectActor;
         internal Action<float> ChangeInterval, ChangeGravity, ChangeDamping,
-            ChangeLifetime, ChangeScale, ChangeLaunchSpeed, ChangeMilkThreshold;
+            ChangeLifetime, ChangeScale, ChangeLaunchSpeed, ChangeMilkThreshold, ChangeMalePreThreshold;
         internal Action Preview, Close;
 
         internal bool SameDisplayAs(LoveJuiceViewModel other) {
@@ -24,12 +24,13 @@ namespace LoveJuice {
                 PreviewChannel == other.PreviewChannel &&
                 SelectedActorIndex == other.SelectedActorIndex &&
                 SameNames(ActorNames, other.ActorNames) &&
-                Face == other.Face && Body == other.Body && Intimate == other.Intimate &&
+                Face == other.Face && Body == other.Body && Intimate == other.Intimate && MalePre == other.MalePre &&
                 Milk == other.Milk && Shower == other.Shower && Special == other.Special &&
                 Collision == other.Collision && Near(Interval, other.Interval) &&
                 Near(Gravity, other.Gravity) && Near(Damping, other.Damping) &&
                 Near(Lifetime, other.Lifetime) && Near(Scale, other.Scale) &&
-                Near(LaunchSpeed, other.LaunchSpeed) && Near(MilkThreshold, other.MilkThreshold);
+                Near(LaunchSpeed, other.LaunchSpeed) && Near(MilkThreshold, other.MilkThreshold) &&
+                Near(MalePreThreshold, other.MalePreThreshold);
         }
         private static bool SameNames(string[] a, string[] b) {
             if (a == null || b == null) return a == b;
@@ -63,6 +64,7 @@ namespace LoveJuice {
                 new Checkbox("面部滴落", m.Face, m.ChangeFace, "lovejuice-face").Enabled(m.Enabled).Height(32f),
                 new Checkbox("身体滴落", m.Body, m.ChangeBody, "lovejuice-body").Enabled(m.Enabled).Height(32f),
                 new Checkbox("爱液滴落（SkinEffects）", m.Intimate, m.ChangeIntimate, "lovejuice-intimate").Enabled(m.Enabled).Height(32f),
+                new Checkbox("男性前液（可选）", m.MalePre, m.ChangeMalePre, "lovejuice-male-pre").Enabled(m.Enabled).Height(32f),
                 new Checkbox("乳液效果", m.Milk, m.ChangeMilk, "lovejuice-milk").Enabled(m.Enabled).Height(32f),
                 new Checkbox("淋浴效果", m.Shower, m.ChangeShower, "lovejuice-shower").Enabled(m.Enabled).Height(32f),
                 new Checkbox("FemboyMode 附加效果", m.Special, m.ChangeSpecial,
@@ -83,6 +85,8 @@ namespace LoveJuice {
                     .Enabled(m.Enabled).Height(36f),
                 new SliderFloat("乳液触发值", m.MilkThreshold, 0f, 100f, m.ChangeMilkThreshold, "lovejuice-milk-threshold")
                     .Enabled(m.Enabled && m.Milk).Height(36f),
+                new SliderFloat("男性前液触发值", m.MalePreThreshold, 0f, 100f, m.ChangeMalePreThreshold, "lovejuice-male-pre-threshold")
+                    .Enabled(m.Enabled && m.MalePre).Height(36f),
                 new Checkbox("世界碰撞", m.Collision, m.ChangeCollision, "lovejuice-collision")
                     .Enabled(m.Enabled).Height(32f),
                 new SliderInt("最大粒子数", m.MaximumParticles, 1, 128, m.ChangeMaximum, "lovejuice-maximum")
@@ -103,9 +107,9 @@ namespace LoveJuice {
                     .Enabled(m.HasScene && m.ActorNames.Length > 0).ExpandWidth().Height(36f),
                 new ScrollView("lovejuice-scroll") { controls.ExpandWidth() }.ExpandWidth().ExpandHeight(),
                 new HStack(5f) {
-                    new ComboBox<int>("预览类型", m.PreviewChannel, new[] { 0, 1, 2, 3, 4, 5, 6 },
+                    new ComboBox<int>("预览类型", m.PreviewChannel, new[] { 0, 1, 2, 3, 4, 5, 6, 7 },
                         i => i == 0 ? "水滴" : i == 1 ? "口水" : i == 2 ? "身体" :
-                            i == 3 ? "淋浴" : i == 4 ? "乳液" : i == 5 ? "附加" : "爱液",
+                            i == 3 ? "淋浴" : i == 4 ? "乳液" : i == 5 ? "附加" : i == 6 ? "爱液" : "男性前液",
                         m.ChangePreviewChannel, "lovejuice-preview-channel").Enabled(m.Enabled).ExpandWidth(),
                     new Button("实际发射", m.Preview, "lovejuice-emit")
                         .Enabled(m.Enabled && m.HasScene && m.ActorCount > 0).Width(106f)

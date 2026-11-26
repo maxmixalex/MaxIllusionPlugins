@@ -1,10 +1,14 @@
-# LoveJuice — 0.3.2 (Native Studio liquids)
+# LoveJuice — 0.3.3 (Native Studio liquids)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
 ## Native asset ownership fix
 
 Studio asset-bundle prefabs are borrowed references. LoveJuice now instantiates the emitter **before** changing active state, hierarchy, name or settings; only the owned instance is parented to its scene pool. This avoids mutating or destroying an asset shared with Studio or another mod. Partially initialized emitters and their material copies are cleaned up on failure.
+
+## 0.3.3: opt-in male pre-fluid
+
+An independent male source uses the actual `cm_J_dan100`-family anatomical bone and the native transparent Studio water emitter. It is **off by default**. Periodic droplets are conditionally allowed only for the current primary male performer while a loop animation is active and the male gauge reaches the user-selected threshold (45 by default). This is explicitly a gauge-based proxy rather than a dedicated pre-fluid animation event; ambiguous second-male scenes are not auto-triggered. A missing bone silently skips the channel instead of emitting from an unrelated body part.
 
 ## 0.3.2: independent intimate-fluid source
 
@@ -18,6 +22,7 @@ Inspected the original game's `abdata/studio/info/00.unity3d` in the authorized 
 | --- | --- |
 | Water / preview | `p_koi_syu_LiquidWater_00_00` |
 | Saliva/light liquid | `p_koi_syu_LiquidSio_00_00` |
+| Male pre-fluid (primary male source) | `p_koi_syu_LiquidWater_00_00` |
 | Intimate fluid (pelvis source) | `p_koi_syu_LiquidSiru_00_00` |
 | Body liquid | `p_koi_syu_LiquidSiru_00_00` |
 | Shower | `p_koi_syu_LiquidShower_01_00` |
