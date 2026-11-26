@@ -19,6 +19,29 @@ namespace FemboyMode
             return Clamp(height, 160f, 900f);
         }
 
+        // Use the actual game's scrollbar art width instead of a hard-coded
+        // skinny 14px rail. Only fall back when the stock RectTransform has
+        // not yet received a valid layout pass (inactive Maker tab).
+        internal static float NativeScrollbarWidth(float rectWidth,
+            float sizeDeltaWidth, float parentScaleRatio)
+        {
+            float candidate = Math.Abs(rectWidth);
+            if (!Finite(candidate) || candidate < 12f || candidate > 64f)
+                candidate = Math.Abs(sizeDeltaWidth);
+            if (!Finite(candidate) || candidate < 12f || candidate > 64f)
+                candidate = 26f;
+            if (!Finite(parentScaleRatio) || parentScaleRatio <= 0f)
+                parentScaleRatio = 1f;
+            return Clamp(candidate * parentScaleRatio, 18f, 64f);
+        }
+
+        // Wheel distances are immediate UI units, never smoothed over time.
+        internal static float WheelDistance(float wheelDelta, float step)
+        {
+            if (!Finite(wheelDelta) || !Finite(step) || step <= 0f) return 0f;
+            return Clamp(wheelDelta, -12f, 12f) * Clamp(step, 40f, 320f);
+        }
+
         internal static float MaxOffset(float preferredContentHeight, float viewportHeight)
         {
             if (!Finite(preferredContentHeight) || !Finite(viewportHeight) ||
