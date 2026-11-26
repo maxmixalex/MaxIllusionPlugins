@@ -19,15 +19,15 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
         private ConfigEntry<bool> enabled, face, body, milk, shower, special, collision;
-        private ConfigEntry<int> maxActive;
-        private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed;
+        private ConfigEntry<int> maxActive, previewChannel;
+        private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold;
         private ConfigEntry<KeyboardShortcut> preview;
         private readonly OptionalEffectBridge integrations = new OptionalEffectBridge();
         private readonly Dictionary<ChaControl, Actor> actors = new Dictionary<ChaControl, Actor>();
@@ -51,13 +51,17 @@ namespace LoveJuice {
             enabled = Config.Bind("General", "Enabled", false,
                 "Enable native Studio liquid drips in active H scenes. Off by default until selected by the user.");
             preview = Config.Bind("General", "Preview key", new KeyboardShortcut(KeyCode.F9),
-                "Spawn real Studio liquid samples from the first active scene character.");
+                "Emit native Studio particles from the first active H scene actor.");
+            previewChannel = Config.Bind("General", "Preview channel", 0,
+                "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special.");
             face = Config.Bind("Sources", "Face drips", true,
                 "Read current face overlay / optional SkinEffects levels, including JuiceControl changes.");
             body = Config.Bind("Sources", "Body drips", true,
                 "Read current body overlay / optional SkinEffects levels, including JuiceControl changes.");
             milk = Config.Bind("Sources", "Milk emission", false,
-                "Enable a separate optional chest-source channel with the native liquid prefab.");
+                "Enable independent chest-source droplets during active loop scenes above the gauge threshold.");
+            milkThreshold = Config.Bind("Sources", "Milk gauge threshold", 65f,
+                "Female gauge needed for the optional milk channel; independent of body overlay state.");
             shower = Config.Bind("Sources", "Shower dripping", false,
                 "Enable liquid shower prefabs during animation states containing 'shower'.");
             special = Config.Bind("Sources", "Marked geometry drips", false,
@@ -65,14 +69,14 @@ namespace LoveJuice {
             collision = Config.Bind("Physics", "World collision", true,
                 "Recycle a drop when its ballistic trajectory first touches a world collider.");
             maxActive = Config.Bind("Performance", "Max active drops", 48,
-                "Hard active-object budget. Recycling uses an object pool.");
+                "Hard native particle budget across all pooled Studio emitters.");
             interval = Config.Bind("Performance", "Emission interval", .26f,
                 "Seconds between emissions from a source at one intensity level.");
             gravity = Config.Bind("Physics", "Gravity", 8f, "World-space droplet gravity.");
             drag = Config.Bind("Physics", "Air damping", 1.0f, "Ballistic velocity damping.");
             lifetime = Config.Bind("Physics", "Drop lifetime", 1.6f, "Maximum seconds a droplet stays visible.");
             scale = Config.Bind("Visual", "Prefab scale multiplier", .045f,
-                "Multiply the original Studio liquid prefab transform scale.");
+                "Multiply the original Studio liquid ParticleSystem transform scale.");
             launchSpeed = Config.Bind("Physics", "Launch speed", .35f,
                 "Additional initial speed, relative to the source bone orientation.");
             visuals = new StudioLiquidPool(message => Logger.LogWarning(message));
@@ -151,7 +155,8 @@ namespace LoveJuice {
             return visuals.Spawn(kind, origin, velocity,
                 DropletPhysics.Clamp(scale.Value, .001f, .3f),
                 DropletPhysics.Clamp(lifetime.Value, .2f, 8f),
-                Math.Max(1, Math.Min(128, maxActive.Value)));
+                Math.Max(1, Math.Min(128, maxActive.Value)),
+                gravity.Value, drag.Value, collision.Value);
         }
 
         private void OnSceneChanged(HSceneProc next) {
@@ -231,19 +236,26 @@ namespace LoveJuice {
                 foreach (Actor actor in actors.Values) UpdateLevels(actor);
             }
             if (preview.Value.IsDown()) {
-                foreach (Actor actor in actors.Values) {
-                    for (int i = 0; i < 4; i++) EmitFrom(actor, LoveJuiceChannel.Water, i);
-                    break;
+                LoveJuiceChannel requested = (LoveJuiceChannel)previewChannel.Value;
+                if (StudioLiquidCatalog.Valid(requested)) {
+                    foreach (Actor actor in actors.Values) {
+                        for (int i = 0; i < 4; i++) EmitFrom(actor, requested, i);
+                        break;
+                    }
                 }
             }
             float dt = DropletPhysics.Clamp(Time.deltaTime, 0f, .15f);
             string state = scene.flags.nowAnimStateName ?? string.Empty;
             bool showerActive = state.IndexOf("shower", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 state.IndexOf("シャワー", StringComparison.Ordinal) >= 0;
+            bool activeLoop = state.IndexOf("Loop", StringComparison.Ordinal) >= 0;
+            int milkLevel = milk.Value && activeLoop &&
+                scene.flags.gaugeFemale >= DropletPhysics.Clamp(milkThreshold.Value, 0f, 100f)
+                ? Mathf.Clamp(Mathf.RoundToInt(scene.flags.gaugeFemale / 33f), 1, 3) : 0;
             foreach (Actor actor in actors.Values) {
                 if (face.Value) TickSource(actor, LoveJuiceChannel.Saliva, actor.FaceLevel, ref actor.FaceTime, dt);
                 if (body.Value) TickSource(actor, LoveJuiceChannel.Body, actor.BodyLevel, ref actor.BodyTime, dt);
-                if (milk.Value) TickSource(actor, LoveJuiceChannel.Milk, actor.BodyLevel, ref actor.MilkTime, dt);
+                if (milk.Value) TickSource(actor, LoveJuiceChannel.Milk, milkLevel, ref actor.MilkTime, dt);
                 if (shower.Value && showerActive)
                     TickSource(actor, LoveJuiceChannel.Shower, 1, ref actor.ShowerTime, dt);
                 if (special.Value) TickSource(actor, LoveJuiceChannel.Special,

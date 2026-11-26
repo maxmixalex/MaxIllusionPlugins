@@ -3,154 +3,186 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace LoveJuice {
-    // A bounded pool of actual Studio item prefabs. The Unity runtime owns
-    // collisions, emission and object lifetime; there are no synthesized
-    // billboard sprites or substitute particle packs in this implementation.
+    // Each verified Studio Liquid prefab is a LOOPING ParticleSystem, not a
+    // single drop. Instead of cloning the whole emitter for every droplet,
+    // keep at most one native emitter per channel, stop its automatic emission
+    // and explicitly emit a bounded number of native particles.
     internal sealed class StudioLiquidPool {
-        private sealed class Drop {
+        private sealed class Emitter {
+            internal GameObject Source;
             internal GameObject Node;
-            internal LoveJuiceChannel Kind;
-            internal DropletMotion Motion;
-            internal float Lifetime, Scale;
-            internal Vector3 OriginalScale;
+            internal ParticleSystem[] Systems;
+            internal readonly List<Material> OwnedMaterials = new List<Material>();
+            internal bool Available;
         }
 
-        private readonly Dictionary<LoveJuiceChannel, GameObject> templates =
-            new Dictionary<LoveJuiceChannel, GameObject>();
-        private readonly Dictionary<LoveJuiceChannel, Stack<GameObject>> inactive =
-            new Dictionary<LoveJuiceChannel, Stack<GameObject>>();
-        private readonly List<Drop> active = new List<Drop>();
-        private readonly HashSet<LoveJuiceChannel> failed = new HashSet<LoveJuiceChannel>();
+        private readonly Dictionary<LoveJuiceChannel, Emitter> emitters =
+            new Dictionary<LoveJuiceChannel, Emitter>();
+        private readonly HashSet<LoveJuiceChannel> unavailable = new HashSet<LoveJuiceChannel>();
         private readonly Action<string> warn;
         private GameObject host;
-        private int collisions;
+        private int lastParticleCount;
 
-        internal int ActiveCount { get { return active.Count; } }
-        internal int Collisions { get { return collisions; } }
+        internal int ActiveCount { get { return CountParticles(); } }
+        internal int EmitterCount { get { return emitters.Count; } }
 
         internal StudioLiquidPool(Action<string> warn) { this.warn = warn; }
 
         internal void Attach(Transform scene) {
             Dispose();
             if (scene == null) return;
-            host = new GameObject("LoveJuice.StudioLiquidEffects");
+            host = new GameObject("LoveJuice.NativeStudioEmitters");
             host.transform.SetParent(scene, false);
         }
 
-        private GameObject Template(LoveJuiceChannel kind) {
-            if (host == null || failed.Contains(kind)) return null;
-            GameObject template;
-            if (templates.TryGetValue(kind, out template) && template != null) return template;
+        private static void TintMilk(Emitter emitter) {
+            Color milk = new Color(.96f, .95f, .91f, 1f);
+            foreach (Renderer renderer in emitter.Node.GetComponentsInChildren<Renderer>(true)) {
+                if (renderer == null) continue;
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null || materials.Length == 0) continue;
+                Material[] copy = new Material[materials.Length];
+                for (int i = 0; i < materials.Length; i++) {
+                    Material shared = materials[i];
+                    if (shared == null) continue;
+                    Material material = new Material(shared);
+                    // Keep original alpha and all non-color shader properties.
+                    if (material.HasProperty("_Color")) {
+                        Color current = material.GetColor("_Color");
+                        material.SetColor("_Color", new Color(milk.r, milk.g, milk.b, current.a));
+                    }
+                    emitter.OwnedMaterials.Add(material);
+                    copy[i] = material;
+                }
+                renderer.sharedMaterials = copy;
+            }
+        }
+
+        private Emitter GetEmitter(LoveJuiceChannel kind) {
+            Emitter emitter;
+            if (host == null || unavailable.Contains(kind)) return null;
+            if (emitters.TryGetValue(kind, out emitter) && emitter.Node != null) return emitter;
             string name = StudioLiquidCatalog.Prefab(kind);
             if (name == null) return null;
             try {
-                // CommonLib's clone flag returns a live Unity object. Keep the
-                // one template disabled; instantiate pooled instances from it.
-                template = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle,
+                // This API is used by the actual Studio AddObjectItem, with
+                // the exact asset key recorded in the installed info bundle.
+                GameObject source = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle,
                     name, true, StudioLiquidCatalog.Manifest);
-                if (template == null)
-                    template = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle, name, true, "");
-                if (template == null) throw new InvalidOperationException("Studio prefab not found: " + name);
-                template.name = "LoveJuice.Template." + name;
-                template.transform.SetParent(host.transform, false);
-                template.SetActive(false);
-                templates[kind] = template;
-                return template;
+                if (source == null)
+                    source = CommonLib.LoadAsset<GameObject>(StudioLiquidCatalog.Bundle,
+                        name, true, string.Empty);
+                if (source == null) throw new InvalidOperationException("Cannot load Studio prefab: " + name);
+                source.name = "LoveJuice.NativeTemplate." + name;
+                source.SetActive(false);
+                source.transform.SetParent(host.transform, false);
+                GameObject node = UnityEngine.Object.Instantiate(source);
+                if (node == null) throw new InvalidOperationException("Cannot instantiate Studio prefab: " + name);
+                node.name = "LoveJuice.NativeEmitter." + kind;
+                node.transform.SetParent(host.transform, false);
+                node.SetActive(false);
+                emitter = new Emitter {
+                    Source = source, Node = node,
+                    Systems = node.GetComponentsInChildren<ParticleSystem>(true),
+                    Available = true
+                };
+                if (emitter.Systems == null || emitter.Systems.Length == 0)
+                    throw new InvalidOperationException("Studio prefab has no native ParticleSystem: " + name);
+                foreach (ParticleSystem system in emitter.Systems) {
+                    if (system == null) continue;
+                    // Source prefab metadata: loop=true/playOnAwake=true. Turn
+                    // off automatic spray *before* activating the clone.
+                    var main = system.main;
+                    main.loop = false;
+                    main.playOnAwake = false;
+                    main.simulationSpace = ParticleSystemSimulationSpace.World;
+                    var emission = system.emission;
+                    emission.enabled = false;
+                    system.Stop();
+                    system.Clear();
+                }
+                if (kind == LoveJuiceChannel.Milk) TintMilk(emitter);
+                node.SetActive(true);
+                emitters[kind] = emitter;
+                return emitter;
             } catch (Exception ex) {
-                failed.Add(kind);
-                if (warn != null) warn("Native Studio liquid unavailable (" + name + "): " + ex.Message);
+                unavailable.Add(kind);
+                if (emitter != null) {
+                    if (emitter.Node != null) UnityEngine.Object.Destroy(emitter.Node);
+                    if (emitter.Source != null) UnityEngine.Object.Destroy(emitter.Source);
+                }
+                if (warn != null) warn("Native Studio emitter unavailable (" + name + "): " + ex.Message);
                 return null;
             }
         }
 
+        private int CountParticles() {
+            int count = 0;
+            foreach (Emitter emitter in emitters.Values)
+                if (emitter.Systems != null)
+                    foreach (ParticleSystem particle in emitter.Systems)
+                        if (particle != null) count += particle.particleCount;
+            lastParticleCount = count;
+            return count;
+        }
+
         internal bool Spawn(LoveJuiceChannel kind, Vector3 position, Vector3 velocity,
-            float size, float duration, int limit) {
-            if (host == null || active.Count >= limit) return false;
-            GameObject template = Template(kind);
-            if (template == null) return false;
-            GameObject node = null;
-            Stack<GameObject> recycled;
-            if (inactive.TryGetValue(kind, out recycled)) {
-                while (recycled.Count > 0 && node == null) node = recycled.Pop();
+            float size, float duration, int limit, float gravity, float damping, bool collision) {
+            if (host == null || ActiveCount >= limit) return false;
+            Emitter emitter = GetEmitter(kind);
+            if (emitter == null || !emitter.Available) return false;
+            Transform transform = emitter.Node.transform;
+            transform.position = position;
+            if (velocity.sqrMagnitude > .0001f)
+                transform.rotation = Quaternion.FromToRotation(Vector3.up, velocity.normalized);
+            transform.localScale = emitter.Source.transform.localScale * size;
+            bool sent = false;
+            foreach (ParticleSystem system in emitter.Systems) {
+                if (system == null || ActiveCount >= limit) break;
+                var main = system.main;
+                main.maxParticles = Math.Max(1, Math.Min(128, limit));
+                main.gravityModifier = new ParticleSystem.MinMaxCurve(
+                    DropletPhysics.Clamp(gravity, 0f, 30f) / 9.81f);
+                main.startLifetime = new ParticleSystem.MinMaxCurve(
+                    DropletPhysics.Clamp(duration, .2f, 8f));
+                var collisions = system.collision;
+                collisions.enabled = collision;
+                if (collision) collisions.type = ParticleSystemCollisionType.World;
+                var limitVelocity = system.limitVelocityOverLifetime;
+                if (damping > 0f) {
+                    limitVelocity.enabled = true;
+                    limitVelocity.dampen = DropletPhysics.Clamp(damping / 10f, 0f, 1f);
+                } else limitVelocity.enabled = false;
+                if (!system.isPlaying) system.Play();
+                // Preserve authored native particle renderer, shape and size.
+                // Emit exactly one native particle, not an entire looping jet.
+                ParticleSystem.EmitParams sample = new ParticleSystem.EmitParams();
+                sample.position = Vector3.zero;
+                sample.velocity = velocity;
+                sample.startLifetime = DropletPhysics.Clamp(duration, .2f, 8f);
+                system.Emit(sample, 1);
+                sent = true;
             }
-            if (node == null) {
-                node = UnityEngine.Object.Instantiate(template);
-                if (node == null) return false;
-                node.transform.SetParent(host.transform, false);
-                node.name = "LoveJuice." + kind;
-            }
-            node.transform.position = position;
-            node.transform.rotation = Quaternion.identity;
-            node.transform.localScale = template.transform.localScale * size;
-            node.SetActive(true);
-            // These components, when present in the game's prefab, must
-            // start their original native lifetime rather than a fake effect.
-            ParticleSystem[] systems = node.GetComponentsInChildren<ParticleSystem>(true);
-            foreach (ParticleSystem system in systems) {
-                if (system != null) { system.Clear(); system.Play(); }
-            }
-            active.Add(new Drop {
-                Node = node, Kind = kind, OriginalScale = template.transform.localScale,
-                Scale = size, Lifetime = duration,
-                Motion = new DropletMotion {
-                    X = position.x, Y = position.y, Z = position.z,
-                    VX = velocity.x, VY = velocity.y, VZ = velocity.z
-                }
-            });
-            return true;
+            return sent;
         }
 
-        private void Recycle(int index) {
-            Drop drop = active[index];
-            if (drop.Node != null) {
-                drop.Node.SetActive(false);
-                Stack<GameObject> pool;
-                if (!inactive.TryGetValue(drop.Kind, out pool)) {
-                    pool = new Stack<GameObject>();
-                    inactive[drop.Kind] = pool;
-                }
-                pool.Push(drop.Node);
-            }
-            active.RemoveAt(index);
-        }
-
-        internal void Tick(float frameTime, float gravity, float damping, bool collide) {
-            // The game's frame rate can spike during load. Bound the catch-up
-            // interval; never teleport pooled liquids through the world.
-            float time = DropletPhysics.Clamp(frameTime, 0f, .15f);
-            int steps = Mathf.Max(1, Mathf.CeilToInt(time / .03f));
-            float dt = time / steps;
-            for (int i = active.Count - 1; i >= 0; i--) {
-                Drop d = active[i];
-                if (d.Node == null) { active.RemoveAt(i); continue; }
-                bool hitGround = false;
-                for (int j = 0; j < steps; j++) {
-                    Vector3 previous = d.Node.transform.position;
-                    d.Motion = DropletPhysics.Step(d.Motion, dt, gravity, damping);
-                    Vector3 next = new Vector3(d.Motion.X, d.Motion.Y, d.Motion.Z);
-                    Vector3 distance = next - previous;
-                    if (collide && d.Motion.Age > .1f && distance.sqrMagnitude > .000001f &&
-                        Physics.Raycast(previous, distance.normalized, distance.magnitude)) {
-                        hitGround = true;
-                        collisions++;
-                        break;
-                    }
-                    d.Node.transform.position = next;
-                }
-                if (hitGround || d.Motion.Age >= d.Lifetime) { Recycle(i); continue; }
-                float life = Mathf.Clamp01(d.Motion.Age / d.Lifetime);
-                d.Node.transform.localScale = d.OriginalScale * d.Scale * (1f - .5f * life);
-            }
+        internal void Tick(float time, float gravity, float damping, bool collision) {
+            // Unity's native particle simulation owns world-space motion and
+            // hit testing. This lightweight Tick performs no per-frame clones.
+            // Update the observed count for diagnostics and the global budget.
+            lastParticleCount = CountParticles();
         }
 
         internal void Dispose() {
-            active.Clear();
-            inactive.Clear();
-            templates.Clear();
-            failed.Clear();
+            foreach (Emitter emitter in emitters.Values) {
+                foreach (Material material in emitter.OwnedMaterials)
+                    if (material != null) UnityEngine.Object.Destroy(material);
+            }
+            emitters.Clear();
+            unavailable.Clear();
             if (host != null) UnityEngine.Object.Destroy(host);
             host = null;
-            collisions = 0;
+            lastParticleCount = 0;
         }
     }
 }
