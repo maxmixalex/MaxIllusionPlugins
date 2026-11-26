@@ -65,6 +65,51 @@ internal static class Program
             settings.StrengthMaxSeconds <= 120f, "bad timer sanitized");
     }
 
+    private static void ReplayTests() {
+        var gate = new HSControlReplayGate();
+        ReplayCommand result = ReplayCommand.None;
+        for (int i = 0; i < 51; i++) {
+            result = gate.Step(.25f, 1, "OUT_A", false, true, true, true);
+            Check(result == ReplayCommand.None, "Native Houshi replay respects 10+3 second wait");
+        }
+        Check(gate.Step(.25f, 1, "OUT_A", false, true, true, true) == ReplayCommand.Again,
+            "Native Houshi uses the only mode which processes Again");
+        for (int i = 0; i < 100; i++)
+            Check(gate.Step(.25f, 1, "OUT_A", false, true, true, true) == ReplayCommand.None,
+                "Houshi replay issues one command per result");
+        gate.Reset();
+        for (int i = 0; i < 52; i++)
+            result = gate.Step(.25f, 2, "A_OUT_A", false, true, true, true);
+        Check(result == ReplayCommand.Insert, "Sonyu must insert rather than send an unhandled Again");
+        for (int i = 0; i < 23; i++)
+            Check(gate.Step(.25f, 2, "A_OUT_A", false, true, true, true) == ReplayCommand.None,
+                "Do not send Sonyu continuation while the previous animation remains active");
+        Check(gate.Step(.25f, 2, "A_IN_A", false, false, true, true) == ReplayCommand.None,
+            "Voice guard defers Sonyu continuation");
+        Check(gate.Step(.25f, 2, "A_IN_A", false, true, true, true) == ReplayCommand.Resume,
+            "Sonyu continuation uses native SpeedUp action after insertion");
+        Check(gate.Step(.25f, 2, "A_IN_A", false, true, true, true) == ReplayCommand.None,
+            "Sonyu continuation is not duplicated");
+        Check(gate.Step(.1f, 2, "WLoop", false, true, true, true) == ReplayCommand.None,
+            "New loop re-arms replay.");
+        gate.Reset();
+        for (int i = 0; i < 52; i++) result = gate.Step(.25f, 2, "IN_A", false, false, true, true);
+        Check(result == ReplayCommand.None, "Voice busy prevents commands after timeout");
+        Check(gate.Step(.25f, 2, "IN_A", false, true, true, true) == ReplayCommand.Resume,
+            "Sonyu inside result directly requests native speedup");
+        Check(gate.Step(.25f, 2, "IN_A", true, true, true, true) == ReplayCommand.None &&
+            gate.Step(.25f, 5, "IN_A", false, true, true, true) == ReplayCommand.None,
+            "Rely and unsupported game modes cannot restart");
+        gate.Reset();
+        for (int i = 0; i < 52; i++) result = gate.Step(.25f, 7, "OUT_A", false, true, false, true);
+        Check(result == ReplayCommand.None, "Existing native click blocks auto replay");
+        Check(gate.Step(.25f, 7, "OUT_A", false, true, true, true) == ReplayCommand.Insert,
+            "3P Sonyu uses its native insert action");
+        gate.Reset();
+        Check(gate.Step(.25f, 1, "OUT_A", false, true, true, false) == ReplayCommand.None,
+            "Disabling auto replay cancels pending actions");
+    }
+
     private static void IniTests() {
         string path = Path.Combine(Path.GetTempPath(), "hscontrol-test-" + Guid.NewGuid().ToString("N") + ".ini");
         try {
@@ -91,6 +136,7 @@ internal static class Program
         try {
             EngineTests();
             IniTests();
+            ReplayTests();
             Console.WriteLine("HSControl state-machine and legacy-config assertions passed: " + assertions);
             return 0;
         } catch (Exception ex) {

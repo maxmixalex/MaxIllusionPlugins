@@ -33,8 +33,9 @@ namespace HSControl
         private NativeSceneButton sceneButton;
         private float nextButtonProbe;
         private Harmony harmony;
-        private bool visible, didMaleFinish, replayPending, replayIssued, strengthPending;
-        private float replayElapsed, nextViewPoll;
+        private bool visible, didMaleFinish, strengthPending;
+        private readonly HSControlReplayGate replayGate = new HSControlReplayGate();
+        private float nextViewPoll;
         private int generation, sceneCheck;
         private string status = "就绪";
 
@@ -139,8 +140,7 @@ namespace HSControl
             nextButtonProbe = 0f;
             scene = next;
             didMaleFinish = false;
-            replayPending = false;
-            replayIssued = false;
+            replayGate.Reset();
             strengthPending = false;
             generation++;
             if (next != null && next.flags != null) {
@@ -182,29 +182,28 @@ namespace HSControl
             }
         }
 
+        private bool ReplayVoiceReady() {
+            if (scene == null || scene.voice == null || scene.voice.nowVoices == null ||
+                scene.voice.nowVoices.Length == 0 || scene.voice.nowVoices[0] == null ||
+                scene.voice.nowVoices[0].state != HVoiceCtrl.VoiceKind.breath) return false;
+            if (scene.flags != null && (int)scene.flags.mode >= 6 &&
+                scene.voice.nowVoices.Length > 1 && scene.voice.nowVoices[1] != null &&
+                scene.voice.nowVoices[1].state != HVoiceCtrl.VoiceKind.breath) return false;
+            return true;
+        }
+
         private void HandleReplay(HFlag flags, HSControlSettings settings) {
-            if (!settings.AutoReplay || !HSControlMotionEngine.IsSupportedMode((int)flags.mode)) {
-                replayPending = false;
-                replayIssued = false;
-                replayElapsed = 0f;
-                return;
-            }
-            string state = flags.nowAnimStateName ?? string.Empty;
-            if (state.IndexOf("Loop", StringComparison.Ordinal) >= 0) {
-                replayPending = false;
-                replayIssued = false;
-                replayElapsed = 0f;
-                return;
-            }
-            if (replayIssued || !state.EndsWith("_A", StringComparison.Ordinal)) return;
-            if (!replayPending) { replayPending = true; replayElapsed = 0f; }
-            replayElapsed += Time.deltaTime;
-            if (replayElapsed >= 1.5f && flags.click == HFlag.ClickKind.none) {
-                flags.click = HFlag.ClickKind.again;
-                replayPending = false;
-                replayIssued = true;
-                replayElapsed = 0f;
-            }
+            ReplayCommand command = replayGate.Step(Time.deltaTime, (int)flags.mode,
+                flags.nowAnimStateName, flags.rely, ReplayVoiceReady(),
+                flags.click == HFlag.ClickKind.none, settings.AutoReplay);
+            if (command == ReplayCommand.None) return;
+            if (command == ReplayCommand.Again) flags.click = HFlag.ClickKind.again;
+            else if (command == ReplayCommand.Insert)
+                flags.click = flags.isAnalPlay && flags.isAnalInsertOK
+                    ? HFlag.ClickKind.insert_anal : HFlag.ClickKind.insert;
+            else if (command == ReplayCommand.Resume)
+                flags.click = HFlag.ClickKind.speedup;
+            status = "自动恢复：" + command;
         }
 
         internal void AfterWaitSpeedProc(HFlag flags) {
