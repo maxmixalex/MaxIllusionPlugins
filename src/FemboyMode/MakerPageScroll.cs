@@ -326,14 +326,19 @@ namespace FemboyMode
                 Mathf.Max(.001f, Mathf.Abs(scrollbarParent.lossyScale.x));
             float ratioY = Mathf.Abs(page.lossyScale.y) /
                 Mathf.Max(.001f, Mathf.Abs(scrollbarParent.lossyScale.y));
-            bar.sizeDelta = new Vector2(nativeBarWidth * ratioX,
+            Vector2 desiredSize = new Vector2(nativeBarWidth * ratioX,
                 viewportHeight * ratioY);
-            bar.rotation = page.rotation;
+            if ((bar.sizeDelta - desiredSize).sqrMagnitude > .01f)
+                bar.sizeDelta = desiredSize;
+            if (Quaternion.Angle(bar.rotation, page.rotation) > .01f)
+                bar.rotation = page.rotation;
             // Top-left of the stock bar is outside the original content
             // right edge. Because this is a sibling of AllTop, it cannot be
             // cut off by the AllTop RectMask2D/stencil Mask.
-            bar.position = page.TransformPoint(new Vector3(
+            Vector3 desiredPosition = page.TransformPoint(new Vector3(
                 page.rect.xMax + nativeBarGap, page.rect.yMax, 0f));
+            if ((bar.position - desiredPosition).sqrMagnitude > .0001f)
+                bar.position = desiredPosition;
         }
 
         private void DisableNativeWheelHandlers()
