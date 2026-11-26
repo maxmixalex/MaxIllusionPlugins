@@ -25,7 +25,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.1";
+        public const string Version = "0.5.2";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -43,6 +43,9 @@ namespace ClothingControl {
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
+        private int lastHotkeyFrame = -1;
+        private float lastHotkeyTime = -1f;
+        private bool makerStateLogged;
         private ConfigEntry<bool> showInMaker;
         private SidebarToggle makerToggle;
         private IDisposable makerSubscription;
@@ -113,12 +116,14 @@ namespace ClothingControl {
 
         private void OnRegisterMaker(object sender, RegisterSubCategoriesEvent e) {
             ReleaseMakerToggle();
+            Logger.LogInfo("ClothingControl Maker sidebar toggle registered.");
             makerToggle = e.AddSidebarControl(new SidebarToggle("ClothingControl", showInMaker.Value, this));
             makerSubscription = makerToggle.ValueChanged.Subscribe(OnMakerToggleChanged);
         }
 
         private void OnMakerToggleChanged(bool value) {
             if (syncingMakerPreference || !MakerAPI.InsideAndLoaded) return;
+            Logger.LogInfo("ClothingControl Maker sidebar toggle clicked; requested=" + value + ".");
             SetMakerPreference(value);
             if (value && !visible) Open();
             else if (!value && visible) Close();
@@ -150,6 +155,7 @@ namespace ClothingControl {
 
         private void OnMakerExiting(object sender, EventArgs e) {
             pendingMakerPreference = false;
+            makerStateLogged = false;
             Close(false);
             ReleaseMakerToggle();
             target = null;
@@ -164,6 +170,10 @@ namespace ClothingControl {
             if (pendingMakerPreference && MakerAPI.InsideAndLoaded) {
                 pendingMakerPreference = false;
                 bool requested = showInMaker.Value;
+                Logger.LogInfo("ClothingControl Maker ready: Show in Maker=" + requested +
+                    ", native UI visible=" + !NativeMakerHidden() +
+                    ", mounted=" + MaximumUIRuntime.IsMounted(MountId) + ".");
+                makerStateLogged = true;
                 SetMakerPreference(requested);
                 if (requested && !visible) Open();
                 else if (!requested && visible) Close(false);
@@ -316,19 +326,80 @@ namespace ClothingControl {
             return (slot + 1) + ". " + (string.IsNullOrEmpty(name) ? part.type + ":" + part.id : name);
         }
 
-        private void Update() {
-            UpdateMakerPresentation();
-            if (shortcut != null && shortcut.Value.IsDown()) {
-                // Keep the existing scene/focus safeguards. Log why a
-                // deliberate shortcut press did nothing, rather than silently
-                // losing a toggle (especially in heavily modded Maker UIs).
-                if (NativeMakerHidden()) Logger.LogInfo("ClothingControl hotkey ignored: native Maker interface is hidden.");
-                else if (MaximumUIRuntime.IsAnyTextFieldFocused || MaximumUIRuntime.IsModalOpen)
-                    Logger.LogInfo("ClothingControl hotkey ignored: a MaximumUI text field or dialog has focus.");
-                else if (visible) Close();
-                else if (SupportedScene()) Open();
-                else Logger.LogInfo("ClothingControl hotkey ignored: only Maker, Studio and Free H are supported.");
+        // The original Clothing State Menu uses Shift+Tab. In some modded
+        // Makers the Unity IMGUI navigation consumes Tab before BepInEx's
+        // KeyboardShortcut.IsDown observes it. Keep the ordinary configurable
+        // shortcut route and add two guarded fallbacks for its original key.
+        // The fallbacks do not intercept a user's custom binding.
+        private bool UsesDefaultShortcut() {
+            return shortcut != null &&
+                shortcut.Value.Equals(new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift));
+        }
+
+        private bool RawDefaultShortcutDown() {
+            return UsesDefaultShortcut() && Input.GetKeyDown(KeyCode.Tab) &&
+                (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+        }
+
+        private bool HandleHotkey(string origin) {
+            // OnGUI and Update may observe the same press. Never toggle
+            // twice; a rapid click must not close the panel immediately.
+            if (lastHotkeyFrame == Time.frameCount ||
+                (lastHotkeyTime >= 0f && Time.unscaledTime - lastHotkeyTime < .12f))
+                return false;
+            lastHotkeyFrame = Time.frameCount;
+            lastHotkeyTime = Time.unscaledTime;
+            Logger.LogInfo("ClothingControl hotkey received via " + origin +
+                "; Maker=" + MakerAPI.InsideAndLoaded +
+                ", nativeVisible=" + !NativeMakerHidden() +
+                ", panelVisible=" + visible +
+                ", mounted=" + MaximumUIRuntime.IsMounted(MountId) + ".");
+            if (NativeMakerHidden()) {
+                Logger.LogInfo("ClothingControl hotkey ignored: native Maker interface is hidden.");
+                return false;
             }
+            if (MaximumUIRuntime.IsAnyTextFieldFocused || MaximumUIRuntime.IsModalOpen) {
+                Logger.LogInfo("ClothingControl hotkey ignored: a MaximumUI text field or dialog has focus.");
+                return false;
+            }
+            if (visible) { Close(); return true; }
+            if (SupportedScene()) { Open(); return true; }
+            Logger.LogInfo("ClothingControl hotkey ignored: only Maker, Studio and Free H are supported.");
+            return false;
+        }
+
+        private void OnGUI() {
+            Event current = Event.current;
+            if (current == null || current.type != EventType.KeyDown ||
+                current.keyCode != KeyCode.Tab || !UsesDefaultShortcut() ||
+                (current.modifiers & EventModifiers.Shift) == 0) return;
+            if (HandleHotkey("Unity OnGUI KeyDown")) current.Use();
+        }
+
+        private void Update() {
+            if (!MakerAPI.InsideMaker) makerStateLogged = false;
+            else if (MakerAPI.InsideAndLoaded && !makerStateLogged) {
+                makerStateLogged = true;
+                Logger.LogInfo("ClothingControl Maker active: nativeVisible=" +
+                    !NativeMakerHidden() + ", preference=" + showInMaker.Value +
+                    ", visible=" + visible + ", mounted=" +
+                    MaximumUIRuntime.IsMounted(MountId) + ".");
+                // MakerFinishedLoading may occur before KKAPI marks Maker
+                // InsideAndLoaded, or a competing plugin may reorder startup.
+                // Respect the saved preference even if the one-time callback
+                // was missed; only auto-open once on this Maker session.
+                if (showInMaker != null && showInMaker.Value && !visible)
+                {
+                    Logger.LogInfo("ClothingControl restoring saved Maker window visibility.");
+                    Open();
+                }
+            }
+            UpdateMakerPresentation();
+            bool configuredKey = shortcut != null && shortcut.Value.IsDown();
+            bool rawKey = RawDefaultShortcutDown();
+            if (configuredKey || rawKey)
+                HandleHotkey(configuredKey ? "BepInEx KeyboardShortcut" :
+                    "Unity Input.GetKeyDown");
             if (!visible) return;
             if (batch != null && (!IsStudio() || SceneManager.GetActiveScene().handle != batch.SceneHandle))
                 CancelOperations("场景已变更，停止预设应用。");
@@ -341,6 +412,8 @@ namespace ClothingControl {
         }
 
         private void Open() {
+            Logger.LogInfo("ClothingControl opening; Maker=" + MakerAPI.InsideAndLoaded +
+                ", Studio=" + IsStudio() + ", HScene=" + IsHScene() + ".");
             if (view == null) {
                 MaximumUIRuntime.EnsureHost();
                 view = new WardrobeView();
@@ -354,11 +427,16 @@ namespace ClothingControl {
             generation++;
             nextPoll = 0f;
             Refresh();
-            MaximumUIRuntime.SetVisible(MountId, !makerPresentationSuppressed);
+            bool applied = MaximumUIRuntime.SetVisible(MountId, !makerPresentationSuppressed);
             if (!makerPresentationSuppressed) MaximumUIRuntime.Focus(MountId);
+            Logger.LogInfo("ClothingControl opening result: mount=" +
+                MaximumUIRuntime.IsMounted(MountId) + ", SetVisible=" + applied +
+                ", IsVisible=" + MaximumUIRuntime.IsVisible(MountId) +
+                ", suppressed=" + makerPresentationSuppressed + ".");
         }
 
         private void Close(bool remember = true) {
+            Logger.LogInfo("ClothingControl closing; rememberMakerVisibility=" + remember + ".");
             visible = false;
             makerPresentationSuppressed = false;
             generation++;
