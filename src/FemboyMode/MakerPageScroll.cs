@@ -45,7 +45,6 @@ namespace FemboyMode
         private float viewportHeight, scrollOffset, maximumOffset, dragOffset, dragStartY, nextRefresh;
         private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
         private int wheelHandledFrame = -1;
-        private bool nativeScrollbarLogged;
 
         private static Transform FindMenu(Transform from)
         {
