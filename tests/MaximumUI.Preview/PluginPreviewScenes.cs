@@ -4,12 +4,17 @@ using AccessoryBatchManager;
 using ClothingControl;
 using HSControl;
 using JuiceControl;
+using LoveJuice;
 using MaximumUI;
 
 // Public examples only. These fixtures do not read cards, XML, configuration,
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
+        yield return Liquid("enabled");
+        yield return Liquid("disabled");
+        yield return Liquid("empty");
+        yield return Liquid("milk");
         yield return HS("live");
         yield return HS("manual");
         yield return HS("range");
@@ -30,6 +35,43 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("filtered");
         yield return Wardrobe("scene");
         yield return Wardrobe("scene-applying");
+    }
+
+    private static PreviewScene Liquid(string state) {
+        LoveJuiceViewModel m = new LoveJuiceViewModel {
+            Version = "0.3.0", Enabled = true, HasScene = true,
+            ActorCount = 2, ActiveParticles = 21, MaximumParticles = 48,
+            Interval = .26f, Gravity = 8f, Damping = 1f, Lifetime = 1.6f,
+            Scale = .045f, LaunchSpeed = .35f, MilkThreshold = 65f,
+            Face = true, Body = true, Collision = true, PreviewChannel = 1,
+            Status = "已发射 4 颗粒子。", Integration = "SkinEffects：已连接（仅读取状态）。",
+            ChangeEnabled = delegate { }, ChangeFace = delegate { },
+            ChangeBody = delegate { }, ChangeMilk = delegate { },
+            ChangeShower = delegate { }, ChangeSpecial = delegate { },
+            ChangeCollision = delegate { }, ChangeMaximum = delegate { },
+            ChangePreviewChannel = delegate { }, ChangeInterval = delegate { },
+            ChangeGravity = delegate { }, ChangeDamping = delegate { },
+            ChangeLifetime = delegate { }, ChangeScale = delegate { },
+            ChangeLaunchSpeed = delegate { }, ChangeMilkThreshold = delegate { },
+            Preview = delegate { }, Close = delegate { }
+        };
+        if (state == "disabled") { m.Enabled = false; m.Status = "已停用。"; }
+        if (state == "empty") {
+            m.HasScene = false; m.ActorCount = m.ActiveParticles = 0;
+            m.Status = "尚未进入场景。";
+            m.Integration = "SkinEffects：未连接，使用游戏自身状态。";
+        }
+        if (state == "milk") { m.Milk = true; m.Special = true; m.PreviewChannel = 4; }
+        return new PreviewScene {
+            Slug = "lovejuice-" + state + "-preview", Title = "LoveJuice",
+            Source = "LoveJuice.LoveJuiceView.Build",
+            Detail = "Synthetic effect control fixture " + state,
+            Widget = new LoveJuiceView { Model = m }.Build(new BuildContext()),
+            StateId = state == "enabled" ? "default" : state,
+            RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-scroll",
+                "lovejuice-face", "lovejuice-maximum", "lovejuice-preview-channel",
+                "lovejuice-emit", "lovejuice-active", "lovejuice-status" }
+        };
     }
 
     private static PreviewScene HS(string state) {

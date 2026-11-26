@@ -1,4 +1,4 @@
-# LoveJuice — 0.2.2 (Native Studio liquids)
+# LoveJuice — 0.3.0 (Native Studio liquids)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
@@ -22,6 +22,10 @@ Runtime loads through the *same native* `CommonLib.LoadAsset<GameObject>(bundle,
 ## 0.2.2: legacy SkinEffects integration
 
 The installed `KK_SkinEffects.dll` exposes `DroolLevel`, `SalivaLevel`, and `SweatLevel` properties, not `SkinEffectKind`/`GetEffectLevel`. LoveJuice now reads **both** the legacy properties and newer enum-based API, with read failures distinguished from level 0. The optional SkinEffects BepInEx load-order dependency is declared, while no plugin DLL is shipped. No external level values are modified.
+
+## 0.3.0 integrated in-game controls
+
+**Ctrl+F9** opens the real MaximumUI control panel (normal **F9** still previews particles). It exposes enable/disable, all five effect sources, native preview channel, gravity, air damping, emission interval, lifetime, scale, launch velocity, collision, maximum active particles and the milk trigger. The UI shows scene actor count, live particle count and SkinEffects connection status. It also works when the effect is disabled, so installation does not require editing configuration files to turn it on. The integrated installer includes the matching `MaximumUI.dll`. The window is included in headless render and layout tests, but its Unity input is not represented as a game E2E result.
 
 ## Working runtime behavior
 
