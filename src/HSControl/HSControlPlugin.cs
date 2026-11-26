@@ -169,6 +169,8 @@ namespace HSControl
             else if (kind == 2) method = "IsSonyuAutoFinish";
             else if (kind == 6) method = "Is3PHoushiAutoFinish";
             else if (kind == 7) method = "IsSonyu3PAutoFinish";
+            else if (kind == 8) method = "IsHoushi3PDarkAutoFinish";
+            else if (kind == 9) method = "IsSonyu3PDarkAutoFinish";
             if (method == null) return;
             try {
                 MethodInfo getter = scene.sprite.GetType().GetMethod(method,
@@ -263,7 +265,8 @@ namespace HSControl
                     if (kind >= 5) {
                         if (kind == 6 || kind == 7) {
                             if (!autoFemaleFinish.Value ||
-                                ((int)flags.mode != 2 && (int)flags.mode != 7)) return;
+                                ((int)flags.mode != 2 && (int)flags.mode != 7 &&
+                                 (int)flags.mode != 9)) return;
                             flags.gaugeFemale = 100f;
                         }
                         if (kind == 5 || kind == 7) {
@@ -298,7 +301,8 @@ namespace HSControl
                 CanForceLoop = master.Value && CanNativeCommands(flags, false),
                 CanStage = master.Value && CanNativeCommands(flags, true),
                 CanFemaleFinish = master.Value && flags != null &&
-                    ((int)flags.mode == 2 || (int)flags.mode == 7) &&
+                    ((int)flags.mode == 2 || (int)flags.mode == 7 ||
+                     (int)flags.mode == 9) &&
                     autoFemaleFinish.Value && CanNativeCommands(flags, true),
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,
