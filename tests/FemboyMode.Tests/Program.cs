@@ -82,6 +82,11 @@ internal static class Program
             MakerPageScrollMath.ViewportFromScreen(100f, 720f, 1f, 42f) == 520f &&
             MakerPageScrollMath.ViewportFromScreen(2000f, 720f, 1f, 42f) == 520f,
             "hidden tabs and invalid geometry cannot crush the complete native Maker page");
+        Check(MakerPageScrollMath.OutsideScrollbarGap(5f) == 5f &&
+            MakerPageScrollMath.OutsideScrollbarGap(-4f) == 2f &&
+            MakerPageScrollMath.OutsideScrollbarGap(float.NaN) == 2f &&
+            MakerPageScrollMath.OutsideScrollbarGap(500f) == 24f,
+            "stock Maker scrollbar stays outside clipping viewport with validated gap");
         Check(MakerPageScrollMath.NativeScrollbarWidth(29f, 12f, 1f) == 29f &&
             MakerPageScrollMath.NativeScrollbarWidth(0f, 28f, 1f) == 28f &&
             MakerPageScrollMath.NativeScrollbarWidth(float.NaN, float.NaN, 1f) == 26f,

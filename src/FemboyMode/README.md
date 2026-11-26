@@ -1,6 +1,15 @@
-# Femboy Mode for Koikatsu — v0.6.2
+# Femboy Mode for Koikatsu — v0.6.3
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.3 — external stock scrollbar + stencil clipping for native text
+
+**RX18 screenshot regression:** the in-place Body > All scrollbar in 0.6.2 overlapped the original content rather than standing outside the viewport, and native text/numeric values leaked into the area above and outside the clipping rectangle after scrolling.
+
+- **Native scrollbar moved outside:** clone only the game's `SocksTop/Scroll View/Scrollbar Vertical`, with the same rendered width and source-derived viewport-to-bar gap. Parent it as a **sibling** of `AllTop` under `tglAll`, *not* as a child of the clipped page. Its world position and height track the page's viewport, but the page's own right padding remains unchanged. The original tab toggle, CanvasGroup visibility, and page enable/disable control external-bar visibility.
+- **Native text clipping:** keep the existing `RectMask2D` for compatible UI graphics and install a real stencil `UnityEngine.UI.Mask` with a non-raycast `Image` on the **same original AllTop**. This clips original text and numeric fields whose shader did not honor `UnityUIClipRect`. Existing mask/image settings are preserved; any disabled `MaskableGraphic.maskable` values are enabled while scrolling and restored on uninstall. No native row or KKAPI widget changes parent.
+- **Fail-open / restore:** missing viewport, missing stencil mask or moved scrollbar parent disables the scroll wrapper. The original page size, layout, mask state and graphics maskability are restored when the feature is disabled or Maker exits.
+- **This is a Windows in-game acceptance blocker:** headless tests cover external gap bounds, not actual TMPro/native stencil rendering. The check must show **no text above the viewport** when scrolling and the **bar outside the content** without overlap before this issue is accepted; other plugins remain blocked.
 
 ## 0.6.2 — inherit native ScrollRect scrolling sensitivity
 
