@@ -223,7 +223,10 @@ namespace FemboyMode
                     instance.originalShowStencilGraphic = instance.stencilMask.showMaskGraphic;
                 }
                 else instance.stencilMask = host.gameObject.AddComponent<Mask>();
-                instance.stencilMask.showMaskGraphic = !instance.addedStencilImage;
+                if (instance.addedStencilMask)
+                    instance.stencilMask.showMaskGraphic = !instance.addedStencilImage;
+                else instance.stencilMask.showMaskGraphic =
+                    instance.originalShowStencilGraphic;
                 instance.stencilMask.enabled = true;
                 instance.EnsureNativeTextMaskability();
                 if (instance.originalFitter != null) instance.originalFitter.enabled = false;
