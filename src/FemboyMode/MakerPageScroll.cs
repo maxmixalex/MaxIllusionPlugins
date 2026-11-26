@@ -262,6 +262,37 @@ namespace FemboyMode
             scrollOffset = 0f;
         }
 
+        private bool NativeRowsRemainVisible()
+        {
+            if (page == null) return false;
+            int candidates = 0, visible = 0;
+            Rect region = page.rect;
+            foreach (Transform native in nativeRows)
+            {
+                if (native == null || native.parent != page) return false;
+                if (!native.gameObject.activeInHierarchy) continue;
+                RectTransform rt = native as RectTransform;
+                if (rt == null || rt.rect.height < 1f || rt.rect.width < 1f) continue;
+                LayoutElement element = rt.GetComponent<LayoutElement>();
+                if (element != null && element.ignoreLayout) continue;
+                candidates++;
+                rt.GetWorldCorners(corners);
+                float xmin = float.PositiveInfinity, xmax = float.NegativeInfinity;
+                float ymin = float.PositiveInfinity, ymax = float.NegativeInfinity;
+                foreach (Vector3 corner in corners)
+                {
+                    Vector3 local = page.InverseTransformPoint(corner);
+                    xmin = Mathf.Min(xmin, local.x); xmax = Mathf.Max(xmax, local.x);
+                    ymin = Mathf.Min(ymin, local.y); ymax = Mathf.Max(ymax, local.y);
+                }
+                if (MakerPageScrollMath.Intersects(xmin, xmax, region.xMin, region.xMax) &&
+                    MakerPageScrollMath.Intersects(ymin, ymax, region.yMin, region.yMax))
+                    visible++;
+            }
+            // A page legitimately may have no active rows during tab rebuild.
+            return candidates == 0 || visible > 0;
+        }
+
         private void LateUpdate()
         {
             if (!installed || page == null || !page.gameObject.activeInHierarchy) return;
@@ -277,9 +308,10 @@ namespace FemboyMode
                 validated = true;
                 if (page.rect.height < MinimumViewport || page.rect.width < 120f ||
                     scrollbar == null || scrollbar.handleRect == null ||
-                    scrollbar.transform.parent != page)
+                    scrollbar.transform.parent != page || !NativeRowsRemainVisible())
                 {
-                    Debug.LogWarning("Femboy Mode: unified viewport validation failed; restoring original page.");
+                    Debug.LogWarning("Femboy Mode: native Maker rows were clipped or page bounds invalid; " +
+                        "restoring all original page layout and input without touching any native row.");
                     Uninstall();
                 }
             }
