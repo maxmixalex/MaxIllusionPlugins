@@ -36,6 +36,15 @@ The shortcut entries can be changed with F1 or in their corresponding `BepInEx/c
 
 Version 0.5.8 sometimes left the original Maker Body > All panel blank. 0.5.9 therefore **keeps every native and third-party control in place** and only wraps the 24 FemboyMode geometry controls in an independent scrollable section under the same tab. Full-page native scrolling is deliberately not claimed. Verify that the Femboy marker and all vanilla rows are still present.
 
+## Blocked acceptance checkpoint: FemboyMode 0.6.3 (first gate)
+
+The user has **already confirmed that the single scroll area exists and its basic controls work** in 0.6.2. The next required two checks, before any other acceptance work, are:
+
+1. **External scrollbar:** check the stock-style scrollbar sits just outside the Body > All content rectangle on the right. It must not cover number fields or alter native row widths; it must disappear with the All tab.
+2. **Clipped native text:** scroll past the native "头的尺寸" row and confirm the values/text (such as the highlighted `30` that appeared *above* the viewport in the 2026-11-26 screenshot) disappear at the **viewport's top edge**. Repeat at the bottom; there must be no characters visible beyond either edge. Also verify FemboyMode rows stay scrollable with one scrollbar.
+
+The existing true Maker gizmo/axis check remains **blocked until both UI items pass**. Do not proceed to other plugins. The new mask is a production UI change not covered by headless raster previews; only the actual Windows RX18 screenshot can close this gate.
+
 ## Blocked acceptance checkpoint: FemboyMode 0.6.2 only
 
 Everything after the Maker test remains blocked until these three findings pass together:
