@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -35,6 +36,10 @@ namespace ClothingControl {
         private static readonly string[] GarmentLabels = {
             "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
         };
+        // The second male performer is optional (MMF/Dark H and some mods).
+        // Use the same public-or-private field lookup as JuiceControl.
+        private static readonly FieldInfo HSceneMale1 = typeof(HSceneProc).GetField(
+            "male1", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
@@ -233,6 +238,8 @@ namespace ClothingControl {
                         if (candidate != null && !result.Contains(candidate)) result.Add(candidate);
                 ChaControl male = active.male;
                 if (male != null && !result.Contains(male)) result.Add(male);
+                ChaControl male1 = HSceneMale1 == null ? null : HSceneMale1.GetValue(active) as ChaControl;
+                if (male1 != null && !result.Contains(male1)) result.Add(male1);
                 return result;
             }
             Studio.Studio studio = Singleton<Studio.Studio>.Instance;
