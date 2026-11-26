@@ -26,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.3";
+        public const string Version = "0.5.4";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -99,9 +99,14 @@ namespace ClothingControl {
             KeyboardShortcut nativeDefault = new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift);
             shortcut = Config.Bind("General", "Show menu", nativeDefault,
                 "Open the MaximumUI wardrobe editor in Maker, Studio or Free H (same shortcut as Clothing State Menu).");
-            if (shortcut.Value.Equals(new KeyboardShortcut(KeyCode.F7))) {
+            if (shortcut.Value.Equals(new KeyboardShortcut(KeyCode.F7)) ||
+                shortcut.Value.Equals(new KeyboardShortcut(KeyCode.LeftShift))) {
+                // 0.5.3 never started because preset validation referenced
+                // InvalidDataException, absent from the game's Mono profile.
+                // The user accidentally saved LeftShift while attempting to
+                // rebind Tab in ConfigurationManager, where Tab is consumed.
                 shortcut.Value = nativeDefault;
-                Logger.LogInfo("Migrated ClothingControl's previous F7 default to LeftShift+Tab.");
+                Logger.LogInfo("Restored ClothingControl shortcut to the original LeftShift+Tab.");
             }
             Logger.LogInfo("ClothingControl v" + Version + " initialized; Show menu=" + shortcut.Value + ".");
             showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
