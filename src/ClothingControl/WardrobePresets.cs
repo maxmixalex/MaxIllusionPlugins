@@ -20,18 +20,18 @@ namespace ClothingControl {
         }
 
         internal void Validate() {
-            if (Presets == null) throw new InvalidDataException("Missing preset list.");
+            if (Presets == null) throw new IOException("Missing preset list.");
             HashSet<string> names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (WardrobePreset preset in Presets) {
                 if (preset == null || !WardrobePreset.ValidName(preset.Name) || !names.Add(preset.Name))
-                    throw new InvalidDataException("Invalid or duplicate preset name.");
+                    throw new IOException("Invalid or duplicate preset name.");
                 preset.Validate();
             }
-            if (Scenes == null) throw new InvalidDataException("Missing scene preset list.");
+            if (Scenes == null) throw new IOException("Missing scene preset list.");
             names.Clear();
             foreach (WardrobeScenePreset scene in Scenes) {
                 if (scene == null || !WardrobePreset.ValidName(scene.Name) || !names.Add(scene.Name))
-                    throw new InvalidDataException("Invalid or duplicate scene preset name.");
+                    throw new IOException("Invalid or duplicate scene preset name.");
                 scene.Validate();
             }
         }
@@ -49,12 +49,12 @@ namespace ClothingControl {
         }
 
         internal void Validate() {
-            if (Members == null || Members.Count == 0) throw new InvalidDataException("Empty scene preset.");
+            if (Members == null || Members.Count == 0) throw new IOException("Empty scene preset.");
             HashSet<string> keys = new HashSet<string>(StringComparer.Ordinal);
             foreach (WardrobeSceneMember entry in Members) {
                 if (entry == null || string.IsNullOrEmpty(entry.Key) || entry.Key.Length > 1024 ||
                     entry.State == null || !keys.Add(entry.Key))
-                    throw new InvalidDataException("Invalid or ambiguous character identity.");
+                    throw new IOException("Invalid or ambiguous character identity.");
                 entry.State.Validate();
             }
         }
@@ -140,16 +140,16 @@ namespace ClothingControl {
 
         internal void Validate() {
             if (Coordinate < 0 || Accessories == null || Garments == null || ShoeMode < -1 || ShoeMode > 1)
-                throw new InvalidDataException("Invalid outfit.");
+                throw new IOException("Invalid outfit.");
             HashSet<string> garmentKinds = new HashSet<string>(StringComparer.Ordinal);
             foreach (GarmentVisibility entry in Garments)
                 if (entry == null || !GarmentVisibility.IsSupported(entry.Kind) || entry.Item <= 0 ||
                     entry.State < -1 || entry.State > 3 || !garmentKinds.Add(entry.Kind))
-                    throw new InvalidDataException("Invalid or duplicate garment.");
+                    throw new IOException("Invalid or duplicate garment.");
             HashSet<int> slots = new HashSet<int>();
             foreach (AccessoryVisibility entry in Accessories)
                 if (entry == null || entry.Slot < 0 || entry.Type < 0 || entry.Item < 0 || !slots.Add(entry.Slot))
-                    throw new InvalidDataException("Invalid or duplicate accessory slot.");
+                    throw new IOException("Invalid or duplicate accessory slot.");
         }
     }
 
@@ -194,7 +194,7 @@ namespace ClothingControl {
             try {
                 WardrobePresetLibrary next = File.Exists(path)
                     ? AtomicXmlFile.Read<WardrobePresetLibrary>(path) : new WardrobePresetLibrary();
-                if (next == null) throw new InvalidDataException("Missing preset document.");
+                if (next == null) throw new IOException("Missing preset document.");
                 next.Validate();
                 library = next;
                 Error = null;

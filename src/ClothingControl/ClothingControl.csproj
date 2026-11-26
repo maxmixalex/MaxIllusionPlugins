@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>ClothingControl</Product>
     <AssemblyTitle>ClothingControl</AssemblyTitle>
-    <Version>0.5.3</Version>
-    <AssemblyVersion>0.5.3.0</AssemblyVersion>
+    <Version>0.5.4</Version>
+    <AssemblyVersion>0.5.4.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Common\Common.csproj" />
