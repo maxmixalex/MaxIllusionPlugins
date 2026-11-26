@@ -3,12 +3,13 @@ using System.Reflection;
 using UnityEngine;
 
 namespace LoveJuice {
-    // Runtime-only, read-only adapters. The installed mod order does not
-    // matter, and neither plugin is a mandatory reference for LoveJuice.
+    // Only reads optional plugin state. Both the enum-based modern API and
+    // the property-based legacy API are supported; no external state is set.
     internal sealed class OptionalEffectBridge {
         private Type controllerType, kindType;
         private MethodInfo getLevel, isFemboy;
         private bool searched;
+        internal bool HasSkinEffects { get { Discover(); return controllerType != null; } }
 
         internal void Reset() {
             controllerType = null;
@@ -24,14 +25,16 @@ namespace LoveJuice {
             foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()) {
                 try {
                     Type skin = assembly.GetType("KK_SkinEffects.SkinEffectsController", false);
-                    Type kind = assembly.GetType("KK_SkinEffects.SkinEffectKind", false);
-                    if (skin != null && kind != null && kind.IsEnum) {
-                        MethodInfo method = skin.GetMethod("GetEffectLevel", BindingFlags.Instance | BindingFlags.Public,
-                            null, new[] { kind }, null);
-                        if (method != null) {
-                            controllerType = skin;
-                            kindType = kind;
-                            getLevel = method;
+                    if (skin != null) {
+                        controllerType = skin;
+                        Type kind = assembly.GetType("KK_SkinEffects.SkinEffectKind", false);
+                        if (kind != null && kind.IsEnum) {
+                            MethodInfo getter = skin.GetMethod("GetEffectLevel",
+                                BindingFlags.Instance | BindingFlags.Public, null, new[] { kind }, null);
+                            if (getter != null) {
+                                kindType = kind;
+                                getLevel = getter;
+                            }
                         }
                     }
                     Type femboy = assembly.GetType("FemboyMode.FemboyModePlugin", false);
@@ -42,17 +45,24 @@ namespace LoveJuice {
             }
         }
 
-        internal int Level(ChaControl character, string kind) {
-            if (character == null) return -1;
+        internal int Level(ChaControl character, string name) {
+            if (character == null || string.IsNullOrEmpty(name)) return -1;
             Discover();
-            if (controllerType == null || kindType == null || getLevel == null) return -1;
+            if (controllerType == null) return -1;
             try {
                 object controller = character.GetComponent(controllerType);
                 if (controller == null) return -1;
-                object option = Enum.Parse(kindType, kind, false);
-                object raw = getLevel.Invoke(controller, new[] { option });
-                int level = Convert.ToInt32(raw);
-                return level >= 0 ? level : -1;
+                if (kindType != null && getLevel != null) {
+                    try {
+                        object option = Enum.Parse(kindType, name, false);
+                        object raw = getLevel.Invoke(controller, new[] { option });
+                        int observed = Convert.ToInt32(raw);
+                        if (observed >= 0) return observed;
+                    } catch (ArgumentException) { }
+                    catch (TargetInvocationException) { }
+                }
+                int legacy;
+                return SkinEffectValueReader.TryReadLegacy(controller, name, out legacy) ? legacy : -1;
             } catch { return -1; }
         }
 
@@ -60,9 +70,8 @@ namespace LoveJuice {
             if (character == null) return false;
             Discover();
             if (isFemboy == null) return false;
-            try {
-                return (bool)isFemboy.Invoke(null, new object[] { character });
-            } catch { return false; }
+            try { return (bool)isFemboy.Invoke(null, new object[] { character }); }
+            catch { return false; }
         }
     }
 }
