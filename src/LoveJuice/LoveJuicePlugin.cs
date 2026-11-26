@@ -5,6 +5,7 @@ using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using KKAPI;
+using MaximumUI;
 using UnityEngine;
 
 [assembly: System.Reflection.AssemblyFileVersion(LoveJuice.LoveJuicePlugin.Version)]
@@ -20,7 +21,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.2.2";
+        public const string Version = "0.3.0";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.NonPublic);
@@ -29,7 +30,13 @@ namespace LoveJuice {
         private ConfigEntry<bool> enabled, face, body, milk, shower, special, collision;
         private ConfigEntry<int> maxActive, previewChannel;
         private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold;
-        private ConfigEntry<KeyboardShortcut> preview;
+        private ConfigEntry<KeyboardShortcut> preview, panelShortcut;
+        private LoveJuiceView panel;
+        private bool panelVisible;
+        private int panelRevision;
+        private float nextPanelRefresh;
+        private string panelStatus = "就绪。";
+        private const string MountId = GUID + ".window";
         private readonly OptionalEffectBridge integrations = new OptionalEffectBridge();
         private readonly Dictionary<ChaControl, Actor> actors = new Dictionary<ChaControl, Actor>();
         private StudioLiquidPool visuals;
@@ -54,6 +61,9 @@ namespace LoveJuice {
                 "Enable native Studio liquid drips in active H scenes. Off by default until selected by the user.");
             preview = Config.Bind("General", "Preview key", new KeyboardShortcut(KeyCode.F9),
                 "Emit native Studio particles from the first active H scene actor.");
+            panelShortcut = Config.Bind("General", "Control panel key",
+                new KeyboardShortcut(KeyCode.F9, KeyCode.LeftControl),
+                "Ctrl+F9 toggles the LoveJuice window; F9 emits the selected preview.");
             previewChannel = Config.Bind("General", "Preview channel", 0,
                 "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special.");
             face = Config.Bind("Sources", "Face drips", true,
@@ -170,6 +180,8 @@ namespace LoveJuice {
         }
 
         private void OnSceneChanged(HSceneProc next) {
+            panelRevision++;
+            panelStatus = next == null ? "尚未进入场景。" : "已连接当前场景。";
             scene = next;
             actors.Clear();
             integrations.Reset();
@@ -229,6 +241,14 @@ namespace LoveJuice {
         }
 
         private void Update() {
+            if (panelShortcut != null && panelShortcut.Value.IsDown() &&
+                !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
+                if (panelVisible) ClosePanel(); else OpenPanel();
+            }
+            if (panelVisible && Time.unscaledTime >= nextPanelRefresh) {
+                nextPanelRefresh = Time.unscaledTime + .2f;
+                RefreshPanel();
+            }
             if (!IsEnabled) {
                 if (scene != null) OnSceneChanged(null);
                 return;
@@ -245,7 +265,7 @@ namespace LoveJuice {
                 RefreshRoster();
                 foreach (Actor actor in actors.Values) UpdateLevels(actor);
             }
-            if (preview.Value.IsDown()) {
+            if (preview.Value.IsDown() && !panelShortcut.Value.IsDown()) {
                 LoveJuiceChannel requested = (LoveJuiceChannel)previewChannel.Value;
                 if (StudioLiquidCatalog.Valid(requested)) {
                     foreach (Actor actor in actors.Values) {
@@ -274,8 +294,97 @@ namespace LoveJuice {
             visuals.Tick(dt, gravity.Value, drag.Value, collision.Value);
         }
 
-        private void OnDisable() { OnSceneChanged(null); }
+        private void OpenPanel() {
+            if (panel == null) {
+                MaximumUIRuntime.EnsureHost();
+                panel = new LoveJuiceView();
+                MaximumUIRuntime.Mount(MountId, panel, new MountOptions {
+                    Visible = false, BuildEveryFrame = false,
+                    SoftMouseCapture = true, SoftKeyboardCapture = true, SortOrder = 145
+                });
+            }
+            panelVisible = true;
+            panelRevision++;
+            RefreshPanel();
+            MaximumUIRuntime.SetVisible(MountId, true);
+            MaximumUIRuntime.Focus(MountId);
+        }
+
+        private void ClosePanel() {
+            panelVisible = false;
+            panelRevision++;
+            if (panel != null) MaximumUIRuntime.SetVisible(MountId, false);
+        }
+
+        private void PreviewFromPanel() {
+            if (!IsEnabled || scene == null || scene.flags == null || actors.Count == 0) {
+                panelStatus = "当前无可用角色或效果未启用。";
+                return;
+            }
+            LoveJuiceChannel channel = (LoveJuiceChannel)previewChannel.Value;
+            int emitted = 0;
+            foreach (Actor actor in actors.Values) {
+                for (int i = 0; i < 4; i++)
+                    if (EmitFrom(actor, channel, i)) emitted++;
+                break;
+            }
+            panelStatus = emitted > 0
+                ? "已向原生发射器发射 " + emitted + " 颗粒子。"
+                : "未发射：素材、粒子预算或骨骼不可用；请检查 BepInEx 日志。";
+        }
+
+        private void RefreshPanel() {
+            if (!panelVisible || panel == null) return;
+            int token = panelRevision;
+            Func<bool> live = () => panelVisible && panelRevision == token;
+            LoveJuiceViewModel m = new LoveJuiceViewModel {
+                Version = Version, Enabled = IsEnabled,
+                HasScene = scene != null && scene.flags != null && !scene.isEnd,
+                ActorCount = actors.Count, ActiveParticles = ActiveDrops,
+                Status = panelStatus, Integration = integrations.HasSkinEffects
+                    ? "SkinEffects：已连接（仅读取状态）。"
+                    : "SkinEffects：未连接，使用游戏自身状态。",
+                Face = face.Value, Body = body.Value, Milk = milk.Value,
+                Shower = shower.Value, Special = special.Value, Collision = collision.Value,
+                MaximumParticles = maxActive.Value, PreviewChannel = previewChannel.Value,
+                Interval = interval.Value, Gravity = gravity.Value, Damping = drag.Value,
+                Lifetime = lifetime.Value, Scale = scale.Value, LaunchSpeed = launchSpeed.Value,
+                MilkThreshold = milkThreshold.Value,
+                Close = () => { if (live()) ClosePanel(); }
+            };
+            m.ChangeEnabled = value => { if (live()) { enabled.Value = value; RefreshPanel(); } };
+            m.ChangeFace = value => { if (live()) { face.Value = value; RefreshPanel(); } };
+            m.ChangeBody = value => { if (live()) { body.Value = value; RefreshPanel(); } };
+            m.ChangeMilk = value => { if (live()) { milk.Value = value; RefreshPanel(); } };
+            m.ChangeShower = value => { if (live()) { shower.Value = value; RefreshPanel(); } };
+            m.ChangeSpecial = value => { if (live()) { special.Value = value; RefreshPanel(); } };
+            m.ChangeCollision = value => { if (live()) { collision.Value = value; RefreshPanel(); } };
+            m.ChangeInterval = value => { if (live()) { interval.Value = DropletPhysics.Clamp(value, .06f, 4f); RefreshPanel(); } };
+            m.ChangeGravity = value => { if (live()) { gravity.Value = DropletPhysics.Clamp(value, 0f, 30f); RefreshPanel(); } };
+            m.ChangeDamping = value => { if (live()) { drag.Value = DropletPhysics.Clamp(value, 0f, 10f); RefreshPanel(); } };
+            m.ChangeLifetime = value => { if (live()) { lifetime.Value = DropletPhysics.Clamp(value, .2f, 8f); RefreshPanel(); } };
+            m.ChangeScale = value => { if (live()) { scale.Value = DropletPhysics.Clamp(value, .001f, .3f); RefreshPanel(); } };
+            m.ChangeLaunchSpeed = value => { if (live()) { launchSpeed.Value = DropletPhysics.Clamp(value, 0f, 5f); RefreshPanel(); } };
+            m.ChangeMilkThreshold = value => { if (live()) { milkThreshold.Value = DropletPhysics.Clamp(value, 0f, 100f); RefreshPanel(); } };
+            m.ChangeMaximum = value => { if (live()) { maxActive.Value = Mathf.Clamp(value, 1, 128); RefreshPanel(); } };
+            m.ChangePreviewChannel = value => { if (live() && value >= 0 && value <= 5) { previewChannel.Value = value; RefreshPanel(); } };
+            m.Preview = () => { if (live()) { PreviewFromPanel(); RefreshPanel(); } };
+            if (!panel.Model.SameDisplayAs(m)) {
+                panel.Model = m;
+                MaximumUIRuntime.MarkDirty(panel);
+            }
+        }
+
+        private void OnDisable() {
+            ClosePanel();
+            if (panel != null) MaximumUIRuntime.Unmount(MountId);
+            panel = null;
+            OnSceneChanged(null);
+        }
         private void OnDestroy() {
+            ClosePanel();
+            if (panel != null) MaximumUIRuntime.Unmount(MountId);
+            panel = null;
             OnSceneChanged(null);
             if (visuals != null) visuals.Dispose();
             if (ReferenceEquals(instance, this)) instance = null;
