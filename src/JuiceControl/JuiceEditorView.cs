@@ -28,6 +28,10 @@ namespace JuiceControl {
         public bool HasCharacter;
         public List<JuiceEffectRow> Effects = new List<JuiceEffectRow>();
         public bool AllLocked;
+        public LoveJuiceSettings LoveJuice;
+        public Action<bool> ChangeLoveJuiceEnabled, ChangeLoveJuiceFace, ChangeLoveJuiceBody,
+            ChangeLoveJuiceMilk, ChangeLoveJuiceShower, ChangeLoveJuiceSpecial;
+        public Action OpenLoveJuice;
         public string[] CharacterPresets = new string[0];
         public string[] GroupPresets = new string[0];
         public int CharacterPresetIndex;
@@ -66,6 +70,7 @@ namespace JuiceControl {
                 Selector("角色:", 42f, m.Characters, m.CharacterIndex, m.SelectCharacter, "juice-character", "无"),
                 new Separator(),
                 BuildEffects(m).ExpandWidth().ExpandHeight(),
+                BuildLoveJuice(m),
                 new HStack(4f) {
                     Command(m, "获取当前状态", JuiceEditorCommand.Refresh, m.HasCharacter),
                     new Checkbox("固定全部汁液", m.AllLocked, m.LockAll, "juice-lock-all")
@@ -84,6 +89,26 @@ namespace JuiceControl {
             }.ExpandHeight());
             if (m.NameDialogVisible) window.Add(BuildNameDialog(m));
             return window;
+        }
+
+        private static Widget BuildLoveJuice(JuiceEditorModel m) {
+            if (!m.LoveJuice.Available)
+                return new Label("LoveJuice：未连接（安装 KK_LoveJuice 后可控制动态滴落）",
+                    "juice-love-unavailable").Height(24f);
+            return new VStack(3f, "juice-love-controls") {
+                new HStack(4f) {
+                    new Checkbox("LoveJuice 动态滴落", m.LoveJuice.Enabled,
+                        m.ChangeLoveJuiceEnabled, "juice-love-enabled").ExpandWidth(),
+                    new Button("详细设置", m.OpenLoveJuice, "juice-love-open").Width(92f)
+                }.Height(32f),
+                new HStack(1f) {
+                    new Checkbox("面部", m.LoveJuice.Face, m.ChangeLoveJuiceFace, "juice-love-face").ExpandWidth(),
+                    new Checkbox("身体", m.LoveJuice.Body, m.ChangeLoveJuiceBody, "juice-love-body").ExpandWidth(),
+                    new Checkbox("乳液", m.LoveJuice.Milk, m.ChangeLoveJuiceMilk, "juice-love-milk").ExpandWidth(),
+                    new Checkbox("淋浴", m.LoveJuice.Shower, m.ChangeLoveJuiceShower, "juice-love-shower").ExpandWidth(),
+                    new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth()
+                }.Height(32f)
+            }.ExpandWidth();
         }
 
         private static Widget BuildEffects(JuiceEditorModel m) {

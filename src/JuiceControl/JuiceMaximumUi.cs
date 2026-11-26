@@ -11,6 +11,7 @@ namespace JuiceControl {
         private ChaControl editorCharacter;
         private float nextEditorPoll;
         private readonly JuiceEditorSession editorSession = new JuiceEditorSession();
+        private readonly LoveJuiceIntegration loveJuice = new LoveJuiceIntegration();
 
         private void ReleaseMaximumUi() {
             showWindow = false;
@@ -64,7 +65,8 @@ namespace JuiceControl {
                 m.Status != statusText || m.Error != presetLoadError || m.CanSave != presetStore.CanSave ||
                 m.CharacterPresetIndex != selectedCharacterPresetIndex || m.GroupPresetIndex != selectedGroupPresetIndex ||
                 m.CharacterPresets.Length != presetXml.CharacterPresets.Count || m.GroupPresets.Length != presetXml.GroupPresets.Count ||
-                m.Integration != SkinEffectsBridge.StatusLabel || m.NameDialogVisible != showNameDialog || m.NameError != nameDialogMessage)
+                m.Integration != SkinEffectsBridge.StatusLabel || m.NameDialogVisible != showNameDialog || m.NameError != nameDialogMessage ||
+                !m.LoveJuice.SameValues(loveJuice.Snapshot()))
                 return true;
             for (int i = 0; i < characters.Count; i++)
                 if (m.Characters[i] != characters[i].DisplayName || !editorSession.MatchesCharacterAt(i, characters[i].Character)) return true;
@@ -98,6 +100,7 @@ namespace JuiceControl {
                 Version = Version, CharacterIndex = GetSelectedCharacterIndex(characters), HasCharacter = selectedCharacter != null,
                 CharacterPresetIndex = selectedCharacterPresetIndex, GroupPresetIndex = selectedGroupPresetIndex,
                 CanSave = presetStore.CanSave, Error = presetLoadError, Status = statusText, Integration = SkinEffectsBridge.StatusLabel,
+                LoveJuice = loveJuice.Snapshot(),
                 NameDialogVisible = showNameDialog, Name = nameDialogText, NamePrompt = GetNameDialogPrompt(), NameError = nameDialogMessage,
                 Characters = new string[characters.Count], CharacterPresets = new string[presetXml.CharacterPresets.Count],
                 GroupPresets = new string[presetXml.GroupPresets.Count],
@@ -127,6 +130,17 @@ namespace JuiceControl {
                     statusText = locked ? "已锁定全部汁液。" : "已解除全部汁液锁定。";
                     RefreshEditor();
                 }
+            };
+            m.ChangeLoveJuiceEnabled = value => ChangeLoveJuiceSetting(m, "Enabled", value);
+            m.ChangeLoveJuiceFace = value => ChangeLoveJuiceSetting(m, "Face", value);
+            m.ChangeLoveJuiceBody = value => ChangeLoveJuiceSetting(m, "Body", value);
+            m.ChangeLoveJuiceMilk = value => ChangeLoveJuiceSetting(m, "Milk", value);
+            m.ChangeLoveJuiceShower = value => ChangeLoveJuiceSetting(m, "Shower", value);
+            m.ChangeLoveJuiceSpecial = value => ChangeLoveJuiceSetting(m, "Special", value);
+            m.OpenLoveJuice = delegate {
+                if (!LiveLoveJuiceCallback(m)) return;
+                if (!loveJuice.OpenPanel()) statusText = "LoveJuice 窗口不可用；请检查插件日志。";
+                RefreshEditor();
             };
             object[] identities = new object[characters.Count];
             for (int i = 0; i < characters.Count; i++) {
@@ -179,6 +193,19 @@ namespace JuiceControl {
                 });
             editorView.Model = m;
             MaximumUIRuntime.MarkDirty(editorView);
+        }
+
+        private bool LiveLoveJuiceCallback(JuiceEditorModel expected) {
+            return editorView != null && ReferenceEquals(editorView.Model, expected) &&
+                editorOptions != null && editorOptions.Visible &&
+                showWindow && isActiveAndEnabled && Enabled != null && Enabled.Value;
+        }
+
+        private void ChangeLoveJuiceSetting(JuiceEditorModel expected, string key, bool value) {
+            if (!LiveLoveJuiceCallback(expected) || !expected.LoveJuice.Available) return;
+            statusText = loveJuice.TrySet(key, value)
+                ? "LoveJuice 设置已更新。" : "LoveJuice 设置失败：目标已失效或读回不匹配。";
+            RefreshEditor();
         }
 
         private void AddEditorEffect(JuiceEditorModel model, ChaControl character, string id, string name, int value, int maximum, Action<int> change, bool available = true) {
