@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.7";
+        public const string Version = "0.5.8";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -38,6 +38,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> EnableMaleGeometryTransforms;
+        internal static ConfigEntry<bool> EnableBodyAllNativeScroll;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<string> MaleBallsBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
@@ -111,6 +112,10 @@ namespace FemboyMode
                 "When a marked heroine visually switches into the giver role, transfer new native Siru overlay writes to the original male instead. Keeps native cleanup and ordinary H unchanged.");
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
+            EnableBodyAllNativeScroll = Config.Bind("Maker", "Enable Body All native scrolling", true,
+                "Wrap the whole native Body > All page in a game-native scrolling viewport. " +
+                "Turn off to immediately restore the original page without disabling other Femboy features.");
+            EnableBodyAllNativeScroll.SettingChanged += OnNativeMakerScrollSettingChanged;
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
@@ -271,6 +276,8 @@ namespace FemboyMode
             MakerAPI.RegisterCustomSubCategories -= RegisterMakerControls;
             MakerAPI.MakerFinishedLoading -= OnMakerFinishedLoading;
             MakerAPI.MakerExiting -= OnMakerExiting;
+            if (EnableBodyAllNativeScroll != null)
+                EnableBodyAllNativeScroll.SettingChanged -= OnNativeMakerScrollSettingChanged;
             ReleasePageScroll();
             MakerAPI.ReloadCustomInterface -= OnReloadCustomInterface;
         }
@@ -391,7 +398,15 @@ namespace FemboyMode
 
         private void OnMakerFinishedLoading(object sender, EventArgs e)
         {
-            StartCoroutine(InstallPageScrollWhenReady(++pageScrollRequest));
+            if (EnableBodyAllNativeScroll != null && EnableBodyAllNativeScroll.Value)
+                StartCoroutine(InstallPageScrollWhenReady(++pageScrollRequest));
+        }
+
+        private void OnNativeMakerScrollSettingChanged(object sender, EventArgs e)
+        {
+            ReleasePageScroll();
+            if (EnableBodyAllNativeScroll != null && EnableBodyAllNativeScroll.Value && MakerAPI.InsideMaker)
+                StartCoroutine(InstallPageScrollWhenReady(++pageScrollRequest));
         }
 
         private void OnMakerExiting(object sender, EventArgs e)
@@ -416,7 +431,8 @@ namespace FemboyMode
                 if (request != pageScrollRequest || !MakerAPI.InsideMaker) yield break;
                 yield return null;
             }
-            if (request != pageScrollRequest || !MakerAPI.InsideAndLoaded) yield break;
+            if (request != pageScrollRequest || !MakerAPI.InsideAndLoaded ||
+                EnableBodyAllNativeScroll == null || !EnableBodyAllNativeScroll.Value) yield break;
             InstallPageScroll();
             RefreshMakerToggle();
         }
@@ -436,7 +452,8 @@ namespace FemboyMode
 
         private void InstallPageScroll()
         {
-            if (pageScroll != null) return;
+            if (pageScroll != null || EnableBodyAllNativeScroll == null ||
+                !EnableBodyAllNativeScroll.Value) return;
             GameObject flag = GetMakerWidget(bodyFlagToggle);
             if (flag == null) return;
             try

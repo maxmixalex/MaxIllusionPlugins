@@ -1,6 +1,15 @@
-# Femboy Mode for Koikatsu — v0.5.6
+# Femboy Mode for Koikatsu — v0.5.8
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.5.8 Native Maker scroll layout repair
+
+The RX18 report on 2026-11-26 showed an almost invisible scrollbar and misplaced Maker controls while the BepInEx log still said `Maker Body > All: native whole-page scroll installed.` The previous resize logic measured the content-driven `Body > All` host itself as a viewport, then subtracted its margin every LateUpdate until the host collapsed to roughly one pixel.
+
+- Viewport sizing now considers only substantial, enabled clipping ancestors **outside** the content-sized host. Layout-driven ancestors are deliberately excluded.
+- If no stable mask can be found, the wrapper uses the stock native SocksTop scroll-template height instead of repeatedly shrinking the entire Maker page. Implausibly small measured viewports are rejected.
+- `Maker / Enable Body All native scrolling` (default on) is a **live emergency rollback switch** in BepInEx Configuration Manager (F1): switching it off uninstalls the wrapper and restores the original page's rows and scroll handlers without disabling FemboyMode's other features. Switching on reinstalls the wrapper when Maker is loaded.
+- Regression tests explicitly reject the previous 1-pixel viewport and model 120 update frames without height erosion. Actual input/layout behavior still needs Windows Maker E2E.
 
 ## 0.5.7 Native transform handles
 
