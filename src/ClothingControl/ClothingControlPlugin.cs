@@ -25,7 +25,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.0";
+        public const string Version = "0.5.1";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -84,7 +84,18 @@ namespace ClothingControl {
         }
 
         private void Awake() {
-            shortcut = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F7), "Open the wardrobe editor in Maker, Studio or Free H.");
+            // Same default key as the original Clothing State Menu (Shift+Tab).
+            // Only migrate our previous *shipped* F7 default; leave all other
+            // user-chosen bindings untouched. ConfigEntry.Value persists the
+            // change, so existing v0.5.0 installations work without editing cfg.
+            KeyboardShortcut nativeDefault = new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift);
+            shortcut = Config.Bind("General", "Show menu", nativeDefault,
+                "Open the MaximumUI wardrobe editor in Maker, Studio or Free H (same shortcut as Clothing State Menu).");
+            if (shortcut.Value.Equals(new KeyboardShortcut(KeyCode.F7))) {
+                shortcut.Value = nativeDefault;
+                Logger.LogInfo("Migrated ClothingControl's previous F7 default to LeftShift+Tab.");
+            }
+            Logger.LogInfo("ClothingControl v" + Version + " initialized; Show menu=" + shortcut.Value + ".");
             showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
@@ -307,9 +318,16 @@ namespace ClothingControl {
 
         private void Update() {
             UpdateMakerPresentation();
-            if (!NativeMakerHidden() && shortcut.Value.IsDown() && !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
-                if (visible) Close();
+            if (shortcut != null && shortcut.Value.IsDown()) {
+                // Keep the existing scene/focus safeguards. Log why a
+                // deliberate shortcut press did nothing, rather than silently
+                // losing a toggle (especially in heavily modded Maker UIs).
+                if (NativeMakerHidden()) Logger.LogInfo("ClothingControl hotkey ignored: native Maker interface is hidden.");
+                else if (MaximumUIRuntime.IsAnyTextFieldFocused || MaximumUIRuntime.IsModalOpen)
+                    Logger.LogInfo("ClothingControl hotkey ignored: a MaximumUI text field or dialog has focus.");
+                else if (visible) Close();
                 else if (SupportedScene()) Open();
+                else Logger.LogInfo("ClothingControl hotkey ignored: only Maker, Studio and Free H are supported.");
             }
             if (!visible) return;
             if (batch != null && (!IsStudio() || SceneManager.GetActiveScene().handle != batch.SceneHandle))
