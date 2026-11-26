@@ -34,7 +34,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene HS(string state) {
         HSControlViewModel model = new HSControlViewModel {
-            Version = "0.1.0", Available = true, Enabled = true, Status = "已连接场景",
+            Version = "0.1.1", Available = true, Enabled = true, Status = "已连接场景",
             AnimationState = "WLoop", Mode = 3, Band = 1, Linkage = 1,
             ManualSpeed = .42f, CurrentSpeed = .55f, TargetSpeed = .68f,
             GaugeMale = 53f, GaugeFemale = 76f, RangeMin = .20f, RangeMax = .82f,

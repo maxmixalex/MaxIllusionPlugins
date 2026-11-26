@@ -20,7 +20,7 @@ namespace HSControl
     public sealed class HSControlPlugin : BaseUnityPlugin
     {
         public const string GUID = "MaxMixAlex.HSControl";
-        public const string Version = "0.1.0";
+        public const string Version = "0.1.1";
         private const string MountId = GUID + ".window";
         internal static HSControlPlugin Instance;
         private readonly HSControlMotionEngine motion = new HSControlMotionEngine(Environment.TickCount);
@@ -42,8 +42,8 @@ namespace HSControl
             Instance = this;
             HSControlSettings ini = HSLegacyIni.Read(Path.Combine(Paths.PluginPath, "KK_HCtrl.ini"));
             master = Config.Bind("General", "Enabled", true, "Enable the native scene controller.");
-            hotkey = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F8),
-                "Open HSControl during a running scene.");
+            hotkey = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F8, KeyCode.LeftControl),
+                "Ctrl+F8 opens HSControl during a running scene; F8 is used by ClothingCompression.");
             mode = Config.Bind("Motion", "Auto speed mode", ini.Mode, "0 off; 1 slow/full/fast; 2 range; 3 gauge linked.");
             band = Config.Bind("Motion", "Speed band", ini.Band, "0 slow, 1 alternating full, 2 fast.");
             linkage = Config.Bind("Motion", "Gauge linkage", ini.Linkage, "0 average, 1 larger gauge.");

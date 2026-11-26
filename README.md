@@ -18,7 +18,7 @@
 | [AccessoryBatchManager](src/AccessoryBatchManager/README.md) | 角色编辑器中的饰品多选、批量整理、跨搭配复制/移动与高亮 | `Shift+=` 或小键盘 `+` |
 | [ClothingCompression](src/ClothingCompression/README.md) | 身体勒肉/局部网格形变，支持服装饰品绑定、左右侧控制和配置保存 | 编辑器“勒肉形变”页，`F8` 高级面板 |
 | [ExpressionControl](src/ExpressionControl/README.md) | 角色表情编辑、表情程序、H/Studio 场景中的表情控制和 XML 预设 | 默认 `L`，可在 XML 中修改 |
-| [HSControl](src/HSControl/README.md) | 原版 KK_HCtrl 独立重实现：H 场景原生速度、自动变速、强度与状态控制 | 默认 `F8` |
+| [HSControl](src/HSControl/README.md) | 原版 KK_HCtrl 独立重实现：H 场景原生速度、自动变速、强度与状态控制 | 默认 `Ctrl+F8` |
 | [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的常规配装切换、饰品显示、多角色选择与 XML 预设 | 默认 `F7` |
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
