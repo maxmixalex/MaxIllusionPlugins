@@ -122,6 +122,13 @@ namespace FemboyMode
                 original.Add(new Row(rect));
             }
             original.Sort((left, right) => left.Index.CompareTo(right.Index));
+            // Snapshot stock + other-plugin rows, including the Femboy flag.
+            // These must remain children of the exact same native AllTop.
+            List<Transform> nativeRows = new List<Transform>();
+            foreach (Transform child in page)
+                if (!used.Contains(child)) nativeRows.Add(child);
+            if (!nativeRows.Contains(anchor))
+                throw new InvalidOperationException("Femboy marker would no longer be a native row.");
 
             GameObject holder = null;
             MakerPageScroll instance = null;
@@ -234,6 +241,9 @@ namespace FemboyMode
                 instance.SetHeight(instance.templateHeight);
 
                 foreach (Row row in original) row.Rect.SetParent(content, false);
+                foreach (Transform native in nativeRows)
+                    if (native == null || native.parent != page)
+                        throw new InvalidOperationException("Native Maker hierarchy changed while installing scroll.");
                 // As in KKAPI's scrollable sidebar, a slider's wheel should
                 // scroll the page rather than alter a numeric value. Restore
                 // exactly the handlers we changed when removing the wrapper.
@@ -255,7 +265,8 @@ namespace FemboyMode
                 LayoutRebuilder.MarkLayoutForRebuild(page);
                 ResetRaycasts(page);
                 Debug.Log("Femboy Mode: scoped native scrollbar installed (" +
-                    original.Count + " owned extension widgets; native Maker hierarchy preserved).");
+                    original.Count + " owned extension widgets; " + nativeRows.Count +
+                    " original Maker/third-party rows retained in native parent).");
                 return instance;
             }
             catch
