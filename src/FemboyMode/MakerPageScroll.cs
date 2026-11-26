@@ -30,13 +30,20 @@ namespace FemboyMode
         private VerticalLayoutGroup layout;
         private ContentSizeFitter originalFitter;
         private RectMask2D mask;
-        private bool addedMask;
+        private Mask stencilMask;
+        private Image stencilImage;
+        private bool addedMask, addedStencilMask, addedStencilImage;
+        private bool originalStencilMaskEnabled, originalShowStencilGraphic;
+        private readonly Dictionary<MaskableGraphic, bool> nativeGraphicMaskability =
+            new Dictionary<MaskableGraphic, bool>();
         private bool originalMaskEnabled, originalFitterEnabled, originalForceExpand;
         private TextAnchor originalAlignment;
         private int padLeft, padRight, padTop, padBottom;
         private Vector2 originalSize, originalPosition;
         private Scrollbar scrollbar;
         private GameObject ownedBar;
+        private RectTransform scrollbarParent;
+        private float nativeBarWidth, nativeBarGap;
         private readonly List<ObservableScrollTrigger> wheelTriggers = new List<ObservableScrollTrigger>();
         private readonly List<Transform> nativeRows = new List<Transform>();
         private readonly Vector3[] corners = new Vector3[4];
@@ -106,6 +113,9 @@ namespace FemboyMode
                 instance = host.gameObject.AddComponent<MakerPageScroll>();
                 instance.page = host;
                 instance.layout = vertical;
+                instance.scrollbarParent = host.parent as RectTransform;
+                if (instance.scrollbarParent == null)
+                    throw new InvalidOperationException("Native Body All tab has no scrollbar sibling parent.");
                 // Inherit Koikatsu's *serialized native ScrollRect setting*.
                 // Do not substitute an invented 112-unit wheel step or create
                 // another user preference for what should be stock behavior.
@@ -130,7 +140,11 @@ namespace FemboyMode
 
                 // Clone ONLY the stock scrollbar, not its Scroll View, content,
                 // masking panel, or scripts. All native controls stay in host.
-                GameObject barObject = Object.Instantiate(source.verticalScrollbar.gameObject, host, false);
+                // The native SocksTop Scroll View places the scrollbar
+                // OUTSIDE its clipped Viewport. Mirror that hierarchy: the
+                // owned scrollbar is a sibling of AllTop, never its child.
+                GameObject barObject = Object.Instantiate(source.verticalScrollbar.gameObject,
+                    instance.scrollbarParent, false);
                 instance.ownedBar = barObject;
                 barObject.name = "FemboyMode.BodyAllScrollbar";
                 var barRect = barObject.transform as RectTransform;
@@ -145,15 +159,35 @@ namespace FemboyMode
                     stockRect == null ? float.NaN : stockRect.rect.width,
                     stockRect == null ? float.NaN : stockRect.sizeDelta.x,
                     scaleRatio);
-                barRect.anchorMin = new Vector2(1f, 0f);
-                barRect.anchorMax = new Vector2(1f, 1f);
-                barRect.pivot = new Vector2(1f, 1f);
-                barRect.offsetMin = new Vector2(-stockWidth, 0f);
-                barRect.offsetMax = Vector2.zero;
-                vertical.padding.right = Mathf.Max(instance.padRight, Mathf.CeilToInt(stockWidth + 4f));
+                instance.nativeBarWidth = stockWidth;
+                float originalGap = float.NaN;
+                if (stockRect != null && source.viewport != null)
+                {
+                    // Use the native ScrollRect's own gap between its
+                    // Viewport right edge and Scrollbar left edge.
+                    source.viewport.GetWorldCorners(instance.corners);
+                    float right = source.transform.InverseTransformPoint(
+                        instance.corners[2]).x;
+                    stockRect.GetWorldCorners(instance.corners);
+                    float left = source.transform.InverseTransformPoint(
+                        instance.corners[0]).x;
+                    originalGap = (left - right) *
+                        Mathf.Abs(source.transform.lossyScale.x) /
+                        Mathf.Max(.001f, Mathf.Abs(host.lossyScale.x));
+                }
+                instance.nativeBarGap = MakerPageScrollMath.OutsideScrollbarGap(originalGap);
+                barRect.anchorMin = new Vector2(0f, 1f);
+                barRect.anchorMax = new Vector2(0f, 1f);
+                barRect.pivot = new Vector2(0f, 1f);
+                barRect.localScale = Vector3.one;
+                barRect.localRotation = Quaternion.identity;
+                // Do not reserve a scrollbar-width gutter *inside* the
+                // original vertical layout: it must retain native width.
+                vertical.padding.right = instance.padRight;
                 Debug.Log("Femboy Mode: copied stock Maker scrollbar width " +
                     stockWidth.ToString("0.0") + " UI units; original rect=" +
                     (stockRect == null ? "missing" : stockRect.rect.width.ToString("0.0")) +
+                    "; outside gap=" + instance.nativeBarGap.ToString("0.0") +
                     "; native ScrollRect.scrollSensitivity=" +
                     instance.nativeScrollSensitivity.ToString("0.###"));
                 instance.scrollbar = barObject.GetComponent<Scrollbar>();
@@ -168,20 +202,49 @@ namespace FemboyMode
                 // their existing layout root, and clip its overflowing children.
                 if (instance.addedMask) instance.mask = host.gameObject.AddComponent<RectMask2D>();
                 else instance.mask.enabled = true;
+                // RectMask2D alone did not clip certain original Maker
+                // labels / number fields in RX18 (reported 2026-11-26).
+                // Add a native stencil Mask + mask graphic to the same
+                // unchanged AllTop; all MaskableGraphics use the stencil
+                // even when their shader ignores UnityUIClipRect.
+                instance.stencilImage = host.GetComponent<Image>();
+                instance.addedStencilImage = instance.stencilImage == null;
+                if (instance.addedStencilImage)
+                {
+                    instance.stencilImage = host.gameObject.AddComponent<Image>();
+                    instance.stencilImage.color = Color.white;
+                    instance.stencilImage.raycastTarget = false;
+                }
+                instance.stencilMask = host.GetComponent<Mask>();
+                instance.addedStencilMask = instance.stencilMask == null;
+                if (!instance.addedStencilMask)
+                {
+                    instance.originalStencilMaskEnabled = instance.stencilMask.enabled;
+                    instance.originalShowStencilGraphic = instance.stencilMask.showMaskGraphic;
+                }
+                else instance.stencilMask = host.gameObject.AddComponent<Mask>();
+                instance.stencilMask.showMaskGraphic = !instance.addedStencilImage;
+                instance.stencilMask.enabled = true;
+                instance.EnsureNativeTextMaskability();
                 if (instance.originalFitter != null) instance.originalFitter.enabled = false;
                 vertical.childAlignment = TextAnchor.UpperLeft;
                 vertical.childForceExpandHeight = false;
                  instance.installed = true;
                 instance.installedFrame = Time.frameCount;
                 instance.SetViewportHeight(instance.MeasureViewportHeight());
+                instance.PositionExternalScrollbar();
                 instance.DisableNativeWheelHandlers();
                 instance.RecalculateContent();
                 instance.ResetRaycasts();
                 Debug.Log("Femboy Mode: unified Body > All scrolling installed; " +
                     instance.nativeRows.Count + " original rows and " + ownedWidgets.Count +
-                    " owned controls retain the same native parent. Viewport=" +
-                    instance.viewportHeight.ToString("0") + " contentRange=" +
-                    instance.maximumOffset.ToString("0") + ".");
+                    " owned controls retain native parent; scrollbar outside viewport=" +
+                    (instance.scrollbarParent == host.parent) +
+                    "; stencil clipping=" + (instance.stencilMask != null &&
+                    instance.stencilMask.enabled) +
+                    "; native graphics forced maskable=" + instance.nativeGraphicMaskability.Count +
+                    "; viewport=" + instance.viewportHeight.ToString("0") +
+                    "; contentRange=" + instance.maximumOffset.ToString("0") + ".");
                 return instance;
             }
             catch
@@ -215,6 +278,55 @@ namespace FemboyMode
             page.position += topBefore - topAfter;
             lastScreenWidth = Screen.width;
             lastScreenHeight = Screen.height;
+            PositionExternalScrollbar();
+        }
+
+        private void EnsureNativeTextMaskability()
+        {
+            if (page == null || stencilMask == null) return;
+            foreach (MaskableGraphic graphic in page.GetComponentsInChildren<MaskableGraphic>(true))
+            {
+                if (graphic == null || graphic == stencilImage || graphic.maskable) continue;
+                if (!nativeGraphicMaskability.ContainsKey(graphic))
+                    nativeGraphicMaskability.Add(graphic, false);
+                graphic.maskable = true;
+                graphic.SetMaterialDirty();
+            }
+        }
+
+        private bool PageVisiblySelected()
+        {
+            if (page == null || !page.gameObject.activeInHierarchy) return false;
+            for (Transform t = page; t != null; t = t.parent)
+            {
+                CanvasGroup group = t.GetComponent<CanvasGroup>();
+                if (group != null && group.alpha <= .01f) return false;
+                if (t.name == "CvsMenuTree") break;
+            }
+            return true;
+        }
+
+        private void PositionExternalScrollbar()
+        {
+            if (scrollbar == null || scrollbarParent == null || page == null) return;
+            bool shouldShow = PageVisiblySelected();
+            if (ownedBar != null && ownedBar.activeSelf != shouldShow)
+                ownedBar.SetActive(shouldShow);
+            if (!shouldShow) return;
+            RectTransform bar = scrollbar.transform as RectTransform;
+            if (bar == null) return;
+            float ratioX = Mathf.Abs(page.lossyScale.x) /
+                Mathf.Max(.001f, Mathf.Abs(scrollbarParent.lossyScale.x));
+            float ratioY = Mathf.Abs(page.lossyScale.y) /
+                Mathf.Max(.001f, Mathf.Abs(scrollbarParent.lossyScale.y));
+            bar.sizeDelta = new Vector2(nativeBarWidth * ratioX,
+                viewportHeight * ratioY);
+            bar.rotation = page.rotation;
+            // Top-left of the stock bar is outside the original content
+            // right edge. Because this is a sibling of AllTop, it cannot be
+            // cut off by the AllTop RectMask2D/stencil Mask.
+            bar.position = page.TransformPoint(new Vector3(
+                page.rect.xMax + nativeBarGap, page.rect.yMax, 0f));
         }
 
         private void DisableNativeWheelHandlers()
@@ -239,6 +351,7 @@ namespace FemboyMode
             // during user wheel input. Preferred height includes the current
             // negative top padding; restore the saved offset numerically.
             LayoutRebuilder.ForceRebuildLayoutImmediate(page);
+            EnsureNativeTextMaskability();
             float preferred = LayoutUtility.GetPreferredHeight(page) +
                 Mathf.RoundToInt(scrollOffset);
             if (float.IsNaN(preferred) || float.IsInfinity(preferred) ||
@@ -282,6 +395,12 @@ namespace FemboyMode
             SetViewportHeight(MeasureViewportHeight());
             nextRefresh = 0f;
             scrollOffset = 0f;
+            PositionExternalScrollbar();
+        }
+
+        private void OnDisable()
+        {
+            if (ownedBar != null) ownedBar.SetActive(false);
         }
 
         private bool NativeRowsRemainVisible()
@@ -320,6 +439,7 @@ namespace FemboyMode
             if (!installed || page == null || !page.gameObject.activeInHierarchy) return;
             if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
                 SetViewportHeight(MeasureViewportHeight());
+            PositionExternalScrollbar();
             if (Time.unscaledTime >= nextRefresh || page.childCount != lastChildCount)
             {
                 nextRefresh = Time.unscaledTime + .25f;
@@ -333,7 +453,9 @@ namespace FemboyMode
                 validated = true;
                 if (page.rect.height < MinimumViewport || page.rect.width < 120f ||
                     scrollbar == null || scrollbar.handleRect == null ||
-                    scrollbar.transform.parent != page || !NativeRowsRemainVisible())
+                    scrollbar.transform.parent != scrollbarParent ||
+                    stencilMask == null || !stencilMask.enabled ||
+                    !NativeRowsRemainVisible())
                 {
                     Debug.LogWarning("Femboy Mode: native Maker rows were clipped or page bounds invalid; " +
                         "restoring all original page layout and input without touching any native row.");
@@ -416,6 +538,13 @@ namespace FemboyMode
             if (ownedBar != null) Object.Destroy(ownedBar);
             ownedBar = null;
             scrollbar = null;
+            foreach (var original in nativeGraphicMaskability)
+                if (original.Key != null)
+                {
+                    original.Key.maskable = original.Value;
+                    original.Key.SetMaterialDirty();
+                }
+            nativeGraphicMaskability.Clear();
             if (page != null)
             {
                 if (layout != null)
@@ -430,6 +559,17 @@ namespace FemboyMode
                 page.sizeDelta = originalSize;
                 page.anchoredPosition = originalPosition;
                 if (originalFitter != null) originalFitter.enabled = originalFitterEnabled;
+                if (stencilMask != null)
+                {
+                    if (addedStencilMask) Object.Destroy(stencilMask);
+                    else
+                    {
+                        stencilMask.enabled = originalStencilMaskEnabled;
+                        stencilMask.showMaskGraphic = originalShowStencilGraphic;
+                    }
+                }
+                if (addedStencilImage && stencilImage != null)
+                    Object.Destroy(stencilImage);
                 if (mask != null)
                 {
                     if (addedMask) Object.Destroy(mask);
