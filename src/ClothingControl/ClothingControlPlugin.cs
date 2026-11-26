@@ -179,6 +179,13 @@ namespace ClothingControl {
             // MonoBehaviour.Update() to notice a one-time Maker event.
             for (int frame = 0; frame < 300 && !MakerAPI.InsideAndLoaded; frame++)
                 yield return null;
+            // Do not mount a permanently hidden MaximumUI window during the
+            // few frames between KKAPI declaring Maker loaded and the native
+            // canvas becoming visible. Previously opening in that interval
+            // set makerPresentationSuppressed=true until Update() corrected it.
+            for (int frame = 0; frame < 120 && MakerAPI.InsideAndLoaded &&
+                NativeMakerHidden(); frame++)
+                yield return null;
             makerRestoreCoroutine = null;
             if (!MakerAPI.InsideAndLoaded || showInMaker == null) {
                 Logger.LogWarning("ClothingControl Maker restore aborted: KKAPI never became InsideAndLoaded.");
