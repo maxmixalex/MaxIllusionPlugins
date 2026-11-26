@@ -4,7 +4,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 7;
+        internal const int TestCount = 8;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
@@ -13,6 +13,7 @@ namespace MaximumUI.Tests {
             FiltersAndBatchOperateOnDisplayedRows();
             GarmentPageDispatchesNativeCommands();
             ClothingStateOptionsInvalidateTheRetainedUi();
+            FreeHDisablesFullCoordinateReloadWithoutDisablingClothing();
             SceneScopeAndCancelAreIndependent();
         }
 
@@ -142,6 +143,30 @@ namespace MaximumUI.Tests {
             b.Garments[0].State = 1;
             b.Garments[0].AllowedStates = new[] { 0, 3 };
             Require(!a.SameDisplayAs(b), "Native capabilities changes invalidate options.");
+        }
+
+        private static void FreeHDisablesFullCoordinateReloadWithoutDisablingClothing() {
+            WardrobeViewModel m = Create();
+            m.CanChangeCoordinate = false;
+            m.Page = 1;
+            m.Garments.Add(new WardrobeRow {
+                Slot = 0, State = 0, Item = 42, Label = "top",
+                AllowedStates = new[] { 0, 1, 3 }, ChangeState = delegate { }
+            });
+            WardrobeView view = new WardrobeView { Model = m };
+            Widget widget = view.Build(null);
+            Require(!Find(widget, "wardrobe-coordinate").Enabled &&
+                !Find(widget, "wardrobe-coordinate-previous").Enabled &&
+                !Find(widget, "wardrobe-coordinate-next").Enabled,
+                "Free H must not reload a whole coordinate during animation.");
+            Require(Find(widget, "garment-state-0") == null,
+                "Virtualized garment rows remain lazy until requested.");
+            Widget row = ((VirtualList)Find(widget, "wardrobe-garments")).BuildItem(0);
+            Require(Find(row, "garment-state-0").Enabled &&
+                Find(widget, "wardrobe-apply").Enabled,
+                "Free H still allows native garment edits and same-coordinate presets.");
+            WardrobeViewModel copy = Create();
+            Require(!m.SameDisplayAs(copy), "H-scene coordinate restriction must invalidate retained UI.");
         }
 
         private static void SceneScopeAndCancelAreIndependent() {

@@ -19,6 +19,7 @@ namespace ClothingControl {
         internal int Revision, Page, AccessoryGroup, ShoeMode = -1;
         internal string AccessoryQuery = string.Empty;
         internal bool Busy, CanWrite, HasTarget, CanScenePresets, HasSceneTargets;
+        internal bool CanChangeCoordinate = true;
         internal int Scope;
         internal readonly List<WardrobeRow> Rows = new List<WardrobeRow>();
         internal readonly List<WardrobeRow> Garments = new List<WardrobeRow>();
@@ -65,6 +66,7 @@ namespace ClothingControl {
             if (other == null || Revision != other.Revision || Version != other.Version ||
                 Name != other.Name || Status != other.Status || Error != other.Error ||
                 Busy != other.Busy || CanWrite != other.CanWrite || HasTarget != other.HasTarget ||
+                CanChangeCoordinate != other.CanChangeCoordinate ||
                 Scope != other.Scope || CanScenePresets != other.CanScenePresets || HasSceneTargets != other.HasSceneTargets ||
                 TargetIndex != other.TargetIndex || CoordinateIndex != other.CoordinateIndex || PresetIndex != other.PresetIndex ||
                 Page != other.Page || ShoeMode != other.ShoeMode || AccessoryGroup != other.AccessoryGroup ||
@@ -106,7 +108,8 @@ namespace ClothingControl {
                 onVisibleChange: value => { if (!value && m.Close != null) m.Close(); });
             VStack body = new VStack(6f) {
                 Selector("角色", "wardrobe-target", m.Targets, m.TargetIndex, m.SelectTarget, !m.Busy),
-                Selector("配装", "wardrobe-coordinate", m.Coordinates, m.CoordinateIndex, m.SelectCoordinate, canEdit),
+                Selector("配装", "wardrobe-coordinate", m.Coordinates, m.CoordinateIndex, m.SelectCoordinate,
+                    canEdit && m.CanChangeCoordinate),
                 new Separator(),
                 new SegmentedControl<int>(m.Page, new[] { 0, 1 }, i => i == 0 ? "饰品" : "服装",
                     value => { if (!m.Busy && m.ChangePage != null) m.ChangePage(value); }, "wardrobe-page").Enabled(!m.Busy).Height(32f),
