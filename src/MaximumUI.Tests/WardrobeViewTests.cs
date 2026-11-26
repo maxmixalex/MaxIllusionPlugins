@@ -144,7 +144,8 @@ namespace MaximumUI.Tests {
                 });
             }
             Window window = (Window)new WardrobeView { Model = m }.Build(null);
-            Require(window.Height >= 900f, "The clothing window starts taller.");
+            Require(window.Height >= 900f && window.MinHeight >= 900f,
+                "Default and minimum clothing window heights fit all nine rows.");
             Require(((SegmentedControl<int>)Find(window, "wardrobe-page")).GetText(0) == "服装",
                 "The first tab is Clothing rather than Accessories.");
             Require(Find(window, "wardrobe-garment-rows") != null &&
@@ -169,6 +170,18 @@ namespace MaximumUI.Tests {
                 "Shoe mode and Restore full outfit follow all garment rows, ahead of presets.");
             Require(presets.Rect.Bottom <= window.Height,
                 "The taller default window fits all garment rows and the lower toolbar.");
+            LayoutNode minimum = new LayoutEngine(ThemeTypography.CreateLayoutMetrics(ThemePalettes.MetroLight()))
+                .Layout(window, new MuiRect(0, 0, window.MinWidth, window.MinHeight));
+            LayoutNode minLast = FindNode(minimum, "garment-8");
+            LayoutNode minShoe = FindNode(minimum, "wardrobe-shoe-mode");
+            LayoutNode minRestore = FindNode(minimum, "wardrobe-restore-clothing");
+            LayoutNode minPresets = FindNode(minimum, "wardrobe-preset-row");
+            Require(minLast != null && minShoe != null && minRestore != null &&
+                minPresets != null && minShoe.Rect.Y >= minLast.Rect.Bottom &&
+                minRestore.Rect.Y >= minShoe.Rect.Bottom &&
+                minPresets.Rect.Y >= minRestore.Rect.Bottom &&
+                minPresets.Rect.Bottom <= window.MinHeight,
+                "Minimum window size must not overlap the last garment, shoe, restore and preset controls.");
         }
 
         private static void ClothingStateOptionsInvalidateTheRetainedUi() {
