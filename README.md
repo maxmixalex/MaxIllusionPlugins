@@ -21,7 +21,7 @@
 | [LoveJuice](src/LoveJuice/README.md) | Studio 原生液体预制体、按状态滴落及物理碰撞，兼容 JuiceControl / FemboyMode | BepInEx 启用、`F9` 预览 |
 | [FemboyMode](src/FemboyMode/README.md) | Maker 角色标记、原生全页滚动与可拖动坐标轴及游戏内选项 | Maker Body > All |
 | [HSControl](src/HSControl/README.md) | 原版 KK_HCtrl 独立重实现：H 场景原生速度、自动变速、强度与状态控制 | 默认 `Ctrl+F8` |
-| [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的常规配装切换、饰品显示、多角色选择与 XML 预设 | 默认 `F7` |
+| [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的九类服装原生四档状态、饰品显示、多角色与 XML 预设 | 默认 `F7` |
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
 | [MaximumUIGallery](src/MaximumUIGallery/README.md) | MaximumUI 控件、布局、对话框和调试工具的独立游戏内示例 | 默认 `F10`，启动时隐藏 |

@@ -5,9 +5,11 @@ using MaximumUI;
 namespace ClothingControl {
     internal sealed class WardrobeRow {
         internal string Label;
-        internal int Slot, Type, Item, Group;
+        internal int Slot, Type, Item, Group, State = -1;
+        internal int[] AllowedStates = new int[0];
         internal bool Visible;
         internal Action<bool> Change;
+        internal Action<int> ChangeState;
     }
 
     internal sealed class WardrobeViewModel {
@@ -45,7 +47,10 @@ namespace ClothingControl {
             for (int i = 0; i < a.Count; i++) {
                 WardrobeRow x = a[i], y = b[i];
                 if (x.Slot != y.Slot || x.Type != y.Type || x.Item != y.Item || x.Group != y.Group ||
-                    x.Label != y.Label || x.Visible != y.Visible) return false;
+                    x.State != y.State || x.Label != y.Label || x.Visible != y.Visible) return false;
+                if (x.AllowedStates.Length != y.AllowedStates.Length) return false;
+                for (int k = 0; k < x.AllowedStates.Length; k++)
+                    if (x.AllowedStates[k] != y.AllowedStates[k]) return false;
             }
             return true;
         }
@@ -177,12 +182,20 @@ namespace ClothingControl {
                 if (canEdit && m.RestoreClothing != null) m.RestoreClothing();
             }, "wardrobe-restore-clothing").Enabled(canEdit && m.RestoreClothing != null).ExpandWidth().Height(32f));
             if (m.Garments.Count == 0)
-                body.Add(new Label("当前配装没有可调整的手套、袜子或鞋。", "wardrobe-no-garments") { WordWrap = true }.ExpandWidth());
-            else body.Add(new VirtualList(m.Garments.Count, 32f, i => {
+                body.Add(new Label("当前配装没有可调整的服装部位。", "wardrobe-no-garments") { WordWrap = true }.ExpandWidth());
+            else body.Add(new VirtualList(m.Garments.Count, 36f, i => {
                 WardrobeRow row = m.Garments[i];
-                return new Checkbox(row.Label, row.Visible, value => {
-                    if (canEdit && row.Change != null) row.Change(value);
-                }, "garment-" + row.Slot).Enabled(canEdit).Height(32f);
+                bool editable = canEdit && row.ChangeState != null && row.AllowedStates.Length > 0;
+                return new HStack(4f, "garment-" + row.Slot) {
+                    new Label(row.Label).Width(94f),
+                    new ComboBox<int>(string.Empty, row.State, row.AllowedStates,
+                        state => state == 0 ? "穿好" : state == 1 ? "半脱" :
+                            state == 2 ? "挂下" : "脱掉",
+                        state => {
+                            if (editable && Array.IndexOf(row.AllowedStates, state) >= 0)
+                                row.ChangeState(state);
+                        }, "garment-state-" + row.Slot).Enabled(editable).ExpandWidth()
+                }.Height(36f);
             }, "wardrobe-garments") { Height = 0f }.MinHeight(120f).ExpandWidth().ExpandHeight());
             return body.ExpandWidth().ExpandHeight();
         }
