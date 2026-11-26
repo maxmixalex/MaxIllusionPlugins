@@ -3,13 +3,13 @@ using MaximumUI;
 
 namespace LoveJuice {
     internal sealed class LoveJuiceViewModel {
-        internal string Version = "0.3.1", Status = "就绪", Integration = "未连接";
-        internal bool Enabled, HasScene, Face, Body, Milk, Shower, Special, Collision;
+        internal string Version = "0.3.2", Status = "就绪", Integration = "未连接";
+        internal bool Enabled, HasScene, Face, Body, Intimate, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
         internal string[] ActorNames = new string[0];
         internal int SelectedActorIndex = -1;
         internal float Interval, Gravity, Damping, Lifetime, Scale, LaunchSpeed, MilkThreshold;
-        internal Action<bool> ChangeEnabled, ChangeFace, ChangeBody, ChangeMilk,
+        internal Action<bool> ChangeEnabled, ChangeFace, ChangeBody, ChangeIntimate, ChangeMilk,
             ChangeShower, ChangeSpecial, ChangeCollision;
         internal Action<int> ChangeMaximum, ChangePreviewChannel, SelectActor;
         internal Action<float> ChangeInterval, ChangeGravity, ChangeDamping,
@@ -24,7 +24,7 @@ namespace LoveJuice {
                 PreviewChannel == other.PreviewChannel &&
                 SelectedActorIndex == other.SelectedActorIndex &&
                 SameNames(ActorNames, other.ActorNames) &&
-                Face == other.Face && Body == other.Body &&
+                Face == other.Face && Body == other.Body && Intimate == other.Intimate &&
                 Milk == other.Milk && Shower == other.Shower && Special == other.Special &&
                 Collision == other.Collision && Near(Interval, other.Interval) &&
                 Near(Gravity, other.Gravity) && Near(Damping, other.Damping) &&
@@ -62,6 +62,7 @@ namespace LoveJuice {
                 new Label("Studio 原生粒子素材", "lovejuice-sources"),
                 new Checkbox("面部滴落", m.Face, m.ChangeFace, "lovejuice-face").Enabled(m.Enabled).Height(32f),
                 new Checkbox("身体滴落", m.Body, m.ChangeBody, "lovejuice-body").Enabled(m.Enabled).Height(32f),
+                new Checkbox("爱液滴落（SkinEffects）", m.Intimate, m.ChangeIntimate, "lovejuice-intimate").Enabled(m.Enabled).Height(32f),
                 new Checkbox("乳液效果", m.Milk, m.ChangeMilk, "lovejuice-milk").Enabled(m.Enabled).Height(32f),
                 new Checkbox("淋浴效果", m.Shower, m.ChangeShower, "lovejuice-shower").Enabled(m.Enabled).Height(32f),
                 new Checkbox("FemboyMode 附加效果", m.Special, m.ChangeSpecial,
@@ -102,9 +103,9 @@ namespace LoveJuice {
                     .Enabled(m.HasScene && m.ActorNames.Length > 0).ExpandWidth().Height(36f),
                 new ScrollView("lovejuice-scroll") { controls.ExpandWidth() }.ExpandWidth().ExpandHeight(),
                 new HStack(5f) {
-                    new ComboBox<int>("预览类型", m.PreviewChannel, new[] { 0, 1, 2, 3, 4, 5 },
+                    new ComboBox<int>("预览类型", m.PreviewChannel, new[] { 0, 1, 2, 3, 4, 5, 6 },
                         i => i == 0 ? "水滴" : i == 1 ? "口水" : i == 2 ? "身体" :
-                            i == 3 ? "淋浴" : i == 4 ? "乳液" : "附加",
+                            i == 3 ? "淋浴" : i == 4 ? "乳液" : i == 5 ? "附加" : "爱液",
                         m.ChangePreviewChannel, "lovejuice-preview-channel").Enabled(m.Enabled).ExpandWidth(),
                     new Button("实际发射", m.Preview, "lovejuice-emit")
                         .Enabled(m.Enabled && m.HasScene && m.ActorCount > 0).Width(106f)

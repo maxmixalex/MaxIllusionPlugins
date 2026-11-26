@@ -58,23 +58,23 @@ internal static class Program {
 
     private static void CheckLiquidLevelEvents() {
         var events = new LiquidLevelEvents();
-        LiquidLevelBursts first = events.Observe(3, 2, 2);
-        Check(first.Face == 0 && first.Body == 0 && first.Special == 0,
+        LiquidLevelBursts first = events.Observe(3, 2, 2, 2);
+        Check(first.Face == 0 && first.Body == 0 && first.Special == 0 && first.Intimate == 0,
             "A loaded card with existing visual status does not receive a false burst.");
-        LiquidLevelBursts changed = events.Observe(4, 5, 3);
-        Check(changed.Face == 1 && changed.Body == 3 && changed.Special == 1,
+        LiquidLevelBursts changed = events.Observe(4, 5, 3, 3);
+        Check(changed.Face == 1 && changed.Body == 3 && changed.Special == 1 && changed.Intimate == 1,
             "New Siru/SkinEffects status immediately creates independent native particle bursts.");
-        changed = events.Observe(4, 5, 3);
+        changed = events.Observe(4, 5, 3, 3);
         Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
             "Unchanged status does not create a second burst.");
-        changed = events.Observe(0, 1, 0);
+        changed = events.Observe(0, 1, 0, 0);
         Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
             "Removing overlays does not cause a burst.");
-        changed = events.Observe(255, 255, 255);
-        Check(changed.Face == 3 && changed.Body == 3 && changed.Special == 3,
+        changed = events.Observe(255, 255, 255, 255);
+        Check(changed.Face == 3 && changed.Body == 3 && changed.Special == 3 && changed.Intimate == 3,
             "Large level jumps are capped to protect the global particle budget.");
         events.Reset();
-        changed = events.Observe(1, 2, 3);
+        changed = events.Observe(1, 2, 3, 4);
         Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
             "Reset scene re-establishes a clean baseline.");
     }
@@ -111,6 +111,8 @@ internal static class Program {
                 "p_koi_syu_LiquidSio_00_00", "Real Studio light-liquid item");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Body) ==
                 "p_koi_syu_LiquidSiru_00_00", "Real Studio viscous-liquid item");
+            Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Intimate) ==
+                "p_koi_syu_LiquidSiru_00_00", "Independent pelvis source reuses Studio viscous-liquid asset");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Special) ==
                 "p_koi_syu_LiquidKancho_00_00", "Real Studio heavy-liquid item");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Shower) ==

@@ -21,7 +21,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.1";
+        public const string Version = "0.3.2";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -31,7 +31,7 @@ namespace LoveJuice {
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
-        private ConfigEntry<bool> masterEnabled, face, body, milk, shower, special, collision;
+        private ConfigEntry<bool> masterEnabled, face, body, intimate, milk, shower, special, collision;
         private ConfigEntry<int> maxActive, previewChannel;
         private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold;
         private ConfigEntry<KeyboardShortcut> preview, panelShortcut;
@@ -51,12 +51,12 @@ namespace LoveJuice {
 
         private sealed class Actor {
             internal ChaControl Character;
-            internal Transform Mouth, Torso, ChestLeft, ChestRight, Alternate;
+            internal Transform Mouth, Torso, Pelvis, ChestLeft, ChestRight, Alternate;
             internal Transform TrackedTop, TrackedHeadRoot, TrackedBodyRoot;
             internal int LastBoneProbe;
             internal bool ChestLeftIsFallback, ChestRightIsFallback;
-            internal float FaceTime, BodyTime, MilkTime, ShowerTime, SpecialTime;
-            internal int FaceLevel, BodyLevel, SpecialLevel;
+            internal float FaceTime, BodyTime, IntimateTime, MilkTime, ShowerTime, SpecialTime;
+            internal int FaceLevel, BodyLevel, IntimateLevel, SpecialLevel;
             internal readonly LiquidLevelEvents LevelChanges = new LiquidLevelEvents();
         }
 
@@ -70,6 +70,7 @@ namespace LoveJuice {
                 case "Enabled": return masterEnabled;
                 case "Face": return face;
                 case "Body": return body;
+                case "Intimate": return intimate;
                 case "Milk": return milk;
                 case "Shower": return shower;
                 case "Special": return special;
@@ -114,11 +115,13 @@ namespace LoveJuice {
                 new KeyboardShortcut(KeyCode.F9, KeyCode.LeftControl),
                 "Ctrl+F9 toggles the LoveJuice window; F9 emits the selected preview.");
             previewChannel = Config.Bind("General", "Preview channel", 0,
-                "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special.");
+                "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special, 6 intimate.");
             face = Config.Bind("Sources", "Face drips", true,
                 "Read current face overlay / optional SkinEffects levels, including JuiceControl changes.");
             body = Config.Bind("Sources", "Body drips", true,
                 "Read current body overlay / optional SkinEffects levels, including JuiceControl changes.");
+            intimate = Config.Bind("Sources", "Intimate fluid drips", true,
+                "Use optional SkinEffects PussyJuiceBody readback to emit native Studio droplets near the female pelvis.");
             milk = Config.Bind("Sources", "Milk emission", false,
                 "Enable independent chest-source droplets during active loop scenes above the gauge threshold.");
             milkThreshold = Config.Bind("Sources", "Milk gauge threshold", 65f,
@@ -180,6 +183,7 @@ namespace LoveJuice {
             actor.TrackedBodyRoot = bodyRoot;
             actor.Mouth = Bone(cha, "cf_J_MouthBase", "cf_J_Mouth", "cf_J_MouthMove", "cf_J_Head") ?? headRoot;
             actor.Torso = Bone(cha, "cf_J_Spine03", "cf_J_Spine02", "cf_J_Hips") ?? bodyRoot;
+            actor.Pelvis = Bone(cha, "cf_J_Kokan", "cf_J_Hips", "cf_J_Pelvis");
             actor.ChestLeft = left ?? bodyRoot;
             actor.ChestRight = right ?? bodyRoot;
             actor.ChestLeftIsFallback = left == null;
@@ -196,7 +200,8 @@ namespace LoveJuice {
                 !ReferenceEquals(actor.TrackedHeadRoot, HeadRoot(cha)) ||
                 !ReferenceEquals(actor.TrackedBodyRoot, BodyRoot(cha));
             bool unresolved = ReferenceEquals(actor.Mouth, actor.TrackedHeadRoot) ||
-                actor.Alternate == null || actor.ChestLeftIsFallback || actor.ChestRightIsFallback;
+                actor.Alternate == null || actor.Pelvis == null ||
+                actor.ChestLeftIsFallback || actor.ChestRightIsFallback;
             if (rigChanged || unresolved && Time.frameCount - actor.LastBoneProbe >= 180)
                 RebindActorBones(actor);
         }
@@ -233,7 +238,9 @@ namespace LoveJuice {
         private float RandomSigned() { return (float)(random.NextDouble() * 2.0 - 1.0); }
 
         private bool EmitFrom(Actor actor, LoveJuiceChannel kind, int n) {
+            if (kind == LoveJuiceChannel.Intimate && actor.Character.sex != 1) return false;
             Transform source = kind == LoveJuiceChannel.Saliva ? actor.Mouth :
+                kind == LoveJuiceChannel.Intimate ? actor.Pelvis :
                 kind == LoveJuiceChannel.Milk ? (n % 2 == 0 ? actor.ChestLeft : actor.ChestRight) :
                 kind == LoveJuiceChannel.Special && actor.Alternate != null ? actor.Alternate : actor.Torso;
             if (source == null || visuals == null ||
@@ -241,6 +248,7 @@ namespace LoveJuice {
             bool leftChest = n % 2 == 0;
             Vector3 local = kind == LoveJuiceChannel.Saliva ?
                 new Vector3(0f, -.035f, .045f) :
+                kind == LoveJuiceChannel.Intimate ? new Vector3(0f, -.02f, .025f) :
                 kind == LoveJuiceChannel.Milk ?
                     (leftChest ? actor.ChestLeftIsFallback : actor.ChestRightIsFallback)
                         ? new Vector3(leftChest ? -.12f : .12f, .34f, .055f)
@@ -335,16 +343,21 @@ namespace LoveJuice {
                 cha.GetSiruFlags(ChaFileDefine.SiruParts.SiruFrontDown));
             actor.FaceLevel = Math.Max(fromFace, Math.Max(0, SkinLevel(cha, "DroolFace", "SalivaFace")));
             actor.BodyLevel = Math.Max(fromBody, Math.Max(0, SkinLevel(cha, "WetBody")));
+            // The installed legacy SkinEffects exposes this separately from
+            // sweat; body overlays must not trigger the intimate source.
+            actor.IntimateLevel = cha.sex == 1 ? Math.Max(0, SkinLevel(cha, "PussyJuiceBody")) : 0;
             actor.SpecialLevel = special.Value && integrations.IsMarked(cha) ? actor.BodyLevel : 0;
 
             LiquidLevelBursts bursts = actor.LevelChanges.Observe(
-                actor.FaceLevel, actor.BodyLevel, actor.SpecialLevel);
+                actor.FaceLevel, actor.BodyLevel, actor.SpecialLevel, actor.IntimateLevel);
             // Match the currently selected effect sources; one readback rise
             // produces a bounded native burst before the periodic drips.
             if (face.Value) for (int i = 0; i < bursts.Face; i++)
                 EmitFrom(actor, LoveJuiceChannel.Saliva, i);
             if (body.Value) for (int i = 0; i < bursts.Body; i++)
                 EmitFrom(actor, LoveJuiceChannel.Body, i);
+            if (intimate.Value) for (int i = 0; i < bursts.Intimate; i++)
+                EmitFrom(actor, LoveJuiceChannel.Intimate, i);
             if (special.Value) for (int i = 0; i < bursts.Special; i++)
                 EmitFrom(actor, LoveJuiceChannel.Special, i);
         }
@@ -399,6 +412,8 @@ namespace LoveJuice {
             foreach (Actor actor in actors.Values) {
                 if (face.Value) TickSource(actor, LoveJuiceChannel.Saliva, actor.FaceLevel, ref actor.FaceTime, dt);
                 if (body.Value) TickSource(actor, LoveJuiceChannel.Body, actor.BodyLevel, ref actor.BodyTime, dt);
+                if (intimate.Value && actor.Character.sex == 1)
+                    TickSource(actor, LoveJuiceChannel.Intimate, actor.IntimateLevel, ref actor.IntimateTime, dt);
                 // Do not turn a scene-wide female gauge into milk emissions
                 // on the male's fallback torso anchor.
                 if (milk.Value && actor.Character.sex == 1)
@@ -462,7 +477,7 @@ namespace LoveJuice {
                 Status = panelStatus, Integration = integrations.HasSkinEffects
                     ? "SkinEffects：已连接（仅读取状态）。"
                     : "SkinEffects：未连接，使用游戏自身状态。",
-                Face = face.Value, Body = body.Value, Milk = milk.Value,
+                Face = face.Value, Body = body.Value, Intimate = intimate.Value, Milk = milk.Value,
                 Shower = shower.Value, Special = special.Value, Collision = collision.Value,
                 MaximumParticles = maxActive.Value, PreviewChannel = previewChannel.Value,
                 Interval = interval.Value, Gravity = gravity.Value, Damping = drag.Value,
@@ -473,6 +488,7 @@ namespace LoveJuice {
             m.ChangeEnabled = value => { if (live()) { masterEnabled.Value = value; RefreshPanel(); } };
             m.ChangeFace = value => { if (live()) { face.Value = value; RefreshPanel(); } };
             m.ChangeBody = value => { if (live()) { body.Value = value; RefreshPanel(); } };
+            m.ChangeIntimate = value => { if (live()) { intimate.Value = value; RefreshPanel(); } };
             m.ChangeMilk = value => { if (live()) { milk.Value = value; RefreshPanel(); } };
             m.ChangeShower = value => { if (live()) { shower.Value = value; RefreshPanel(); } };
             m.ChangeSpecial = value => { if (live()) { special.Value = value; RefreshPanel(); } };
@@ -485,7 +501,7 @@ namespace LoveJuice {
             m.ChangeLaunchSpeed = value => { if (live()) { launchSpeed.Value = DropletPhysics.Clamp(value, 0f, 5f); RefreshPanel(); } };
             m.ChangeMilkThreshold = value => { if (live()) { milkThreshold.Value = DropletPhysics.Clamp(value, 0f, 100f); RefreshPanel(); } };
             m.ChangeMaximum = value => { if (live()) { maxActive.Value = Mathf.Clamp(value, 1, 128); RefreshPanel(); } };
-            m.ChangePreviewChannel = value => { if (live() && value >= 0 && value <= 5) { previewChannel.Value = value; RefreshPanel(); } };
+            m.ChangePreviewChannel = value => { if (live() && value >= 0 && value <= 6) { previewChannel.Value = value; RefreshPanel(); } };
             m.SelectActor = value => {
                 if (!live() || scene == null || scene.flags == null || scene.isEnd) return;
                 if (roster.Select(value)) {

@@ -1,10 +1,14 @@
-# LoveJuice — 0.3.1 (Native Studio liquids)
+# LoveJuice — 0.3.2 (Native Studio liquids)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
 ## Native asset ownership fix
 
 Studio asset-bundle prefabs are borrowed references. LoveJuice now instantiates the emitter **before** changing active state, hierarchy, name or settings; only the owned instance is parented to its scene pool. This avoids mutating or destroying an asset shared with Studio or another mod. Partially initialized emitters and their material copies are cleaned up on failure.
+
+## 0.3.2: independent intimate-fluid source
+
+The optional SkinEffects `PussyJuiceBody` level drives its **own** switchable native Studio liquid emitter with pelvis-relative positioning, separate from sweat/body overlays. This source is restricted to active female characters. A missing optional plugin or unresolved pelvis bone does not produce invented drips or substitute an unrelated torso anchor. It is configurable in either LoveJuice or JuiceControl and offers an explicit F9 preview channel. The emitter uses the same original Studio `LiquidSiru` asset (borrowed, instantiated and pooled) rather than copying game assets.
 
 ## Native source assets
 
@@ -14,6 +18,7 @@ Inspected the original game's `abdata/studio/info/00.unity3d` in the authorized 
 | --- | --- |
 | Water / preview | `p_koi_syu_LiquidWater_00_00` |
 | Saliva/light liquid | `p_koi_syu_LiquidSio_00_00` |
+| Intimate fluid (pelvis source) | `p_koi_syu_LiquidSiru_00_00` |
 | Body liquid | `p_koi_syu_LiquidSiru_00_00` |
 | Shower | `p_koi_syu_LiquidShower_01_00` |
 | Milk (optional, white-tinted only if supported by the native prefab) | `p_koi_syu_LiquidWater_00_00` |
