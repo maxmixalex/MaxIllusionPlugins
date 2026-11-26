@@ -15,6 +15,7 @@ PLUGINS = (
     "ExpressionControl",
     "JuiceControl",
     "ClothingControl",
+    "HSControl",
 )
 GALLERY = "MaximumUIGallery"
 LIBRARIES = ("Common", "MaximumUI")

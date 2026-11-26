@@ -14,6 +14,7 @@
     <Compile Include="..\JuiceControl\JuiceEditorSession.cs" Link="Production\JuiceEditorSession.cs" />
     <Compile Include="..\JuiceControl\ReadbackState.cs" Link="Production\ReadbackState.cs" />
     <Compile Include="..\ClothingControl\WardrobeView.cs" Link="Production\WardrobeView.cs" />
+    <Compile Include="..\HSControl\HSControlView.cs" Link="Production\HSControlView.cs" />
     <Compile Include="..\AccessoryBatchManager\AccessoryEditorView.cs" Link="Production\AccessoryEditorView.cs" />
   </ItemGroup>
   <Target Name="CopyHeadlessUnityReference" AfterTargets="Build">

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AccessoryBatchManager;
 using ClothingControl;
+using HSControl;
 using JuiceControl;
 using MaximumUI;
 
@@ -9,6 +10,10 @@ using MaximumUI;
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
+        yield return HS("live");
+        yield return HS("manual");
+        yield return HS("range");
+        yield return HS("unavailable");
         yield return Juice("main");
         yield return Juice("name");
         yield return Juice("xml-error");
@@ -25,6 +30,41 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("filtered");
         yield return Wardrobe("scene");
         yield return Wardrobe("scene-applying");
+    }
+
+    private static PreviewScene HS(string state) {
+        HSControlViewModel model = new HSControlViewModel {
+            Version = "0.1.1", Available = true, Enabled = true, Status = "已连接场景",
+            AnimationState = "WLoop", Mode = 3, Band = 1, Linkage = 1,
+            ManualSpeed = .42f, CurrentSpeed = .55f, TargetSpeed = .68f,
+            GaugeMale = 53f, GaugeFemale = 76f, RangeMin = .20f, RangeMax = .82f,
+            AutoStrength = true, StrengthMinSeconds = 10f, StrengthMaxSeconds = 30f,
+            AutoFemaleFinish = true, AutoMaleFinish = false, AutoReplay = false,
+            ChangeEnabled = delegate { }, ChangeMode = delegate { },
+            ChangeBand = delegate { }, ChangeLinkage = delegate { },
+            ChangeManualOverride = delegate { }, ChangeManualSpeed = delegate { },
+            ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
+            ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
+            ChangeStrengthMax = delegate { }, ChangeGaugeMale = delegate { },
+            ChangeGaugeFemale = delegate { }, ChangeAutoMaleFinish = delegate { },
+            ChangeAutoFemaleFinish = delegate { }, ChangeAutoReplay = delegate { },
+            Reroll = delegate { }, Close = delegate { }
+        };
+        if (state == "manual") { model.ManualOverride = true; model.Mode = 0; }
+        if (state == "range") { model.Mode = 2; }
+        if (state == "unavailable") {
+            model.Available = false; model.Enabled = false;
+            model.AnimationState = ""; model.Status = "当前场景无可用的 H 控制器";
+        }
+        return new PreviewScene {
+            Slug = "hscontrol-" + state + "-preview", Title = "HSControl",
+            Source = "HSControl.HSControlView.Build", Detail = "Synthetic HSControl fixture " + state,
+            Widget = new HSControlView { Model = model }.Build(new BuildContext()),
+            StateId = state == "live" ? "default" : state,
+            RequiredKeys = new[] { "hscontrol-scroll", "hscontrol-enabled",
+                "hscontrol-speed-mode", "hscontrol-current", "hscontrol-strength",
+                "hscontrol-gauge-male", "hscontrol-replay", "hscontrol-status" }
+        };
     }
 
     private static PreviewScene Wardrobe(string state) {

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KK_HSControl</AssemblyName>
+    <RootNamespace>HSControl</RootNamespace>
+    <Authors>MaxMixAlex</Authors>
+    <Company>MaxMixAlex</Company>
+    <Product>HSControl</Product>
+    <AssemblyTitle>HSControl</AssemblyTitle>
+    <Version>0.1.1</Version>
+    <AssemblyVersion>0.1.1.0</AssemblyVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Core" />
+    <PackageReference Include="BepInEx.Analyzers" PrivateAssets="all" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp" />
+    <PackageReference Include="IllusionLibs.Koikatu.Assembly-CSharp-firstpass" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine" />
+    <PackageReference Include="IllusionLibs.Koikatu.UnityEngine.UI" />
+    <PackageReference Include="IllusionModdingAPI.KKAPI" />
+  </ItemGroup>
+</Project>

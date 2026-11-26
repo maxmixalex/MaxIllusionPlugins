@@ -58,6 +58,7 @@ namespace MaximumUI.Tests {
                 RetainedTextFocusTests.RunAll();
                 JuiceParityTests.RunAll();
                 WardrobeViewTests.RunAll();
+                HSControlViewTests.RunAll();
                 UiInteractionTests.RunAll();
                 MountRoutingTests.RunAll();
                 UiFollowupReviewTests.Run();
@@ -68,7 +69,7 @@ namespace MaximumUI.Tests {
                 EmbeddedUiTests.Run();
                 InlineDialogLayoutTests.RunAll();
                 if (Environment.GetEnvironmentVariable("MAXIMUMUI_BENCHMARK") == "1") MeasureBuildAndLayoutPerformance();
-                int count = 41 + ScrollChromeTests.TestCount + EditingAndRoutingTests.TestCount + PainterCompositionTests.TestCount + ScrollMeasurementTests.TestCount + WindowActivationTests.TestCount + RetainedTextFocusTests.TestCount + JuiceParityTests.TestCount + WardrobeViewTests.TestCount + Mdl2DesignTests.TestCount + Mdl2PopupTests.TestCount + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
+                int count = 41 + ScrollChromeTests.TestCount + EditingAndRoutingTests.TestCount + PainterCompositionTests.TestCount + ScrollMeasurementTests.TestCount + WindowActivationTests.TestCount + RetainedTextFocusTests.TestCount + JuiceParityTests.TestCount + WardrobeViewTests.TestCount + HSControlViewTests.TestCount + Mdl2DesignTests.TestCount + Mdl2PopupTests.TestCount + ThemeDesignTests.TestCount + UiInteractionTests.TestCount + MountRoutingTests.TestCount
                     + UiFollowupReviewTests.TestCount + CoordinateTests.TestCount + DialogLayoutTests.TestCount + NumericInputTests.TestCount
                     + PluginEditorViewTests.TestCount + EmbeddedUiTests.TestCount + InlineDialogLayoutTests.TestCount;
                 Console.WriteLine("MaximumUI regression groups: " + count + " passed.");

@@ -23,7 +23,7 @@ def main():
 
     if not args.no_build:
         run(dotnet, "build", "MaxIllusionPlugins.sln", "-c", args.configuration, "--nologo", "-m:1", "-nodeReuse:false")
-    for suite in ("MaximumUI.Runner", "MultiTeamH.Regression", "AccessoryClothing.Regression", "PluginCore.Regression"):
+    for suite in ("MaximumUI.Runner", "MultiTeamH.Regression", "AccessoryClothing.Regression", "PluginCore.Regression", "HSControl.Regression"):
         command = [dotnet, "run", "--project", f"tests/{suite}/{suite}.csproj", "-c", args.configuration, "--no-build"]
         if suite == "MaximumUI.Runner":
             command += ["--", f"bin/{args.configuration}/MaximumUI.Tests/MaximumUI.Tests.dll"]

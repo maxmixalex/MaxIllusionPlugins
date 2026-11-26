@@ -6,7 +6,7 @@
 
 ## 下载开发构建
 
-[GitHub Actions](https://github.com/maxmixalex/MaxIllusionPlugins/actions/workflows/ci.yml) 会在每次推送和 PR 更新后编译、执行回归、生成界面预览并上传安装包。打开 `fix/plugin-audit-maximumui` 分支最近一次绿色运行，在 **Artifacts** 下载 `plugin-packages-…`；其中提供五插件合集、各插件单独 ZIP 和可选的 Gallery。共享库已按实际依赖包含，解压所选安装 ZIP 内的 `BepInEx` 到游戏根目录。完整步骤见 [CI 与下载说明](docs/CI.md)。
+[GitHub Actions](https://github.com/maxmixalex/MaxIllusionPlugins/actions/workflows/ci.yml) 会在每次推送和 PR 更新后编译、执行回归、生成界面预览并上传安装包。打开 `fix/plugin-audit-maximumui` 分支最近一次绿色运行，在 **Artifacts** 下载 `plugin-packages-…`；其中提供全部功能插件合集、各插件单独 ZIP 和可选的 Gallery。共享库已按实际依赖包含，解压所选安装 ZIP 内的 `BepInEx` 到游戏根目录。完整步骤见 [CI 与下载说明](docs/CI.md)。
 
 更新时请先移除其他目录里的同名旧 DLL，避免重复加载。ClothingCompression 的 XML 现使用 `MaxMixAlex.ClothingCompression.xml`；旧文件请自行重命名，程序不回退读取旧名字。
 
@@ -18,6 +18,7 @@
 | [AccessoryBatchManager](src/AccessoryBatchManager/README.md) | 角色编辑器中的饰品多选、批量整理、跨搭配复制/移动与高亮 | `Shift+=` 或小键盘 `+` |
 | [ClothingCompression](src/ClothingCompression/README.md) | 身体勒肉/局部网格形变，支持服装饰品绑定、左右侧控制和配置保存 | 编辑器“勒肉形变”页，`F8` 高级面板 |
 | [ExpressionControl](src/ExpressionControl/README.md) | 角色表情编辑、表情程序、H/Studio 场景中的表情控制和 XML 预设 | 默认 `L`，可在 XML 中修改 |
+| [HSControl](src/HSControl/README.md) | 原版 KK_HCtrl 独立重实现：H 场景原生速度、自动变速、强度与状态控制 | 默认 `Ctrl+F8` |
 | [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的常规配装切换、饰品显示、多角色选择与 XML 预设 | 默认 `F7` |
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
@@ -25,7 +26,7 @@
 | [MaximumUI.Tests](src/MaximumUI.Tests/README.md) | MaximumUI 布局、输入、选择、绘制及导航的无界面断言测试 | `scripts/test.py` / `scripts/Test-All.ps1` |
 | [Common](src/Common/README.md) | 构建版本号、日志与原子 XML 读写辅助代码 | 共享库 |
 
-各项目的实际版本见对应 `.csproj` 和插件版本常量。AccessoryBatchManager、ClothingCompression 高级窗口、ExpressionControl 和 JuiceControl 已接入 MaximumUI 的真实声明式控件。MaximumUI 0.5.0 默认使用亮色 MDL2 主题，本轮重做滚动框和滚动条，修复输入提交与嵌套滚动，并按迁移前 `c0380d6` 恢复四插件的布局、按钮原文和操作路径。之前迁移造成的偏移及逐项核对见 [业务 UI 复刻记录](docs/UI-Parity-2026-10-24.md)。ClothingCompression 的 Maker 原生页面继续提供编辑入口；MultiTeamH 保留现有游戏面板。Gallery 是可选的独立开发示例。
+各项目的实际版本见对应 `.csproj` 和插件版本常量。AccessoryBatchManager、ClothingCompression 高级窗口、ExpressionControl、HSControl 和 JuiceControl 已接入 MaximumUI 的真实声明式控件。MaximumUI 0.5.0 默认使用亮色 MDL2 主题，本轮重做滚动框和滚动条，修复输入提交与嵌套滚动，并按迁移前 `c0380d6` 恢复四插件的布局、按钮原文和操作路径。之前迁移造成的偏移及逐项核对见 [业务 UI 复刻记录](docs/UI-Parity-2026-10-24.md)。ClothingCompression 的 Maker 原生页面继续提供编辑入口；MultiTeamH 保留现有游戏面板。Gallery 是可选的独立开发示例。
 
 Gallery 提供 12 个页面，CI 从真实 C# 控件树模拟渲染亮色、深色、最小窗口、放大字号与各类交互/滚动状态；四插件也检查各窗口、最小尺寸、滚动与下拉框。质量检查包括最终 PNG 的滚动列表右边框，防止轨道覆盖边框后仍然通过。下载 `maximumui-previews-…` 后打开 `index.html` 可查看整套 PNG、SVG 与检查结果。设计与验证记录见 [UI 成熟度改进](docs/UI-Maturity-2026-10-24.md)。
 
