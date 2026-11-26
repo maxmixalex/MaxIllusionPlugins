@@ -1,6 +1,17 @@
-# Femboy Mode for Koikatsu — v0.5.9
+# Femboy Mode for Koikatsu — v0.6.0
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.0 — unified native Body > All scroll, without moving native controls
+
+The user correctly rejected 0.5.9's return to a previously completed independent Femboy-only scroll. This version restores the original requirement: **native Body > All controls and all FemboyMode extensions share one scrollbar and one clipped viewport.**
+
+Implementation: a `RectMask2D` clips the *original* `AllTop` rectangle, its existing `VerticalLayoutGroup` adjusts **top padding** to scroll all original children together, and only a native **Scrollbar artwork** child is cloned from the game's SocksTop template. The original native controls, added Femboy controls, event handlers, and direct parent-child relationships are never moved or replaced. The original `ContentSizeFitter` is temporarily disabled while using the fixed screen-relative viewport, then restored on uninstall.
+
+- One scrollbar controls every visible native row and every additional Femboy row. Scroll-wheel and blank-area drag both alter the same clamped content offset. A mouse-wheel over native sliders scrolls the page; normal slider drag and keyboard input are preserved.
+- Geometry is based on actual screen height, page location and root canvas scale, **not** a page height derived from the content itself. The scroll range is computed from the native layout's total preferred height, with bounds checks and regression tests for top/middle/bottom and unusual resolutions.
+- A runtime watchdog checks that original rows retain the same parent and at least one active native row intersects the viewport; if geometry or visibility is invalid, it automatically restores the unmodified page. The existing F1 Maker scrolling toggle remains a live fail-open escape hatch.
+- This design is significantly different from 0.5.4 and 0.5.9's *independent extension-only* scrolling and 0.5.6–0.5.8's *reparent-everything* clones. It must still be checked in the real Windows Maker for scrollbar appearance, text clipping, row interaction, card reload, and tab switching; CI cannot substitute for actual Unity 5.6 graphical testing.
 
 ## 0.5.9 — isolate Femboy extensions from native Maker layout
 

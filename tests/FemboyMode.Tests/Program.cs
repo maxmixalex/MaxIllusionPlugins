@@ -95,6 +95,10 @@ internal static class Program
         Check(MakerPageScrollMath.ScrollbarSize(600f, 0f) == 1f &&
             MakerPageScrollMath.ScrollbarValue(0f, 0f) == 1f,
             "short unmarked pages retain their native controls without phantom overflow");
+        Check(MakerPageScrollMath.Intersects(0f, 40f, 35f, 90f) &&
+            !MakerPageScrollMath.Intersects(0f, 40f, 40f, 90f) &&
+            !MakerPageScrollMath.Intersects(float.NaN, 30f, 0f, 100f),
+            "native viewport watchdog distinguishes truly visible rows from clipped rows");
         Check(MakerPageScrollMath.ScrollbarValue(0f, 1000f) == 1f &&
             MakerPageScrollMath.ScrollbarValue(500f, 1000f) == .5f &&
             MakerPageScrollMath.ScrollbarValue(1000f, 1000f) == 0f &&

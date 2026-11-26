@@ -28,13 +28,17 @@ The shortcut entries can be changed with F1 or in their corresponding `BepInEx/c
 - `BepInEx/config/MaxMixAlex.HSControl.cfg`: `General / Enabled = true`; `Motion / Auto speed mode = 0` means automatic speed is **off** (1 = bands, 2 = randomized range, 3 = gauge linked). `Manual override = false`, `Auto strength = false`, `Strength timer minimum = 10`, `maximum = 30`. `Scene / Auto male finish = false`, `Auto female finish = true`, `Auto replay = false`. Turn a feature on before testing its automatic behavior.
 - `BepInEx/config/MaxMixAlex.ClothingControl.cfg`: `General / Show menu = F7`, `Show in Maker = false` (remember visibility preference, not an unload or disable setting).
 
+### Scope history
+
+0.5.9 was a temporary reversion to a Femboy-only scroll and **did not** meet the original whole-page requirement. **0.6.0** now scrolls all native and extension rows in the original AllTop using the existing VerticalLayoutGroup; no original row is moved. The body page is clipped in place with RectMask2D and driven by a single copied native Scrollbar. Check the complete viewport in Windows Maker, not just the generated managed screenshots.
+
 ### Scope correction (0.5.9)
 
 Version 0.5.8 sometimes left the original Maker Body > All panel blank. 0.5.9 therefore **keeps every native and third-party control in place** and only wraps the 24 FemboyMode geometry controls in an independent scrollable section under the same tab. Full-page native scrolling is deliberately not claimed. Verify that the Femboy marker and all vanilla rows are still present.
 
 ## Priority test cases
 
-1. **Maker layout / FemboyMode 0.5.9**: Female Maker > Body > All. Original rows, extra Femboy controls and draggable axis settings must all be present in the same scroll viewport. The scrollbar must have meaningful track height; scroll wheel, dragging, and other Maker tabs must work. Repeat after changing tabs, resolution, card, and returning to Maker. The 2026-11-26 screenshot with a tiny scrollbar and misplaced text is a **failure**.
+1. **Maker layout / FemboyMode 0.6.0**: Female Maker > Body > All. Original rows, extra Femboy controls and draggable axis settings must all be present in the same scroll viewport. The scrollbar must have meaningful track height; scroll wheel, dragging, and other Maker tabs must work. Repeat after changing tabs, resolution, card, and returning to Maker. The 2026-11-26 screenshot with a tiny scrollbar and misplaced text is a **failure**.
 2. **Maker emergency rollback**: F1 > Femboy Mode > Maker > `Enable Body All native scrolling = false` *while the Maker is open*. The original Body > All layout and input should recover without reopening the game; turn it back on for a new check. If this fails, preserve `BepInEx/LogOutput.log` and a screenshot.
 3. **Femboy XYZ handles**: Enable an active marked card, show one of the Penis/Balls axes, and drag X/Y/Z under scale, translation and rotation. Check sliders and character transform remain in sync and the gizmo disappears when hidden.
 4. **JuiceControl integrity**: Set nonzero Ex/SkinEffects values, open/close JuiceControl, change character, and save/reload presets. Values must not silently clear or be overwritten by an unreadable optional field.

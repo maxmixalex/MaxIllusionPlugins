@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.9";
+        public const string Version = "0.6.0";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -113,8 +113,8 @@ namespace FemboyMode
             ShowFreeHMarker = Config.Bind("Free H", "Show top-left Femboy marker", true,
                 "Display a distinctive mark at the upper-left of Free H for the currently selected marked female character.");
             EnableBodyAllNativeScroll = Config.Bind("Maker", "Enable Body All native scrolling", true,
-                "Scroll only the additional Femboy geometry controls inside Body > All. " +
-                "Native Maker rows and other plugins are not moved. Can be disabled immediately.");
+                "Unified scrolling for ALL native Body > All rows and Femboy geometry controls. " +
+                "No original row is reparented. Turn off to restore the unmodified native page.");
             EnableBodyAllNativeScroll.SettingChanged += OnNativeMakerScrollSettingChanged;
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
@@ -487,14 +487,14 @@ namespace FemboyMode
             List<Transform> pluginRows = GetExtendedMakerRows(flag.transform.parent);
             if (pluginRows == null)
             {
-                Logger.LogWarning("Maker scroll skipped: own extension controls not fully initialized; original page untouched.");
+                Logger.LogWarning("Maker full-page scroll skipped: extension controls are not initialized; native page unchanged.");
                 return;
             }
             try
             {
                 pageScroll = MakerPageScroll.Install(flag.transform, pluginRows);
                 if (pageScroll != null)
-                    Logger.LogInfo("Maker Body > All: Femboy extension-only scroll installed; original Maker rows preserved.");
+                    Logger.LogInfo("Maker Body > All: unified in-place native + Femboy scrolling installed; all original row parents preserved.");
             }
             catch (Exception ex)
             {
