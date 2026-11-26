@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ChaCustom;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UniRx.Triggers;
 using Object = UnityEngine.Object;
@@ -9,60 +10,39 @@ using Object = UnityEngine.Object;
 namespace FemboyMode
 {
     /// <summary>
-    /// Non-invasive scrolling for FemboyMode-owned extension rows only.
-    /// Native Body > All rows, including any third-party widgets, stay
-    /// under the original parent with their layout and scripts untouched.
+    /// One scroll region for the original Maker Body > All rows AND the
+    /// Femboy extension rows. Never reparent, rename, replace or deactivate
+    /// a native row: native scripts and KKAPI address these direct children.
+    ///
+    /// Instead, retain the existing VerticalLayoutGroup, scroll its padding,
+    /// clip to its own fixed viewport and drive it with a copied native
+    /// scrollbar. This avoids the 0.5.6-0.5.9 nested ScrollRect regressions.
     /// </summary>
-    internal sealed class MakerPageScroll : MonoBehaviour
+    internal sealed class MakerPageScroll : MonoBehaviour,
+        IScrollHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         private const string TemplatePath = "03_ClothesTop/tglSocks/SocksTop/Scroll View";
-        private const string HolderName = "MaxMixAlex.NativeMakerPageScroll";
-        private readonly List<Row> rows = new List<Row>();
-        private readonly List<ObservableScrollTrigger> wheelHandlers = new List<ObservableScrollTrigger>();
-         private RectTransform host, slot;
-        private VerticalLayoutGroup hostLayout;
-        private LayoutElement slotLayout;
-        private ScrollRect scroll;
-        private bool oldForceExpand, installed, resetPosition = true;
-        private bool validated;
-        private int installedFrame;
-         private float templateHeight, appliedHeight;
+        private const float MinimumViewport = 160f;
+        private const float EdgeMarginPx = 42f;
+        private const float ScrollStep = 36f;
 
-        private sealed class Row
-        {
-            internal readonly RectTransform Rect;
-            internal readonly int Index;
-            private readonly Vector2 anchorMin, anchorMax, pivot, size, position;
-            private readonly Vector3 scale;
-            private readonly Quaternion rotation;
-
-            internal Row(RectTransform rect)
-            {
-                Rect = rect;
-                Index = rect.GetSiblingIndex();
-                anchorMin = rect.anchorMin;
-                anchorMax = rect.anchorMax;
-                pivot = rect.pivot;
-                size = rect.sizeDelta;
-                position = rect.anchoredPosition;
-                scale = rect.localScale;
-                rotation = rect.localRotation;
-            }
-
-            internal void Restore(RectTransform parent)
-            {
-                if (Rect == null) return;
-                Rect.SetParent(parent, false);
-                Rect.SetSiblingIndex(Math.Min(Index, parent.childCount - 1));
-                Rect.anchorMin = anchorMin;
-                Rect.anchorMax = anchorMax;
-                Rect.pivot = pivot;
-                Rect.sizeDelta = size;
-                Rect.anchoredPosition = position;
-                Rect.localScale = scale;
-                Rect.localRotation = rotation;
-            }
-        }
+        private RectTransform page;
+        private VerticalLayoutGroup layout;
+        private ContentSizeFitter originalFitter;
+        private RectMask2D mask;
+        private bool addedMask;
+        private bool originalMaskEnabled, originalFitterEnabled, originalForceExpand;
+        private TextAnchor originalAlignment;
+        private int padLeft, padRight, padTop, padBottom;
+        private Vector2 originalSize, originalPosition;
+        private Scrollbar scrollbar;
+        private GameObject ownedBar;
+        private readonly List<ObservableScrollTrigger> wheelTriggers = new List<ObservableScrollTrigger>();
+        private readonly List<Transform> nativeRows = new List<Transform>();
+        private readonly Vector3[] corners = new Vector3[4];
+        private bool installed, updatingBar, validated;
+        private float viewportHeight, scrollOffset, maximumOffset, dragOffset, dragStartY, nextRefresh;
+        private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
 
         private static Transform FindMenu(Transform from)
         {
@@ -76,210 +56,294 @@ namespace FemboyMode
             return null;
         }
 
-        private static bool AlreadyScrollable(RectTransform page)
+        private static bool AlreadyScrollable(RectTransform candidate)
         {
-            for (Transform t = page; t != null; t = t.parent)
+            for (Transform t = candidate; t != null; t = t.parent)
             {
-                ScrollRect native = t.GetComponent<ScrollRect>();
-                if (native != null && native.vertical && native.content != null &&
-                    (native.content == page || page.IsChildOf(native.content))) return true;
+                ScrollRect existing = t.GetComponent<ScrollRect>();
+                if (existing != null && existing.vertical && existing.content != null &&
+                    (existing.content == candidate || candidate.IsChildOf(existing.content)))
+                    return true;
             }
             return false;
         }
 
-        internal static MakerPageScroll Install(Transform anchor, IList<Transform> pluginWidgets)
+        internal static MakerPageScroll Install(Transform anchor, IList<Transform> ownedWidgets)
         {
-            RectTransform page = anchor == null ? null : anchor.parent as RectTransform;
-            if (page == null) return null;
-            Transform menu = FindMenu(page);
-            if (menu == null) throw new InvalidOperationException("Could not verify native Body > All hierarchy.");
-            if (AlreadyScrollable(page)) return null;
+            RectTransform host = anchor == null ? null : anchor.parent as RectTransform;
+            if (host == null) return null;
+            Transform menu = FindMenu(host);
+            if (menu == null) throw new InvalidOperationException("Body > All hierarchy is not verified.");
+            if (AlreadyScrollable(host)) return null;
+            if (host.GetComponent<MakerPageScroll>() != null) return null;
 
-            VerticalLayoutGroup layout = page.GetComponent<VerticalLayoutGroup>();
-            if (layout == null || !layout.enabled)
-                throw new InvalidOperationException("Native page is not a vertical layout.");
+            VerticalLayoutGroup vertical = host.GetComponent<VerticalLayoutGroup>();
+            if (vertical == null || !vertical.enabled)
+                throw new InvalidOperationException("Body > All has no active VerticalLayoutGroup.");
+
+            if (ownedWidgets == null || ownedWidgets.Count != 24)
+                throw new InvalidOperationException("Femboy Maker controls are not fully registered.");
+            var owned = new HashSet<Transform>();
+            foreach (Transform widget in ownedWidgets)
+                if (widget == null || widget.parent != host || !owned.Add(widget))
+                    throw new InvalidOperationException("One of the registered Femboy controls moved.");
+            if (owned.Contains(anchor))
+                throw new InvalidOperationException("The native marker must not be treated as a scroll replacement.");
+
             Transform template = menu.Find(TemplatePath);
             ScrollRect source = template == null ? null : template.GetComponent<ScrollRect>();
-            if (source == null || !source.vertical || source.content == null ||
-                source.viewport == null || source.verticalScrollbar == null)
-                throw new InvalidOperationException("Native Maker scroll template is unavailable.");
+            if (source == null || source.verticalScrollbar == null)
+                throw new InvalidOperationException("Stock Maker scrollbar artwork is unavailable.");
 
-            // The 0.5.6-0.5.8 regression moved EVERY child of the
-            // native AllTop root into a cloned ScrollRect. The game still
-            // expects the original hierarchy, so this could make the whole
-            // page disappear without raising any exception.
-            // Never move anything except our 24 explicitly registered
-            // geometry widgets. The Femboy flag remains visible at the top.
-            if (pluginWidgets == null || pluginWidgets.Count != 24)
-                throw new InvalidOperationException("Expected exactly 24 owned geometry widgets.");
-            var used = new HashSet<Transform>();
-            List<Row> original = new List<Row>();
-            foreach (Transform child in pluginWidgets)
-            {
-                RectTransform rect = child as RectTransform;
-                if (rect == null || rect.parent != page || !used.Add(rect))
-                    throw new InvalidOperationException("An owned widget was missing or moved.");
-                original.Add(new Row(rect));
-            }
-            original.Sort((left, right) => left.Index.CompareTo(right.Index));
-            // Snapshot stock + other-plugin rows, including the Femboy flag.
-            // These must remain children of the exact same native AllTop.
-            List<Transform> nativeRows = new List<Transform>();
-            foreach (Transform child in page)
-                if (!used.Contains(child)) nativeRows.Add(child);
-            if (!nativeRows.Contains(anchor))
-                throw new InvalidOperationException("Femboy marker would no longer be a native row.");
-
-            GameObject holder = null;
             MakerPageScroll instance = null;
             try
             {
-                holder = new GameObject(HolderName, typeof(RectTransform), typeof(LayoutElement));
-                holder.SetActive(false);
-                RectTransform slotRect = (RectTransform)holder.transform;
-                slotRect.SetParent(page, false);
-                slotRect.SetAsLastSibling();
-                slotRect.anchorMin = new Vector2(0f, 1f);
-                slotRect.anchorMax = new Vector2(1f, 1f);
-                slotRect.pivot = new Vector2(.5f, 1f);
-                slotRect.anchoredPosition = Vector2.zero;
-                slotRect.sizeDelta = Vector2.zero;
+                instance = host.gameObject.AddComponent<MakerPageScroll>();
+                instance.page = host;
+                instance.layout = vertical;
+                instance.originalFitter = host.GetComponent<ContentSizeFitter>();
+                instance.originalFitterEnabled = instance.originalFitter != null && instance.originalFitter.enabled;
+                instance.originalForceExpand = vertical.childForceExpandHeight;
+                instance.originalAlignment = vertical.childAlignment;
+                instance.padLeft = vertical.padding.left;
+                instance.padRight = vertical.padding.right;
+                instance.padTop = vertical.padding.top;
+                instance.padBottom = vertical.padding.bottom;
+                instance.originalSize = host.sizeDelta;
+                instance.originalPosition = host.anchoredPosition;
+                instance.mask = host.GetComponent<RectMask2D>();
+                instance.addedMask = instance.mask == null;
+                instance.originalMaskEnabled = instance.mask != null && instance.mask.enabled;
+                foreach (Transform child in host)
+                    if (!owned.Contains(child)) instance.nativeRows.Add(child);
+                if (!instance.nativeRows.Contains(anchor))
+                    throw new InvalidOperationException("The original marker is not a native child.");
 
-                // KKAPI's SubCategoryCreator uses the same stock SocksTop
-                // scroll view. Clone only inside an inactive, owned holder.
-                GameObject clone = Object.Instantiate(source.gameObject, slotRect, false);
-                clone.name = "Scroll View";
-                ScrollRect nativeScroll = clone.GetComponent<ScrollRect>();
-                RectTransform content = nativeScroll == null ? null : nativeScroll.content;
-                RectTransform viewport = nativeScroll == null ? null : nativeScroll.viewport;
-                Scrollbar vertical = nativeScroll == null ? null : nativeScroll.verticalScrollbar;
-                if (content == null || viewport == null || vertical == null ||
-                    !content.IsChildOf(clone.transform) || !viewport.IsChildOf(clone.transform) ||
-                    !vertical.transform.IsChildOf(clone.transform))
-                    throw new InvalidOperationException("Native scroll clone did not remap its references.");
+                // Clone ONLY the stock scrollbar, not its Scroll View, content,
+                // masking panel, or scripts. All native controls stay in host.
+                GameObject barObject = Object.Instantiate(source.verticalScrollbar.gameObject, host, false);
+                instance.ownedBar = barObject;
+                barObject.name = "FemboyMode.BodyAllScrollbar";
+                var barRect = barObject.transform as RectTransform;
+                if (barRect == null) throw new InvalidOperationException("Native scrollbar has no RectTransform.");
+                LayoutElement barLayout = barObject.GetComponent<LayoutElement>();
+                if (barLayout == null) barLayout = barObject.AddComponent<LayoutElement>();
+                barLayout.ignoreLayout = true;
+                barRect.anchorMin = new Vector2(1f, 0f);
+                barRect.anchorMax = new Vector2(1f, 1f);
+                barRect.pivot = new Vector2(1f, 1f);
+                barRect.offsetMin = new Vector2(-14f, 0f);
+                barRect.offsetMax = Vector2.zero;
+                instance.scrollbar = barObject.GetComponent<Scrollbar>();
+                if (instance.scrollbar == null || instance.scrollbar.handleRect == null)
+                    throw new InvalidOperationException("Cloned native scrollbar is missing a handle.");
+                instance.scrollbar.direction = Scrollbar.Direction.BottomToTop;
+                instance.scrollbar.onValueChanged = new Scrollbar.ScrollEvent();
+                instance.scrollbar.onValueChanged.AddListener(instance.OnScrollbarChanged);
+                barObject.SetActive(true);
 
-                // Delete copied template rows, never rows from the live page.
-                while (content.childCount != 0) Object.DestroyImmediate(content.GetChild(content.childCount - 1).gameObject);
-                // Avoid retaining native page-specific behaviour from the copied
-                // template. Its Unity UI graphics, masking and scrollbar are kept.
-                foreach (MonoBehaviour component in clone.GetComponentsInChildren<MonoBehaviour>(true))
-                {
-                    if (component == null) continue;
-                    if (component is ScrollRect || component is Scrollbar || component is Graphic ||
-                        component is Mask || component is RectMask2D || component is LayoutGroup ||
-                        component is ContentSizeFitter || component is LayoutElement ||
-                        component is Selectable) continue;
-                    Object.DestroyImmediate(component);
-                }
-                nativeScroll.onValueChanged = new ScrollRect.ScrollRectEvent();
-                nativeScroll.verticalScrollbar = null;
-                vertical.onValueChanged = new Scrollbar.ScrollEvent();
-                nativeScroll.verticalScrollbar = vertical;
-                Scrollbar horizontal = nativeScroll.horizontalScrollbar;
-                nativeScroll.horizontalScrollbar = null;
-                if (horizontal != null) horizontal.gameObject.SetActive(false);
-                nativeScroll.horizontal = false;
-                nativeScroll.vertical = true;
-                nativeScroll.movementType = ScrollRect.MovementType.Clamped;
-                // Always keep the bar visible: AutoHide previously hid it
-                // when an inactive Maker tab reported zero content height.
-                nativeScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
-
-                RectTransform root = (RectTransform)clone.transform;
-                root.anchorMin = Vector2.zero;
-                root.anchorMax = Vector2.one;
-                root.offsetMin = Vector2.zero;
-                root.offsetMax = Vector2.zero;
-                root.localScale = Vector3.one;
-                root.localRotation = Quaternion.identity;
-
-                content.anchorMin = new Vector2(0f, 1f);
-                content.anchorMax = Vector2.one;
-                content.pivot = new Vector2(.5f, 1f);
-                content.anchoredPosition = Vector2.zero;
-                content.sizeDelta = Vector2.zero;
-                foreach (LayoutGroup other in content.GetComponents<LayoutGroup>())
-                    if (!(other is VerticalLayoutGroup)) Object.DestroyImmediate(other);
-                VerticalLayoutGroup inner = content.GetComponent<VerticalLayoutGroup>();
-                if (inner == null) inner = content.gameObject.AddComponent<VerticalLayoutGroup>();
-                inner.enabled = true;
-                // The outer layout already owns the original padding.
-                inner.padding = new RectOffset();
-                inner.spacing = layout.spacing;
-                inner.childAlignment = layout.childAlignment;
-                inner.childControlWidth = layout.childControlWidth;
-                inner.childControlHeight = layout.childControlHeight;
-                inner.childForceExpandWidth = layout.childForceExpandWidth;
-                inner.childForceExpandHeight = false;
-                ContentSizeFitter fit = content.GetComponent<ContentSizeFitter>();
-                if (fit == null) fit = content.gameObject.AddComponent<ContentSizeFitter>();
-                fit.enabled = true;
-                fit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-                fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-                Image contentImage = content.GetComponent<Image>();
-                if (contentImage != null) contentImage.raycastTarget = true;
-                Image barImage = vertical.GetComponent<Image>();
-                if (barImage != null) barImage.raycastTarget = true;
-
-                instance = holder.AddComponent<MakerPageScroll>();
-                instance.host = page;
-                instance.hostLayout = layout;
-                instance.oldForceExpand = layout.childForceExpandHeight;
-                instance.slot = slotRect;
-                instance.slotLayout = holder.GetComponent<LayoutElement>();
-                instance.slotLayout.flexibleWidth = 1f;
-                instance.slotLayout.flexibleHeight = 0f;
-                instance.scroll = nativeScroll;
-                // Stable, bounded extension viewport. Its height must NOT
-                // be inferred from the content-sized native host.
-                instance.templateHeight = MakerPageScrollMath.ScopedViewportHeight(
-                    ((RectTransform)source.transform).rect.height);
-                instance.rows.AddRange(original);
+                // Preserve native row objects AND parent hierarchy. Resize only
+                // their existing layout root, and clip its overflowing children.
+                if (instance.addedMask) instance.mask = host.gameObject.AddComponent<RectMask2D>();
+                else instance.mask.enabled = true;
+                if (instance.originalFitter != null) instance.originalFitter.enabled = false;
+                vertical.childAlignment = TextAnchor.UpperLeft;
+                vertical.childForceExpandHeight = false;
+                vertical.padding.right = Math.Max(instance.padRight, 17);
                 instance.installed = true;
                 instance.installedFrame = Time.frameCount;
-                // No modification to the native layout's force-expand policy.
-                instance.SetHeight(instance.templateHeight);
-
-                foreach (Row row in original) row.Rect.SetParent(content, false);
-                foreach (Transform native in nativeRows)
-                    if (native == null || native.parent != page)
-                        throw new InvalidOperationException("Native Maker hierarchy changed while installing scroll.");
-                // As in KKAPI's scrollable sidebar, a slider's wheel should
-                // scroll the page rather than alter a numeric value. Restore
-                // exactly the handlers we changed when removing the wrapper.
-                foreach (Row row in original)
-                    foreach (Slider slider in row.Rect.GetComponentsInChildren<Slider>(true))
-                    {
-                        ObservableScrollTrigger trigger = slider.GetComponent<ObservableScrollTrigger>();
-                        if (trigger == null || !trigger.enabled) continue;
-                        instance.wheelHandlers.Add(trigger);
-                        trigger.enabled = false;
-                    }
-                // A copied scrollbar may already be inactive because the
-                // Socks template had no overflow when KKAPI built its UI.
-                // Keep the owned track visible regardless of current rows.
-                vertical.gameObject.SetActive(true);
-                clone.SetActive(true);
-                holder.SetActive(true);
-                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-                LayoutRebuilder.MarkLayoutForRebuild(page);
-                ResetRaycasts(page);
-                Debug.Log("Femboy Mode: scoped native scrollbar installed (" +
-                    original.Count + " owned extension widgets; " + nativeRows.Count +
-                    " original Maker/third-party rows retained in native parent).");
+                instance.SetViewportHeight(instance.MeasureViewportHeight());
+                instance.DisableNativeWheelHandlers();
+                instance.RecalculateContent();
+                instance.ResetRaycasts();
+                Debug.Log("Femboy Mode: unified Body > All scrolling installed; " +
+                    instance.nativeRows.Count + " original rows and " + ownedWidgets.Count +
+                    " owned controls retain the same native parent. Viewport=" +
+                    instance.viewportHeight.ToString("0") + " contentRange=" +
+                    instance.maximumOffset.ToString("0") + ".");
                 return instance;
             }
             catch
             {
-                if (instance != null && instance.installed) instance.Uninstall();
-                else if (holder != null) Object.Destroy(holder);
+                if (instance != null) instance.Uninstall();
                 throw;
             }
         }
 
-        private static void ResetRaycasts(RectTransform page)
+        private float MeasureViewportHeight()
         {
-            // Recollect the native image targets after the hierarchy changes.
+            if (page == null) return 520f;
+            Canvas canvas = page.GetComponentInParent<Canvas>();
+            float scale = canvas == null || canvas.rootCanvas == null ?
+                1f : Mathf.Max(.25f, canvas.rootCanvas.scaleFactor);
+            Camera camera = canvas == null || canvas.renderMode == RenderMode.ScreenSpaceOverlay ?
+                null : canvas.worldCamera;
+            Vector3 top = page.TransformPoint(new Vector3(page.rect.xMin, page.rect.yMax, 0f));
+            float topPixels = RectTransformUtility.WorldToScreenPoint(camera, top).y;
+            return MakerPageScrollMath.ViewportFromScreen(
+                topPixels, Screen.height, scale, EdgeMarginPx);
+        }
+
+        private void SetViewportHeight(float height)
+        {
+            if (page == null) return;
+            viewportHeight = Mathf.Clamp(height, MinimumViewport, 900f);
+            Vector3 topBefore = page.TransformPoint(new Vector3(page.rect.xMin, page.rect.yMax, 0f));
+            page.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, viewportHeight);
+            Vector3 topAfter = page.TransformPoint(new Vector3(page.rect.xMin, page.rect.yMax, 0f));
+            page.position += topBefore - topAfter;
+            lastScreenWidth = Screen.width;
+            lastScreenHeight = Screen.height;
+        }
+
+        private void DisableNativeWheelHandlers()
+        {
+            // Sliders keep their drag/keyboard interaction. Wheel events
+            // bubble up to this one shared scroll region instead of changing
+            // arbitrary numeric values while the user scrolls.
+            foreach (Slider slider in page.GetComponentsInChildren<Slider>(true))
+            {
+                ObservableScrollTrigger trigger = slider.GetComponent<ObservableScrollTrigger>();
+                if (trigger == null || !trigger.enabled) continue;
+                wheelTriggers.Add(trigger);
+                trigger.enabled = false;
+            }
+        }
+
+        private void RecalculateContent()
+        {
+            if (!installed || page == null || layout == null) return;
+            // Measure without the negative scroll padding. No children move to
+            // a different parent; Unity's native layout computes their height.
+            layout.padding.top = padTop;
+            layout.padding.bottom = padBottom;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(page);
+            float preferred = LayoutUtility.GetPreferredHeight(page);
+            if (float.IsNaN(preferred) || float.IsInfinity(preferred) ||
+                preferred < 0f || preferred > 100000f)
+            {
+                Debug.LogWarning("Femboy Mode: invalid native content height; restoring layout.");
+                Uninstall();
+                return;
+            }
+            maximumOffset = MakerPageScrollMath.MaxOffset(preferred, viewportHeight);
+            lastChildCount = page.childCount;
+            SetOffset(scrollOffset);
+        }
+
+        private void SetOffset(float offset)
+        {
+            if (!installed || layout == null) return;
+            scrollOffset = MakerPageScrollMath.ClampOffset(offset, maximumOffset);
+            layout.padding.top = padTop - Mathf.RoundToInt(scrollOffset);
+            LayoutRebuilder.MarkLayoutForRebuild(page);
+            if (scrollbar == null) return;
+            updatingBar = true;
+            try
+            {
+                scrollbar.size = MakerPageScrollMath.ScrollbarSize(viewportHeight, maximumOffset);
+                scrollbar.value = MakerPageScrollMath.ScrollbarValue(scrollOffset, maximumOffset);
+            }
+            finally { updatingBar = false; }
+        }
+
+        private void OnScrollbarChanged(float value)
+        {
+            if (!updatingBar) SetOffset(MakerPageScrollMath.FromScrollbar(value, maximumOffset));
+        }
+
+        private void OnEnable()
+        {
+            if (!installed) return;
+            // Body > All is normally inactive when Maker first loads. Its
+            // actual screen bounds become trustworthy after activation.
+            SetViewportHeight(MeasureViewportHeight());
+            nextRefresh = 0f;
+            scrollOffset = 0f;
+        }
+
+        private bool NativeRowsRemainVisible()
+        {
+            if (page == null) return false;
+            int candidates = 0, visible = 0;
+            Rect region = page.rect;
+            foreach (Transform native in nativeRows)
+            {
+                if (native == null || native.parent != page) return false;
+                if (!native.gameObject.activeInHierarchy) continue;
+                RectTransform rt = native as RectTransform;
+                if (rt == null || rt.rect.height < 1f || rt.rect.width < 1f) continue;
+                LayoutElement element = rt.GetComponent<LayoutElement>();
+                if (element != null && element.ignoreLayout) continue;
+                candidates++;
+                rt.GetWorldCorners(corners);
+                float xmin = float.PositiveInfinity, xmax = float.NegativeInfinity;
+                float ymin = float.PositiveInfinity, ymax = float.NegativeInfinity;
+                foreach (Vector3 corner in corners)
+                {
+                    Vector3 local = page.InverseTransformPoint(corner);
+                    xmin = Mathf.Min(xmin, local.x); xmax = Mathf.Max(xmax, local.x);
+                    ymin = Mathf.Min(ymin, local.y); ymax = Mathf.Max(ymax, local.y);
+                }
+                if (MakerPageScrollMath.Intersects(xmin, xmax, region.xMin, region.xMax) &&
+                    MakerPageScrollMath.Intersects(ymin, ymax, region.yMin, region.yMax))
+                    visible++;
+            }
+            // A page legitimately may have no active rows during tab rebuild.
+            return candidates == 0 || visible > 0;
+        }
+
+        private void LateUpdate()
+        {
+            if (!installed || page == null || !page.gameObject.activeInHierarchy) return;
+            if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
+                SetViewportHeight(MeasureViewportHeight());
+            if (Time.unscaledTime >= nextRefresh || page.childCount != lastChildCount)
+            {
+                nextRefresh = Time.unscaledTime + .25f;
+                RecalculateContent();
+            }
+            if (!validated && Time.frameCount > installedFrame + 2)
+            {
+                validated = true;
+                if (page.rect.height < MinimumViewport || page.rect.width < 120f ||
+                    scrollbar == null || scrollbar.handleRect == null ||
+                    scrollbar.transform.parent != page || !NativeRowsRemainVisible())
+                {
+                    Debug.LogWarning("Femboy Mode: native Maker rows were clipped or page bounds invalid; " +
+                        "restoring all original page layout and input without touching any native row.");
+                    Uninstall();
+                }
+            }
+        }
+
+        public void OnScroll(PointerEventData eventData)
+        {
+            if (!installed || eventData == null) return;
+            SetOffset(scrollOffset - eventData.scrollDelta.y * ScrollStep);
+            eventData.Use();
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (eventData == null || eventData.button != PointerEventData.InputButton.Left) return;
+            dragStartY = eventData.position.y;
+            dragOffset = scrollOffset;
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (!installed || eventData == null || eventData.button != PointerEventData.InputButton.Left) return;
+            Canvas canvas = page.GetComponentInParent<Canvas>();
+            float scale = canvas == null || canvas.rootCanvas == null ?
+                1f : Mathf.Max(.25f, canvas.rootCanvas.scaleFactor);
+            SetOffset(dragOffset + (eventData.position.y - dragStartY) / scale);
+        }
+
+        public void OnEndDrag(PointerEventData eventData) { }
+
+        private void ResetRaycasts()
+        {
             for (Transform t = page; t != null; t = t.parent)
             {
                 UI_RaycastCtrl ctrl = t.GetComponent<UI_RaycastCtrl>();
@@ -288,65 +352,42 @@ namespace FemboyMode
             }
         }
 
-        private void SetHeight(float height)
-        {
-            appliedHeight = height;
-            slotLayout.minHeight = height;
-            slotLayout.preferredHeight = height;
-            slot.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
-        }
-
-        private void OnEnable() { resetPosition = true; }
-
-        private void LateUpdate()
-        {
-            if (!installed || host == null || slot == null || scroll == null || scroll.content == null) return;
-            if (resetPosition)
-            {
-                resetPosition = false;
-                LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
-                scroll.verticalNormalizedPosition = 1f;
-            }
-            // Runtime fail-open. Never leave a corrupted extension scroll
-            // installed when the live Unity canvas reports invalid geometry.
-            if (!validated && Time.frameCount - installedFrame >= 3 &&
-                host.gameObject.activeInHierarchy)
-            {
-                validated = true;
-                RectTransform viewport = scroll.viewport;
-                if (viewport == null || viewport.rect.height < 96f ||
-                    viewport.rect.width < 140f)
-                {
-                    Debug.LogWarning("Femboy Mode: invalid scoped viewport; restoring original extension rows.");
-                    Uninstall();
-                }
-            }
-        }
-
         internal void Uninstall()
         {
-            if (!installed) return;
+            if (!installed && page == null) { Object.Destroy(this); return; }
             installed = false;
-            // Do not destroy live page rows along with the wrapper.
-            gameObject.SetActive(false);
-            if (host != null)
+            foreach (ObservableScrollTrigger trigger in wheelTriggers)
+                if (trigger != null) trigger.enabled = true;
+            wheelTriggers.Clear();
+            if (scrollbar != null)
+                scrollbar.onValueChanged.RemoveListener(OnScrollbarChanged);
+            if (ownedBar != null) Object.Destroy(ownedBar);
+            ownedBar = null;
+            scrollbar = null;
+            if (page != null)
             {
-                foreach (Row row in rows) row.Restore(host);
-                // Any rows appended by another plugin while the page was
-                // wrapped also belong to the Maker, not to the scroll clone.
-                if (scroll != null && scroll.content != null)
-                    while (scroll.content.childCount > 0)
-                        scroll.content.GetChild(0).SetParent(host, false);
-                if (hostLayout != null) hostLayout.childForceExpandHeight = oldForceExpand;
-                foreach (ObservableScrollTrigger trigger in wheelHandlers)
-                    if (trigger != null) trigger.enabled = true;
-                LayoutRebuilder.MarkLayoutForRebuild(host);
-                try { ResetRaycasts(host); }
-                catch (Exception ex) { Debug.LogWarning("Maker raycast cache reset failed: " + ex.Message); }
+                if (layout != null)
+                {
+                    layout.padding.left = padLeft;
+                    layout.padding.right = padRight;
+                    layout.padding.top = padTop;
+                    layout.padding.bottom = padBottom;
+                    layout.childAlignment = originalAlignment;
+                    layout.childForceExpandHeight = originalForceExpand;
+                }
+                page.sizeDelta = originalSize;
+                page.anchoredPosition = originalPosition;
+                if (originalFitter != null) originalFitter.enabled = originalFitterEnabled;
+                if (mask != null)
+                {
+                    if (addedMask) Object.Destroy(mask);
+                    else mask.enabled = originalMaskEnabled;
+                }
+                LayoutRebuilder.MarkLayoutForRebuild(page);
+                try { ResetRaycasts(); }
+                catch (Exception ex) { Debug.LogWarning("Maker raycast restore failed: " + ex.Message); }
             }
-            rows.Clear();
-            wheelHandlers.Clear();
-            Object.Destroy(gameObject);
+            Object.Destroy(this);
         }
     }
 }

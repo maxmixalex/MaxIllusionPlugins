@@ -73,38 +73,42 @@ internal static class Program
         Check(FemboyMakerAxisMath.DragValue(float.NaN, 1f, 0, false, false) == 1f &&
             FemboyMakerAxisMath.DragValue(0f, float.PositiveInfinity, 1, false, false) == 0f,
             "invalid drag input cannot poison persistent geometry");
-        Check(MakerPageScrollMath.ScopedViewportHeight(952f) == 620f,
-            "new scrollbar has a bounded 620px viewport under the stock layout");
-        Check(Math.Abs(MakerPageScrollMath.ScopedViewportHeight(600f) - 396f) < .01f,
-            "native template scaling preserves bounded partial viewports");
-        Check(MakerPageScrollMath.ScopedViewportHeight(300f) == 240f &&
-            MakerPageScrollMath.ScopedViewportHeight(float.NaN) == 520f &&
-            MakerPageScrollMath.ScopedViewportHeight(float.PositiveInfinity) == 520f,
-            "invalid or tiny source templates cannot cause an invisible scroll");
-        Check(MakerPageScrollMath.ResolveHeight(500f, -100f, 952f, 8f) == 592f,
-            "native viewport fits available page height");
-        Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 952f,
-            "regression: invalid near-zero Maker viewport must not collapse the page");
-        Check(!MakerPageScrollMath.IsStableViewport(false, false, 500f),
-            "regression: the content-sized host cannot be its own viewport");
-        Check(!MakerPageScrollMath.IsStableViewport(true, true, 500f),
-            "regression: a content-driven masked ancestor is not stable");
-        Check(!MakerPageScrollMath.IsStableViewport(true, false, 1f) &&
-            MakerPageScrollMath.IsStableViewport(true, false, 320f),
-            "only substantial fixed masked regions are eligible");
-        float stableHeight = 320f;
+        Check(Math.Abs(MakerPageScrollMath.ViewportFromScreen(650f, 720f, 1f, 42f) - 608f) < .001f,
+            "original Body All page has a screen-bounded viewport, not a child-sized clone");
+        Check(Math.Abs(MakerPageScrollMath.ViewportFromScreen(950f, 1080f, 2f, 42f) - 454f) < .001f,
+            "canvas scaling keeps original Maker viewport in local units");
+        Check(MakerPageScrollMath.ViewportFromScreen(float.NaN, 720f, 1f, 42f) == 520f &&
+            MakerPageScrollMath.ViewportFromScreen(0f, 720f, 1f, 42f) == 520f &&
+            MakerPageScrollMath.ViewportFromScreen(100f, 720f, 1f, 42f) == 520f &&
+            MakerPageScrollMath.ViewportFromScreen(2000f, 720f, 1f, 42f) == 520f,
+            "hidden tabs and invalid geometry cannot crush the complete native Maker page");
+        Check(MakerPageScrollMath.MaxOffset(1600f, 600f) == 1000f &&
+            MakerPageScrollMath.MaxOffset(500f, 600f) == 0f &&
+            MakerPageScrollMath.MaxOffset(float.PositiveInfinity, 600f) == 0f,
+            "all native plus extension rows share one bounded scroll range");
+        Check(MakerPageScrollMath.ClampOffset(1200f, 1000f) == 1000f &&
+            MakerPageScrollMath.ClampOffset(-100f, 1000f) == 0f &&
+            MakerPageScrollMath.ClampOffset(float.NaN, 1000f) == 0f,
+            "mouse wheel and dragging never scroll outside the native page");
+        Check(Math.Abs(MakerPageScrollMath.ScrollbarSize(600f, 1000f) - .375f) < .001f,
+            "native scrollbar thumb represents full content, not only Femboy controls");
+        Check(MakerPageScrollMath.ScrollbarSize(600f, 0f) == 1f &&
+            MakerPageScrollMath.ScrollbarValue(0f, 0f) == 1f,
+            "short unmarked pages retain their native controls without phantom overflow");
+        Check(MakerPageScrollMath.Intersects(0f, 40f, 35f, 90f) &&
+            !MakerPageScrollMath.Intersects(0f, 40f, 40f, 90f) &&
+            !MakerPageScrollMath.Intersects(float.NaN, 30f, 0f, 100f),
+            "native viewport watchdog distinguishes truly visible rows from clipped rows");
+        Check(MakerPageScrollMath.ScrollbarValue(0f, 1000f) == 1f &&
+            MakerPageScrollMath.ScrollbarValue(500f, 1000f) == .5f &&
+            MakerPageScrollMath.ScrollbarValue(1000f, 1000f) == 0f &&
+            MakerPageScrollMath.FromScrollbar(.5f, 1000f) == 500f,
+            "the shared scrollbar reaches the first, middle and last native rows");
+        float offsetAtBottom = 0f;
         for (int frame = 0; frame < 120; frame++)
-            stableHeight = MakerPageScrollMath.IsStableViewport(false, true, stableHeight)
-                ? MakerPageScrollMath.ResolveHeight(0f, -stableHeight, 320f, 8f)
-                : 320f;
-        Check(stableHeight == 320f,
-            "120 frames of content-driven layout cannot erode native scroll height");
-        Check(MakerPageScrollMath.ResolveHeight(500f, float.NegativeInfinity, 600f, 8f) == 600f,
-            "unmeasured viewport falls back to the native template height");
-        Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, float.NaN, 8f) == 160f,
-            "invalid measurements use a bounded fallback");
-        Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, 1f, 8f) == 160f,
-            "near-zero source template height must use safe fallback instead of collapsing native page");
+            offsetAtBottom = MakerPageScrollMath.ClampOffset(offsetAtBottom + 36f, 1000f);
+        Check(offsetAtBottom == 1000f,
+            "scrolling for 120 frames reaches the bottom without eroding the viewport");
         Check(FemboyRules.FrontInsertStartIndex(false) == 0,
             "normal initiative uses buttons 0/1");
         Check(FemboyRules.FrontInsertStartIndex(true) == 7,
