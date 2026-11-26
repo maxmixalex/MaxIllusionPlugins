@@ -30,6 +30,8 @@ namespace HSControl
         private ConfigEntry<KeyboardShortcut> hotkey;
         private HSControlView view;
         private HSceneProc scene;
+        private NativeSceneButton sceneButton;
+        private float nextButtonProbe;
         private Harmony harmony;
         private bool visible, didMaleFinish, replayPending, strengthPending;
         private float replayElapsed, nextViewPoll;
@@ -78,6 +80,13 @@ namespace HSControl
                 HSceneProc observed = UnityEngine.Object.FindObjectOfType<HSceneProc>();
                 if (!ReferenceEquals(scene, observed)) SwapScene(observed);
             }
+            if (scene != null && scene.flags != null && Time.unscaledTime >= nextButtonProbe) {
+                nextButtonProbe = Time.unscaledTime + .5f;
+                if (sceneButton == null || !sceneButton.Matches(scene)) {
+                    if (sceneButton != null) sceneButton.Dispose();
+                    sceneButton = NativeSceneButton.TryInstall(scene, delegate { ToggleFromNativeButton(scene); }, Logger.LogWarning);
+                }
+            }
             if (hotkey != null && hotkey.Value.IsDown() &&
                 !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
                 if (visible) Close();
@@ -119,7 +128,15 @@ namespace HSControl
             }
         }
 
+        internal void ToggleFromNativeButton(HSceneProc owner) {
+            if (!ReferenceEquals(owner, scene) || scene == null || scene.flags == null) return;
+            if (visible) Close(); else Open();
+        }
+
         private void SwapScene(HSceneProc next) {
+            if (sceneButton != null) sceneButton.Dispose();
+            sceneButton = null;
+            nextButtonProbe = 0f;
             scene = next;
             didMaleFinish = false;
             replayPending = false;
@@ -273,6 +290,8 @@ namespace HSControl
         private void OnDestroy() { Cleanup(); }
 
         private void Cleanup() {
+            if (sceneButton != null) sceneButton.Dispose();
+            sceneButton = null;
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             visible = false;

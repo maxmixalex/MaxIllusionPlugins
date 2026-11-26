@@ -4,7 +4,7 @@ A new, independently implemented controller for a running Koikatsu / Koikatsu Pa
 
 ## Runtime features
 
-- Default `F8` opens the MaximumUI window. BepInEx configuration is under `MaxMixAlex.HSControl.cfg`. Change the hotkey if it conflicts with another installed plugin.
+- Default `F8` opens the MaximumUI window. A separate **HS** button is also installed alongside the native HSprite MainMenu/Base > Config control (when that hierarchy exists). The button uses original Button/Image UI styling and event handling; the original menu is left unchanged. BepInEx configuration is under `MaxMixAlex.HSControl.cfg`. Change the hotkey if it conflicts with another installed plugin.
 - Four speed modes: off; slow/full/fast bands; timed randomized range; gauge linkage. Manual slider can temporarily override speed. Live readback displays both current output and target speed.
 - Each supported scene/animation mode is checked before writing values. Aibu uses native `HFlag.speed`; supported Houshi/Sonyu loops use `HFlag.speedCalc` after the game's `WaitSpeedProc`, via Harmony postfix. No speed writes in unsupported modes or transition states.
 - Optional automatic motion-strength switching, with a configurable randomized interval. Auto finish toggles, native gauge adjustments and optional replay use the game's existing HFlag action system.
