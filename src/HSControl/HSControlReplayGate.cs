@@ -21,7 +21,8 @@ namespace HSControl {
         }
 
         internal static bool Supported(int mode, bool rely) {
-            return !rely && (mode == 1 || mode == 2 || mode == 6 || mode == 7);
+            return !rely && (mode == 1 || mode == 2 || mode == 6 || mode == 7 ||
+                mode == 8 || mode == 9);
         }
 
         internal ReplayCommand Step(float delta, int mode, string state, bool rely,
@@ -61,7 +62,7 @@ namespace HSControl {
             }
             elapsed += dt;
             if (elapsed < 13f || !voiceReady || !actionFree) return ReplayCommand.None;
-            if (mode == 1 || mode == 6) {
+            if (mode == 1 || mode == 6 || mode == 8) {
                 issued = true;
                 return ReplayCommand.Again;
             }

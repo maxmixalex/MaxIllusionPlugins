@@ -14,17 +14,23 @@ internal static class Program
         Check(HSControlActionRules.CanStartLoop(1, false, true) &&
             HSControlActionRules.CanStartLoop(2, false, true) &&
             HSControlActionRules.CanStartLoop(6, false, true) &&
-            HSControlActionRules.CanStartLoop(7, false, true),
-            "native loop actions supported in two-person and 3P Houshi/Sonyu");
+            HSControlActionRules.CanStartLoop(7, false, true) &&
+            HSControlActionRules.CanStartLoop(8, false, true) &&
+            HSControlActionRules.CanStartLoop(9, false, true),
+            "native loop actions supported in 2P, 3P and MMF Houshi/Sonyu");
         Check(!HSControlActionRules.CanStartLoop(1, true, true) &&
             !HSControlActionRules.CanStartLoop(6, true, true) &&
             !HSControlActionRules.CanStartLoop(7, true, true) &&
+            !HSControlActionRules.CanStartLoop(8, true, true) &&
+            !HSControlActionRules.CanStartLoop(9, true, true) &&
             !HSControlActionRules.CanStartLoop(5, false, true) &&
             !HSControlActionRules.CanStartLoop(6, false, false),
             "native loop guard rejects rely, unsupported modes or missing action");
         Check(HSControlActionRules.LoopName(2, true, true) == "A_SLoop" &&
             HSControlActionRules.LoopName(7, true, false) == "A_WLoop" &&
             HSControlActionRules.LoopName(6, false, true) == "SLoop" &&
+            HSControlActionRules.LoopName(8, false, true) == "SLoop" &&
+            HSControlActionRules.LoopName(9, true, false) == "A_WLoop" &&
             HSControlActionRules.LoopName(1, false, false) == "WLoop" &&
             HSControlActionRules.LoopName(5, false, true) == null,
             "native loop state names match installed original two-person and 3P action families");
@@ -115,6 +121,16 @@ internal static class Program
         Check(result == ReplayCommand.None, "Existing native click blocks auto replay");
         Check(gate.Step(.25f, 7, "OUT_A", false, true, true, true) == ReplayCommand.Insert,
             "3P Sonyu uses its native insert action");
+        gate.Reset();
+        for (int i = 0; i < 52; i++)
+            result = gate.Step(.25f, 8, "OUT_A", false, true, true, true);
+        Check(result == ReplayCommand.Again, "MMF Houshi uses native Again.");
+        gate.Reset();
+        for (int i = 0; i < 52; i++)
+            result = gate.Step(.25f, 9, "OUT_A", false, true, true, true);
+        Check(result == ReplayCommand.Insert, "MMF Sonyu uses native Insert.");
+        Check(gate.Step(.25f, 9, "IN_A", true, true, true, true) == ReplayCommand.None,
+            "MMF rely guard disallows forced restart.");
         gate.Reset();
         Check(gate.Step(.25f, 1, "OUT_A", false, true, true, false) == ReplayCommand.None,
             "Disabling auto replay cancels pending actions");
