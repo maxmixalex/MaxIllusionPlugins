@@ -35,6 +35,15 @@ namespace FemboyMode
             return Clamp(candidate * parentScaleRatio, 18f, 64f);
         }
 
+        // The original scrollbar is a sibling of the stock viewport.
+        // Keep that visual separation even if the template used overlapping
+        // anchors or has not been laid out during inactive Maker loading.
+        internal static float OutsideScrollbarGap(float nativeGap)
+        {
+            if (float.IsNaN(nativeGap) || float.IsInfinity(nativeGap)) return 2f;
+            return Math.Max(2f, Math.Min(24f, nativeGap));
+        }
+
         // Unity ScrollRect.OnScroll applies eventData.scrollDelta directly
         // multiplied by its serialized scrollSensitivity. Honor that exact
         // native value; don't impose artificial detent/step bounds.
