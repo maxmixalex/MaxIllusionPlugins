@@ -16,6 +16,8 @@ PLUGINS = (
     "JuiceControl",
     "ClothingControl",
     "HSControl",
+    "FemboyMode",
+    "LoveJuice",
 )
 GALLERY = "MaximumUIGallery"
 LIBRARIES = ("Common", "MaximumUI")
@@ -63,6 +65,10 @@ def dependency_closure(projects, names):
 
 def installation_text(title, projects, included, revision):
     versions = "\n".join(f"- {name}: {projects[name]['version']}" for name in included)
+    hs_note = ("**请移走原版 `BepInEx/plugins/KK_HCtrl.dll` 后再运行 HSControl；保留其 .ini 可导入旧设置。**\\n"
+               if "HSControl" in included else "")
+    love_note = ("LoveJuice：首次启用请在 BepInEx 配置中将 `Enabled` 设置为 true；进入 H 场景后按 F9 可进行原生素材发射测试。\\n"
+                 if "LoveJuice" in included else "")
     gallery_note = ("本包包含独立 Gallery，快捷键可在其配置中调整；默认值见对应版本的 README。\n"
                     if GALLERY in included else "独立 MaximumUI Gallery 不包含在功能插件合集内。\n")
     return f"""# {title}
@@ -75,6 +81,7 @@ def installation_text(title, projects, included, revision):
 4. 多个包来自同一次构建时，可以将其共享 DLL 覆盖到同一目录。现有 `.cfg`、预设、角色卡和存档不在包中。
 
 {gallery_note}
+{hs_note}{love_note}
 ClothingCompression 的 XML 使用 `BepInEx/config/MaxMixAlex.ClothingCompression.xml`；已有旧文件请自行由 `ClothingCompression.xml` 重命名。
 
 ## Included versions

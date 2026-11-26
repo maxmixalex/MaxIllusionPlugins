@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/LoveJuice/StudioLiquidCatalog.cs" Link="StudioLiquidCatalog.cs" />
+  </ItemGroup>
+</Project>

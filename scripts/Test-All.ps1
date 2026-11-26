@@ -16,7 +16,7 @@ try {
         & dotnet build MaxIllusionPlugins.sln -c $Configuration --nologo -m:1 -nodeReuse:false
         if ($LASTEXITCODE -ne 0) { throw "Solution build failed (exit $LASTEXITCODE)." }
     }
-    foreach ($suite in @('MaximumUI.Runner', 'MultiTeamH.Regression', 'AccessoryClothing.Regression', 'PluginCore.Regression', 'HSControl.Regression')) {
+    foreach ($suite in @('MaximumUI.Runner', 'MultiTeamH.Regression', 'AccessoryClothing.Regression', 'PluginCore.Regression', 'HSControl.Regression', 'FemboyMode.Tests', 'LoveJuice.Regression')) {
         $command = @('run', '--project', "tests/$suite/$suite.csproj", '-c', $Configuration, '--no-build')
         if ($suite -eq 'MaximumUI.Runner') {
             $command += @('--', "bin/$Configuration/MaximumUI.Tests/MaximumUI.Tests.dll")
