@@ -35,11 +35,15 @@ namespace FemboyMode
             return Clamp(candidate * parentScaleRatio, 18f, 64f);
         }
 
-        // Wheel distances are immediate UI units, never smoothed over time.
-        internal static float WheelDistance(float wheelDelta, float step)
+        // Unity ScrollRect.OnScroll applies eventData.scrollDelta directly
+        // multiplied by its serialized scrollSensitivity. Honor that exact
+        // native value; don't impose artificial detent/step bounds.
+        internal static float NativeWheelDistance(float wheelDelta, float nativeSensitivity)
         {
-            if (!Finite(wheelDelta) || !Finite(step) || step <= 0f) return 0f;
-            return Clamp(wheelDelta, -12f, 12f) * Clamp(step, 40f, 320f);
+            if (!Finite(wheelDelta) || !Finite(nativeSensitivity) ||
+                nativeSensitivity < 0f) return 0f;
+            float distance = wheelDelta * nativeSensitivity;
+            return Finite(distance) ? distance : 0f;
         }
 
         internal static float MaxOffset(float preferredContentHeight, float viewportHeight)

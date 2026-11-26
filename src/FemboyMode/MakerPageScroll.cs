@@ -25,7 +25,6 @@ namespace FemboyMode
         private const string TemplatePath = "03_ClothesTop/tglSocks/SocksTop/Scroll View";
         private const float MinimumViewport = 160f;
         private const float EdgeMarginPx = 42f;
-        private const float DefaultWheelStep = 112f;
 
         private RectTransform page;
         private VerticalLayoutGroup layout;
@@ -43,6 +42,7 @@ namespace FemboyMode
         private readonly Vector3[] corners = new Vector3[4];
         private bool installed, updatingBar, validated;
         private float viewportHeight, scrollOffset, maximumOffset, dragOffset, dragStartY, nextRefresh;
+        private float nativeScrollSensitivity;
         private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
         private int wheelHandledFrame = -1;
 
@@ -96,6 +96,9 @@ namespace FemboyMode
             ScrollRect source = template == null ? null : template.GetComponent<ScrollRect>();
             if (source == null || source.verticalScrollbar == null)
                 throw new InvalidOperationException("Stock Maker scrollbar artwork is unavailable.");
+            if (float.IsNaN(source.scrollSensitivity) ||
+                float.IsInfinity(source.scrollSensitivity) || source.scrollSensitivity < 0f)
+                throw new InvalidOperationException("Stock Maker ScrollRect has invalid scroll sensitivity.");
 
             MakerPageScroll instance = null;
             try
@@ -103,6 +106,10 @@ namespace FemboyMode
                 instance = host.gameObject.AddComponent<MakerPageScroll>();
                 instance.page = host;
                 instance.layout = vertical;
+                // Inherit Koikatsu's *serialized native ScrollRect setting*.
+                // Do not substitute an invented 112-unit wheel step or create
+                // another user preference for what should be stock behavior.
+                instance.nativeScrollSensitivity = source.scrollSensitivity;
                 instance.originalFitter = host.GetComponent<ContentSizeFitter>();
                 instance.originalFitterEnabled = instance.originalFitter != null && instance.originalFitter.enabled;
                 instance.originalForceExpand = vertical.childForceExpandHeight;
@@ -146,7 +153,9 @@ namespace FemboyMode
                 vertical.padding.right = Mathf.Max(instance.padRight, Mathf.CeilToInt(stockWidth + 4f));
                 Debug.Log("Femboy Mode: copied stock Maker scrollbar width " +
                     stockWidth.ToString("0.0") + " UI units; original rect=" +
-                    (stockRect == null ? "missing" : stockRect.rect.width.ToString("0.0")));
+                    (stockRect == null ? "missing" : stockRect.rect.width.ToString("0.0")) +
+                    "; native ScrollRect.scrollSensitivity=" +
+                    instance.nativeScrollSensitivity.ToString("0.###"));
                 instance.scrollbar = barObject.GetComponent<Scrollbar>();
                 if (instance.scrollbar == null || instance.scrollbar.handleRect == null)
                     throw new InvalidOperationException("Cloned native scrollbar is missing a handle.");
@@ -337,9 +346,8 @@ namespace FemboyMode
         {
             if (!installed || page == null || !page.gameObject.activeInHierarchy ||
                 wheelHandledFrame == Time.frameCount || maximumOffset <= 0f) return;
-            float step = FemboyModePlugin.NativeScrollWheelStep == null ?
-                DefaultWheelStep : FemboyModePlugin.NativeScrollWheelStep.Value;
-            float distance = MakerPageScrollMath.WheelDistance(delta, step);
+            float distance = MakerPageScrollMath.NativeWheelDistance(
+                delta, nativeScrollSensitivity);
             if (Mathf.Abs(distance) <= .0001f) return;
             wheelHandledFrame = Time.frameCount;
             SetOffset(scrollOffset - distance);

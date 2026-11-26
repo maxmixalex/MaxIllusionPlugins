@@ -1,13 +1,20 @@
-# Femboy Mode for Koikatsu — v0.6.1
+# Femboy Mode for Koikatsu — v0.6.2
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.2 — inherit native ScrollRect scrolling sensitivity
+
+- Removed the manually invented `Maker / Whole-page wheel step` option entirely. The in-place Body > All scroller reads the game's `03_ClothesTop/tglSocks/SocksTop/Scroll View` `ScrollRect.scrollSensitivity` at installation, and applies incoming wheel deltas using that exact value, without hardcoded detent or speed bounds.
+- The captured native sensitivity is logged together with stock scrollbar width. A former `Whole-page wheel step` entry may remain as an unused historical line in an existing BepInEx config file; the plugin no longer binds or reads it.
+- The same-frame application and narrow native-slider wheel fallback from 0.6.1 remain in place, with no artificial smoothing. Managed tests now explicitly verify exact native sensitivity multiplication (including zero, fractional deltas, and large valid values), not a forced 112-unit scroll.
+- This corrects a configuration design error; actual RX18 wheel responsiveness and the true Maker axis still require the user\'s blocked in-game checkpoint to pass.
 
 ## 0.6.1 — original Maker scrollbar sizing, direct wheel, actual Maker gizmo
 
 **Acceptance blocker**: Body > All scrolling was present in 0.6.0, but the scrollbar was thinner than stock, the mouse wheel was sluggish, and the "显示轴" option still created hand-drawn RawImage/Text axes rather than using the real game gizmo.
 
 - **Scrollbar** copies the native SocksTop Scrollbar GameObject, reading the stock scrollbar's rendered RectTransform width (and actual canvas scale) rather than forcing a 14-unit rail. The chosen width is logged on installation.
-- **Wheel** uses immediate delta application, configurable at `F1 → Femboy Mode → Maker → Whole-page wheel step` (default 112 UI units per notch, range 40–320). A narrowly scoped raw-wheel fallback catches sliders or other controls that consume Unity pointer-scroll events. Periodic content measurement no longer resets native padding to zero and causes jumps.
+- **Wheel (in 0.6.1)** used an adjustable, synthetic 112-unit scroll step; it was replaced by native `ScrollRect.scrollSensitivity` readback in 0.6.2. A narrowly scoped raw-wheel fallback catches sliders or other controls that consume Unity pointer-scroll events. Periodic content measurement no longer resets native padding to zero and causes jumps.
 - **Original Maker 3D guide**: `CustomBase.customCtrl.cmpGuid[0]` is the source of a separate `CustomUtility.CustomGuideObject` instance with the actual game `CustomGuideMove` and `CustomGuideRotation` components and original arrow/ring models. The cloned guide is **not** stored in `cmpGuid[]`, so native accessory editing remains attached to its own unchanged guide and CvsAccessory does not write Femboy edits into an accessory slot.
 - **Three edit modes**: translation uses the native move arrows; rotation uses the native rotation rings; scale applies native move-arrow displacement to the card's scale parameters, since the original Maker only supplies native move and rotation guide models (not a separate Maker scale guide). No IMGUI, RawImage or custom color-line axes are drawn.
 - Native guide activation requires the marked card and the actually visible Body > All tab. It is destroyed on Maker exit, does not take over the accessory guide, and writes only the FemboyCharacterController card-local values. Modifier keys remain Shift=fine, Ctrl=coarse.

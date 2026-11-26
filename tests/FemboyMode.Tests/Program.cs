@@ -86,10 +86,15 @@ internal static class Program
             MakerPageScrollMath.NativeScrollbarWidth(0f, 28f, 1f) == 28f &&
             MakerPageScrollMath.NativeScrollbarWidth(float.NaN, float.NaN, 1f) == 26f,
             "Maker scrollbar thickness comes from stock UI template, not the old skinny 14px rail");
-        Check(MakerPageScrollMath.WheelDistance(1f, 112f) == 112f &&
-            MakerPageScrollMath.WheelDistance(-2f, 112f) == -224f &&
-            MakerPageScrollMath.WheelDistance(float.NaN, 112f) == 0f,
-            "one native mouse wheel detent immediately scrolls full rows without smoothing jitter");
+        Check(MakerPageScrollMath.NativeWheelDistance(1f, 40f) == 40f &&
+            MakerPageScrollMath.NativeWheelDistance(-2f, 40f) == -80f &&
+            MakerPageScrollMath.NativeWheelDistance(.5f, 32f) == 16f,
+            "native scroll delta scales exactly with the game's serialized ScrollRect sensitivity");
+        Check(MakerPageScrollMath.NativeWheelDistance(1f, 0f) == 0f &&
+            MakerPageScrollMath.NativeWheelDistance(1f, 480f) == 480f &&
+            MakerPageScrollMath.NativeWheelDistance(float.NaN, 40f) == 0f &&
+            MakerPageScrollMath.NativeWheelDistance(1f, float.PositiveInfinity) == 0f,
+            "native ScrollRect zero and large valid settings are preserved without custom clamping");
         Check(Math.Abs(FemboyNativeAxisMath.Moved(1f, .1f, true, 1f) - 1.3f) < .0001f &&
             Math.Abs(FemboyNativeAxisMath.Moved(.02f, .04f, false, 1f) - .06f) < .0001f,
             "original Maker guide displacements map to correct Penis/Balls scale and position values");
