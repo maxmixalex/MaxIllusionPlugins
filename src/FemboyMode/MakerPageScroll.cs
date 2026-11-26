@@ -365,8 +365,10 @@ namespace FemboyMode
                 page.rect.xMax + nativeBarGap, page.rect.yMax, 0f));
             Vector3 local = scrollbarParent.InverseTransformPoint(desiredWorld);
             Vector2 anchored = new Vector2(
-                local.x - scrollbarParent.rect.xMin,
-                local.y - scrollbarParent.rect.yMax);
+                MakerPageScrollMath.OutsideBarAnchorCoordinate(
+                    local.x, scrollbarParent.rect.xMin),
+                MakerPageScrollMath.OutsideBarAnchorCoordinate(
+                    local.y, scrollbarParent.rect.yMax));
             if ((bar.anchoredPosition - anchored).sqrMagnitude > .0001f)
                 bar.anchoredPosition = anchored;
         }

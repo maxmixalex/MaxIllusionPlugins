@@ -82,6 +82,10 @@ internal static class Program
             MakerPageScrollMath.ViewportFromScreen(100f, 720f, 1f, 42f) == 520f &&
             MakerPageScrollMath.ViewportFromScreen(2000f, 720f, 1f, 42f) == 520f,
             "hidden tabs and invalid geometry cannot crush the complete native Maker page");
+        Check(MakerPageScrollMath.OutsideBarAnchorCoordinate(200f, -400f) == 600f &&
+            MakerPageScrollMath.OutsideBarAnchorCoordinate(50f, 300f) == -250f &&
+            MakerPageScrollMath.OutsideBarAnchorCoordinate(float.NaN, 100f) == 0f,
+            "external scrollbar hit region uses its CvsMenuTree RectTransform anchor reference, not tglAll coordinates");
         Check(MakerPageScrollMath.OutsideScrollbarGap(5f) == 5f &&
             MakerPageScrollMath.OutsideScrollbarGap(-4f) == 2f &&
             MakerPageScrollMath.OutsideScrollbarGap(float.NaN) == 2f &&
