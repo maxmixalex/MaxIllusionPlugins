@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/HSControl/HSControlMotionEngine.cs" Link="Production/HSControlMotionEngine.cs" />
+    <Compile Include="../../src/HSControl/HSLegacyIni.cs" Link="Production/HSLegacyIni.cs" />
+  </ItemGroup>
+</Project>

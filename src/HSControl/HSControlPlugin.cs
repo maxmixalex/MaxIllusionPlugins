@@ -84,8 +84,17 @@ namespace HSControl
                 else if (scene != null && scene.flags != null) Open();
             }
 
-            if (scene == null || scene.flags == null || !master.Value) {
-                if (visible && scene == null) Close();
+            if (scene == null || scene.flags == null) {
+                if (visible) Close();
+                return;
+            }
+            if (!master.Value) {
+                // An enabled/disabled master switch must be recoverable from
+                // the same window; do not freeze the UI on the disabled branch.
+                if (visible && view != null && Time.unscaledTime >= nextViewPoll) {
+                    nextViewPoll = Time.unscaledTime + .15f;
+                    RefreshView();
+                }
                 return;
             }
             HFlag flags = scene.flags;
@@ -126,7 +135,7 @@ namespace HSControl
         }
 
         private bool SessionCurrent(int version, HSceneProc owner) {
-            return master != null && master.Value && visible && scene != null &&
+            return master != null && visible && scene != null &&
                 ReferenceEquals(scene, owner) && owner.flags != null && version == generation;
         }
 
