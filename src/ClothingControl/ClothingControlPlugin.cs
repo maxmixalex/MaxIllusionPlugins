@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.IO;
@@ -25,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.2";
+        public const string Version = "0.5.3";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -47,6 +48,8 @@ namespace ClothingControl {
         private float lastHotkeyTime = -1f;
         private bool makerStateLogged;
         private bool shiftTabWasHeld;
+        private Coroutine makerRestoreCoroutine;
+        private bool runtimeLoopLogged;
         private ConfigEntry<bool> showInMaker;
         private SidebarToggle makerToggle;
         private IDisposable makerSubscription;
@@ -106,6 +109,8 @@ namespace ClothingControl {
         }
 
         private void OnEnable() {
+            Logger.LogInfo("ClothingControl Unity OnEnable; enabled=" + enabled +
+                ", activeInHierarchy=" + gameObject.activeInHierarchy + ".");
             CharacterApi.CharacterReloaded += OnCharacterReloaded;
             CharacterApi.CoordinateLoaded += OnCoordinateLoaded;
             MakerAPI.RegisterCustomSubCategories += OnRegisterMaker;
@@ -133,10 +138,49 @@ namespace ClothingControl {
         private void OnMakerLoaded(object sender, EventArgs e) {
             // KKAPI raises this before InsideAndLoaded becomes true.
             pendingMakerPreference = true;
+            Logger.LogInfo("ClothingControl MakerFinishedLoading callback; InsideMaker=" +
+                MakerAPI.InsideMaker + ", InsideAndLoaded=" + MakerAPI.InsideAndLoaded +
+                ", savedVisibility=" + (showInMaker != null && showInMaker.Value) + ".");
+            if (makerRestoreCoroutine != null) StopCoroutine(makerRestoreCoroutine);
+            makerRestoreCoroutine = StartCoroutine(RestoreMakerWindowAfterLoaded());
+        }
+
+        private IEnumerator RestoreMakerWindowAfterLoaded() {
+            // React directly to the KKAPI lifecycle. Do not require our
+            // MonoBehaviour.Update() to notice a one-time Maker event.
+            for (int frame = 0; frame < 300 && !MakerAPI.InsideAndLoaded; frame++)
+                yield return null;
+            makerRestoreCoroutine = null;
+            if (!MakerAPI.InsideAndLoaded || showInMaker == null) {
+                Logger.LogWarning("ClothingControl Maker restore aborted: KKAPI never became InsideAndLoaded.");
+                yield break;
+            }
+            bool requested = showInMaker.Value;
+            pendingMakerPreference = false;
+            makerStateLogged = true;
+            Logger.LogInfo("ClothingControl Maker restore event: requested=" + requested +
+                ", nativeVisible=" + !NativeMakerHidden() +
+                ", componentEnabled=" + isActiveAndEnabled + ".");
+            if (requested && !visible) Open();
+            else if (!requested && visible) Close(false);
+            else if (visible) UpdateMakerPresentation();
         }
 
         private void OnMakerPreferenceChanged(object sender, EventArgs e) {
-            if (!syncingMakerPreference && MakerAPI.InsideMaker) pendingMakerPreference = true;
+            if (syncingMakerPreference || !MakerAPI.InsideMaker || showInMaker == null) return;
+            Logger.LogInfo("ClothingControl Maker visibility preference changed to " +
+                showInMaker.Value + "; InsideAndLoaded=" + MakerAPI.InsideAndLoaded + ".");
+            if (!MakerAPI.InsideAndLoaded) {
+                pendingMakerPreference = true;
+                return;
+            }
+            // The F1 Configuration Manager setting must operate the panel
+            // IMMEDIATELY; waiting for Update() made it a no-op in the user's
+            // 0.5.2 runtime. This also provides an independent way to verify
+            // MaximumUI mounting when Shift+Tab is intercepted externally.
+            pendingMakerPreference = false;
+            if (showInMaker.Value && !visible) Open();
+            else if (!showInMaker.Value && visible) Close(false);
         }
 
         private void SetMakerPreference(bool value) {
@@ -155,6 +199,10 @@ namespace ClothingControl {
         }
 
         private void OnMakerExiting(object sender, EventArgs e) {
+            if (makerRestoreCoroutine != null) {
+                StopCoroutine(makerRestoreCoroutine);
+                makerRestoreCoroutine = null;
+            }
             pendingMakerPreference = false;
             makerStateLogged = false;
             Close(false);
@@ -211,6 +259,13 @@ namespace ClothingControl {
         }
 
         private void OnDisable() {
+            Logger.LogInfo("ClothingControl Unity OnDisable; frame=" + Time.frameCount +
+                ", enabled=" + enabled + ", activeInHierarchy=" +
+                (gameObject != null && gameObject.activeInHierarchy) + ".");
+            if (makerRestoreCoroutine != null) {
+                StopCoroutine(makerRestoreCoroutine);
+                makerRestoreCoroutine = null;
+            }
             CharacterApi.CharacterReloaded -= OnCharacterReloaded;
             CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
             MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
@@ -388,6 +443,11 @@ namespace ClothingControl {
         }
 
         private void Update() {
+            if (!runtimeLoopLogged) {
+                runtimeLoopLogged = true;
+                Logger.LogInfo("ClothingControl Unity Update loop active; frame=" +
+                    Time.frameCount + ", active=" + isActiveAndEnabled + ".");
+            }
             if (!MakerAPI.InsideMaker) makerStateLogged = false;
             else if (MakerAPI.InsideAndLoaded && !makerStateLogged) {
                 makerStateLogged = true;
