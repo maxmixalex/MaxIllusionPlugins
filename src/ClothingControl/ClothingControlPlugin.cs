@@ -26,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.4";
+        public const string Version = "0.5.5";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
