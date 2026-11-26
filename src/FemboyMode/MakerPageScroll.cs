@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ChaCustom;
+using KKAPI.Maker;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -24,7 +25,7 @@ namespace FemboyMode
         private const string TemplatePath = "03_ClothesTop/tglSocks/SocksTop/Scroll View";
         private const float MinimumViewport = 160f;
         private const float EdgeMarginPx = 42f;
-        private const float ScrollStep = 36f;
+        private const float DefaultWheelStep = 112f;
 
         private RectTransform page;
         private VerticalLayoutGroup layout;
@@ -43,6 +44,8 @@ namespace FemboyMode
         private bool installed, updatingBar, validated;
         private float viewportHeight, scrollOffset, maximumOffset, dragOffset, dragStartY, nextRefresh;
         private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
+        private int wheelHandledFrame = -1;
+        private bool nativeScrollbarLogged;
 
         private static Transform FindMenu(Transform from)
         {
@@ -129,11 +132,22 @@ namespace FemboyMode
                 LayoutElement barLayout = barObject.GetComponent<LayoutElement>();
                 if (barLayout == null) barLayout = barObject.AddComponent<LayoutElement>();
                 barLayout.ignoreLayout = true;
+                RectTransform stockRect = source.verticalScrollbar.transform as RectTransform;
+                float scaleRatio = stockRect == null ? 1f :
+                    Mathf.Abs(stockRect.lossyScale.x) / Mathf.Max(.001f, Mathf.Abs(host.lossyScale.x));
+                float stockWidth = MakerPageScrollMath.NativeScrollbarWidth(
+                    stockRect == null ? float.NaN : stockRect.rect.width,
+                    stockRect == null ? float.NaN : stockRect.sizeDelta.x,
+                    scaleRatio);
                 barRect.anchorMin = new Vector2(1f, 0f);
                 barRect.anchorMax = new Vector2(1f, 1f);
                 barRect.pivot = new Vector2(1f, 1f);
-                barRect.offsetMin = new Vector2(-14f, 0f);
+                barRect.offsetMin = new Vector2(-stockWidth, 0f);
                 barRect.offsetMax = Vector2.zero;
+                vertical.padding.right = Mathf.Max(instance.padRight, Mathf.CeilToInt(stockWidth + 4f));
+                Debug.Log("Femboy Mode: copied stock Maker scrollbar width " +
+                    stockWidth.ToString("0.0") + " UI units; original rect=" +
+                    (stockRect == null ? "missing" : stockRect.rect.width.ToString("0.0")));
                 instance.scrollbar = barObject.GetComponent<Scrollbar>();
                 if (instance.scrollbar == null || instance.scrollbar.handleRect == null)
                     throw new InvalidOperationException("Cloned native scrollbar is missing a handle.");
@@ -149,8 +163,7 @@ namespace FemboyMode
                 if (instance.originalFitter != null) instance.originalFitter.enabled = false;
                 vertical.childAlignment = TextAnchor.UpperLeft;
                 vertical.childForceExpandHeight = false;
-                vertical.padding.right = Math.Max(instance.padRight, 17);
-                instance.installed = true;
+                 instance.installed = true;
                 instance.installedFrame = Time.frameCount;
                 instance.SetViewportHeight(instance.MeasureViewportHeight());
                 instance.DisableNativeWheelHandlers();
@@ -213,12 +226,13 @@ namespace FemboyMode
         private void RecalculateContent()
         {
             if (!installed || page == null || layout == null) return;
-            // Measure without the negative scroll padding. No children move to
-            // a different parent; Unity's native layout computes their height.
-            layout.padding.top = padTop;
-            layout.padding.bottom = padBottom;
+            // Leave the scroll padding in place while measuring. Previously
+            // resetting it to zero every 0.25s created intermittent jumps
+            // during user wheel input. Preferred height includes the current
+            // negative top padding; restore the saved offset numerically.
             LayoutRebuilder.ForceRebuildLayoutImmediate(page);
-            float preferred = LayoutUtility.GetPreferredHeight(page);
+            float preferred = LayoutUtility.GetPreferredHeight(page) +
+                Mathf.RoundToInt(scrollOffset);
             if (float.IsNaN(preferred) || float.IsInfinity(preferred) ||
                 preferred < 0f || preferred > 100000f)
             {
@@ -303,6 +317,9 @@ namespace FemboyMode
                 nextRefresh = Time.unscaledTime + .25f;
                 RecalculateContent();
             }
+            // Native Maker sliders can consume UI scroll events; raw wheel
+            // polling in this exact viewport is a narrowly scoped fallback.
+            PollWheelOnNativeMaker();
             if (!validated && Time.frameCount > installedFrame + 2)
             {
                 validated = true;
@@ -317,10 +334,38 @@ namespace FemboyMode
             }
         }
 
+        private void ScrollByWheel(float delta)
+        {
+            if (!installed || page == null || !page.gameObject.activeInHierarchy ||
+                wheelHandledFrame == Time.frameCount || maximumOffset <= 0f) return;
+            float step = FemboyModePlugin.NativeScrollWheelStep == null ?
+                DefaultWheelStep : FemboyModePlugin.NativeScrollWheelStep.Value;
+            float distance = MakerPageScrollMath.WheelDistance(delta, step);
+            if (Mathf.Abs(distance) <= .0001f) return;
+            wheelHandledFrame = Time.frameCount;
+            SetOffset(scrollOffset - distance);
+            // Apply on this wheel frame, not one or two frames later.
+            LayoutRebuilder.ForceRebuildLayoutImmediate(page);
+        }
+
+        private void PollWheelOnNativeMaker()
+        {
+            if (!installed || !MakerAPI.InsideAndLoaded || !MakerAPI.IsInterfaceVisible() ||
+                page == null || !page.gameObject.activeInHierarchy) return;
+            Vector2 wheel = Input.mouseScrollDelta;
+            if (Mathf.Abs(wheel.y) <= .0001f) return;
+            Canvas canvas = page.GetComponentInParent<Canvas>();
+            Camera camera = canvas == null || canvas.renderMode ==
+                RenderMode.ScreenSpaceOverlay ? null : canvas.worldCamera;
+            if (RectTransformUtility.RectangleContainsScreenPoint(
+                page, Input.mousePosition, camera))
+                ScrollByWheel(wheel.y);
+        }
+
         public void OnScroll(PointerEventData eventData)
         {
             if (!installed || eventData == null) return;
-            SetOffset(scrollOffset - eventData.scrollDelta.y * ScrollStep);
+            ScrollByWheel(eventData.scrollDelta.y);
             eventData.Use();
         }
 

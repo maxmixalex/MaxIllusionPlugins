@@ -82,6 +82,27 @@ internal static class Program
             MakerPageScrollMath.ViewportFromScreen(100f, 720f, 1f, 42f) == 520f &&
             MakerPageScrollMath.ViewportFromScreen(2000f, 720f, 1f, 42f) == 520f,
             "hidden tabs and invalid geometry cannot crush the complete native Maker page");
+        Check(MakerPageScrollMath.NativeScrollbarWidth(29f, 12f, 1f) == 29f &&
+            MakerPageScrollMath.NativeScrollbarWidth(0f, 28f, 1f) == 28f &&
+            MakerPageScrollMath.NativeScrollbarWidth(float.NaN, float.NaN, 1f) == 26f,
+            "Maker scrollbar thickness comes from stock UI template, not the old skinny 14px rail");
+        Check(MakerPageScrollMath.WheelDistance(1f, 112f) == 112f &&
+            MakerPageScrollMath.WheelDistance(-2f, 112f) == -224f &&
+            MakerPageScrollMath.WheelDistance(float.NaN, 112f) == 0f,
+            "one native mouse wheel detent immediately scrolls full rows without smoothing jitter");
+        Check(Math.Abs(FemboyNativeAxisMath.Moved(1f, .1f, true, 1f) - 1.3f) < .0001f &&
+            Math.Abs(FemboyNativeAxisMath.Moved(.02f, .04f, false, 1f) - .06f) < .0001f,
+            "original Maker guide displacements map to correct Penis/Balls scale and position values");
+        Check(FemboyNativeAxisMath.Moved(3.8f, 1f, true, 1f) == 4f &&
+            FemboyNativeAxisMath.Moved(-.2f, -.5f, false, 1f) == -.3f &&
+            FemboyNativeAxisMath.Rotated(340f, 80f, 1f) == 360f,
+            "native guide actions enforce existing card-local bounds");
+        Check(Math.Abs(FemboyNativeAxisMath.Rotated(12f, -20f, .2f) - 8f) < .0001f &&
+            FemboyNativeAxisMath.Moved(1f, .1f, true, .2f) < 1.1f,
+            "shift fine adjustment scales genuine native pointer movement");
+        Check(FemboyNativeAxisMath.Moved(1f, float.NaN, true, 1f) == 1f &&
+            FemboyNativeAxisMath.Rotated(0f, float.PositiveInfinity, 1f) == 0f,
+            "native drag invalid geometry never poisons model state");
         Check(MakerPageScrollMath.MaxOffset(1600f, 600f) == 1000f &&
             MakerPageScrollMath.MaxOffset(500f, 600f) == 0f &&
             MakerPageScrollMath.MaxOffset(float.PositiveInfinity, 600f) == 0f,
