@@ -28,6 +28,13 @@ namespace FemboyMode
             return Math.Max(0f, preferredContentHeight - viewportHeight);
         }
 
+        internal static bool Intersects(float minA, float maxA, float minB, float maxB)
+        {
+            if (!Finite(minA) || !Finite(maxA) || !Finite(minB) || !Finite(maxB) ||
+                minA > maxA || minB > maxB) return false;
+            return maxA > minB && maxB > minA;
+        }
+
         internal static float ClampOffset(float offset, float maximumOffset)
         {
             if (!Finite(offset) || !Finite(maximumOffset) || maximumOffset <= 0f) return 0f;
