@@ -79,11 +79,30 @@ internal static class Program {
             "Reset scene re-establishes a clean baseline.");
     }
 
+    private static void CheckHardParticleBudget() {
+        var budget = new NativeParticleBudget();
+        Check(budget.TryReserve(100, 9, 10),
+            "Last available native particle can be emitted.");
+        Check(!budget.TryReserve(100, 9, 10),
+            "Immediate additional Emit is blocked even before particleCount advances.");
+        Check(!budget.TryReserve(100, 10, 10),
+            "Observed count at cap blocks emission.");
+        Check(budget.TryReserve(101, 8, 10) && budget.TryReserve(101, 8, 10) &&
+            !budget.TryReserve(101, 8, 10),
+            "A new frame uses its own observed count with exact remaining slots.");
+        budget.Reset();
+        Check(budget.TryReserve(200, 0, 1) && !budget.TryReserve(200, 0, 1),
+            "Scene reset does not reuse stale reservations.");
+        Check(!budget.TryReserve(201, 0, 0),
+            "Disabled particle budget rejects requests.");
+    }
+
     public static int Main() {
         try {
             CheckLegacySkinEffects();
             CheckActorSelection();
             CheckLiquidLevelEvents();
+            CheckHardParticleBudget();
             Check(StudioLiquidCatalog.Bundle == "studio/00.unity3d" &&
                 StudioLiquidCatalog.Manifest == "studio00", "Verified installed bundle path/manifest");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Water) ==

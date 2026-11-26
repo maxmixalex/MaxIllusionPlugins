@@ -20,6 +20,7 @@ namespace LoveJuice {
             new Dictionary<LoveJuiceChannel, Emitter>();
         private readonly HashSet<LoveJuiceChannel> unavailable = new HashSet<LoveJuiceChannel>();
         private readonly Action<string> warn;
+        private readonly NativeParticleBudget budget = new NativeParticleBudget();
         private GameObject host;
         private int lastParticleCount;
 
@@ -149,7 +150,10 @@ namespace LoveJuice {
             transform.localScale = emitter.Source.transform.localScale * size;
             bool sent = false;
             foreach (ParticleSystem system in emitter.Systems) {
-                if (system == null || ActiveCount >= limit) break;
+                if (system == null) continue;
+                // Count reservations made this frame too; particleCount may
+                // not update immediately after Emit() on Unity 5.6.
+                if (!budget.TryReserve(Time.frameCount, ActiveCount, limit)) break;
                 var main = system.main;
                 main.maxParticles = Math.Max(1, Math.Min(128, limit));
                 main.gravityModifier = new ParticleSystem.MinMaxCurve(
@@ -195,6 +199,7 @@ namespace LoveJuice {
             }
             emitters.Clear();
             unavailable.Clear();
+            budget.Reset();
             if (host != null) UnityEngine.Object.Destroy(host);
             host = null;
             lastParticleCount = 0;

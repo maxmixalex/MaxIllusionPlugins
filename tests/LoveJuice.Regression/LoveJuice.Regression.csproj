@@ -9,5 +9,6 @@
     <Compile Include="../../src/LoveJuice/SkinEffectValueReader.cs" Link="SkinEffectValueReader.cs" />
     <Compile Include="../../src/LoveJuice/LiveActorRoster.cs" Link="LiveActorRoster.cs" />
     <Compile Include="../../src/LoveJuice/LiquidLevelEvents.cs" Link="LiquidLevelEvents.cs" />
+    <Compile Include="../../src/LoveJuice/NativeParticleBudget.cs" Link="NativeParticleBudget.cs" />
   </ItemGroup>
 </Project>
