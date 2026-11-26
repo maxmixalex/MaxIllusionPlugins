@@ -2,26 +2,14 @@ using System;
 using System.Collections.Generic;
 using AccessoryBatchManager;
 using ClothingControl;
-using HSControl;
 using JuiceControl;
-using LoveJuice;
 using MaximumUI;
 
 // Public examples only. These fixtures do not read cards, XML, configuration,
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
-        yield return Liquid("enabled");
-        yield return Liquid("disabled");
-        yield return Liquid("empty");
-        yield return Liquid("milk");
-        yield return Liquid("male-pre");
-        yield return HS("live");
-        yield return HS("manual");
-        yield return HS("range");
-        yield return HS("unavailable");
         yield return Juice("main");
-        yield return Juice("lovejuice");
         yield return Juice("name");
         yield return Juice("xml-error");
         yield return Juice("empty");
@@ -40,93 +28,9 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("scene-applying");
     }
 
-    private static PreviewScene Liquid(string state) {
-        LoveJuiceViewModel m = new LoveJuiceViewModel {
-            Version = "0.3.3", Enabled = true, HasScene = true,
-            ActorCount = 2, ActiveParticles = 21, MaximumParticles = 48,
-            ActorNames = new[] { "1. 示例角色 A", "2. 示例角色 B" }, SelectedActorIndex = 1,
-            Interval = .26f, Gravity = 8f, Damping = 1f, Lifetime = 1.6f,
-            Scale = .045f, LaunchSpeed = .35f, MilkThreshold = 65f, MalePreThreshold = 45f,
-            Face = true, Body = true, Collision = true, PreviewChannel = 1,
-            Status = "已发射 4 颗粒子。", Integration = "SkinEffects：已连接（仅读取状态）。",
-            ChangeEnabled = delegate { }, ChangeFace = delegate { },
-            ChangeBody = delegate { }, ChangeIntimate = delegate { },
-            ChangeMalePre = delegate { }, ChangeMilk = delegate { },
-            ChangeShower = delegate { }, ChangeSpecial = delegate { },
-            ChangeCollision = delegate { }, ChangeMaximum = delegate { },
-            SelectActor = delegate { },
-            ChangePreviewChannel = delegate { }, ChangeInterval = delegate { },
-            ChangeGravity = delegate { }, ChangeDamping = delegate { },
-            ChangeLifetime = delegate { }, ChangeScale = delegate { },
-            ChangeLaunchSpeed = delegate { }, ChangeMilkThreshold = delegate { },
-            ChangeMalePreThreshold = delegate { },
-            Preview = delegate { }, Close = delegate { }
-        };
-        if (state == "disabled") { m.Enabled = false; m.Status = "已停用。"; }
-        if (state == "empty") {
-            m.HasScene = false; m.ActorCount = m.ActiveParticles = 0;
-            m.ActorNames = new string[0]; m.SelectedActorIndex = -1;
-            m.Status = "尚未进入场景。";
-            m.Integration = "SkinEffects：未连接，使用游戏自身状态。";
-        }
-        if (state == "milk") { m.Milk = true; m.Special = true; m.PreviewChannel = 4; }
-        if (state == "male-pre") {
-            m.MalePre = true; m.MalePreThreshold = 55f; m.PreviewChannel = 7;
-            m.Status = "男性前液已启用（达到阈值时触发）。";
-        }
-        return new PreviewScene {
-            Slug = "lovejuice-" + state + "-preview", Title = "LoveJuice",
-            Source = "LoveJuice.LoveJuiceView.Build",
-            Detail = "Synthetic effect control fixture " + state,
-            Widget = new LoveJuiceView { Model = m }.Build(new BuildContext()),
-            StateId = state == "enabled" ? "default" : state,
-            RequiredKeys = state == "male-pre"
-                ? new[] { "lovejuice-enabled", "lovejuice-male-pre", "lovejuice-male-pre-threshold",
-                    "lovejuice-preview-channel", "lovejuice-emit", "lovejuice-status" }
-                : new[] { "lovejuice-enabled", "lovejuice-target", "lovejuice-scroll",
-                    "lovejuice-face", "lovejuice-maximum", "lovejuice-preview-channel",
-                    "lovejuice-emit", "lovejuice-active", "lovejuice-status" }
-        };
-    }
-
-    private static PreviewScene HS(string state) {
-        HSControlViewModel model = new HSControlViewModel {
-            Version = "0.1.1", Available = true, Enabled = true, Status = "已连接场景",
-            AnimationState = "WLoop", Mode = 3, Band = 1, Linkage = 1,
-            ManualSpeed = .42f, CurrentSpeed = .55f, TargetSpeed = .68f,
-            GaugeMale = 53f, GaugeFemale = 76f, RangeMin = .20f, RangeMax = .82f,
-            AutoStrength = true, StrengthMinSeconds = 10f, StrengthMaxSeconds = 30f,
-            AutoFemaleFinish = true, AutoMaleFinish = false, AutoReplay = false,
-            ChangeEnabled = delegate { }, ChangeMode = delegate { },
-            ChangeBand = delegate { }, ChangeLinkage = delegate { },
-            ChangeManualOverride = delegate { }, ChangeManualSpeed = delegate { },
-            ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
-            ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
-            ChangeStrengthMax = delegate { }, ChangeGaugeMale = delegate { },
-            ChangeGaugeFemale = delegate { }, ChangeAutoMaleFinish = delegate { },
-            ChangeAutoFemaleFinish = delegate { }, ChangeAutoReplay = delegate { },
-            Reroll = delegate { }, Close = delegate { }
-        };
-        if (state == "manual") { model.ManualOverride = true; model.Mode = 0; }
-        if (state == "range") { model.Mode = 2; }
-        if (state == "unavailable") {
-            model.Available = false; model.Enabled = false;
-            model.AnimationState = ""; model.Status = "当前场景无可用的 H 控制器";
-        }
-        return new PreviewScene {
-            Slug = "hscontrol-" + state + "-preview", Title = "HSControl",
-            Source = "HSControl.HSControlView.Build", Detail = "Synthetic HSControl fixture " + state,
-            Widget = new HSControlView { Model = model }.Build(new BuildContext()),
-            StateId = state == "live" ? "default" : state,
-            RequiredKeys = new[] { "hscontrol-scroll", "hscontrol-enabled",
-                "hscontrol-speed-mode", "hscontrol-current", "hscontrol-strength",
-                "hscontrol-gauge-male", "hscontrol-replay", "hscontrol-status" }
-        };
-    }
-
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.5.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.5", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -141,16 +45,17 @@ internal static class PluginPreviewScenes {
             Slot = i, Type = 121, Item = i + 1, Group = i % 2, Label = (i + 1) + ". " + names[i % names.Length],
             Visible = i % 3 != 0, Change = delegate { }
         });
+        // Clothing is now tab 0; accessory-heavy previews use tab 1.
+        model.Page = state == "main" || state == "garments" ||
+            state == "free-h" ? 0 : 1;
         if (state == "free-h") {
-            model.Page = 1;
             model.CanChangeCoordinate = false;
-            model.ShoeMode = -1;
             model.Targets = new[] { "1. 活动角色 A", "2. 活动角色 B", "3. 活动角色 C" };
             model.HasTarget = true;
             model.Status = "Free H：当前配装的服装状态可编辑，配装重载已禁用。";
         }
-        if (state == "garments" || state == "free-h") {
-            model.Page = 1; model.ShoeMode = 0;
+        if (state == "main" || state == "garments" || state == "free-h") {
+            model.ShoeMode = 0;
             string[] garmentLabels = {
                 "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
             };
@@ -186,16 +91,19 @@ internal static class PluginPreviewScenes {
             Widget = window, StateId = state == "main" ? "default" : state,
             Width = state == "xml-error" ? window.MinWidth : 0f,
             Height = state == "xml-error" ? window.MinHeight : 0f,
-            RequiredKeys = state == "garments" || state == "free-h"
-                ? new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-garments", "wardrobe-shoe-mode", "wardrobe-restore-clothing", "wardrobe-preset" }
-                : new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories", "wardrobe-preset",
-                    "wardrobe-name", "wardrobe-apply", "wardrobe-reload", "wardrobe-accessory-search", "wardrobe-hide-filtered" }
+            RequiredKeys = state == "main" || state == "garments" || state == "free-h"
+                ? new[] { "wardrobe-target-current", "wardrobe-coordinate-current",
+                    "wardrobe-garment-rows", "garment-state-0-current", "wardrobe-shoe-mode",
+                    "wardrobe-restore-clothing", "wardrobe-preset-current" }
+                : new[] { "wardrobe-target-current", "wardrobe-coordinate-current", "wardrobe-accessories",
+                    "wardrobe-preset-current", "wardrobe-name", "wardrobe-apply", "wardrobe-reload",
+                    "wardrobe-accessory-search", "wardrobe-accessory-group-current", "wardrobe-hide-filtered" }
         };
     }
 
     private static PreviewScene Juice(string state) {
         JuiceEditorModel model = new JuiceEditorModel {
-            Version = "0.2.6", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
+            Version = "0.2.1", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
             CharacterIndex = 0, HasCharacter = true, AllLocked = false,
             CharacterPresets = new[] { "自然效果", "雨后", "舞台妆容" },
             GroupPresets = new[] { "场景示例 A", "场景示例 B" },
@@ -217,17 +125,6 @@ internal static class PluginPreviewScenes {
                 Change = delegate { }, Lock = delegate { }
             });
         }
-        if (state == "lovejuice") {
-            model.LoveJuice = new LoveJuiceSettings {
-                Available = true, Enabled = true, Face = true, Body = true,
-                Intimate = true, MalePre = true, Milk = false, Shower = false, Special = false
-            };
-            model.ChangeLoveJuiceEnabled = delegate { }; model.ChangeLoveJuiceFace = delegate { };
-            model.ChangeLoveJuiceBody = delegate { }; model.ChangeLoveJuiceIntimate = delegate { };
-            model.ChangeLoveJuiceMalePre = delegate { }; model.ChangeLoveJuiceMilk = delegate { };
-            model.ChangeLoveJuiceShower = delegate { }; model.ChangeLoveJuiceSpecial = delegate { };
-            model.OpenLoveJuice = delegate { };
-        }
         if (state == "name") {
             model.NameDialogVisible = true; model.NamePrompt = "请输入汁液预设名"; model.Name = "自然效果";
         } else if (state == "xml-error") {
@@ -243,8 +140,6 @@ internal static class PluginPreviewScenes {
             Source = "JuiceControl.JuiceEditorView.Build", Detail = "Anonymous fixture; restored pre-migration single window, " + state,
             Widget = view.Build(new BuildContext()), StateId = state == "main" ? "default" : state,
             RequiredKeys = state == "empty" ? new[] { "juice-no-character", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
-                : state == "lovejuice" ? new[] { "juice-effects", "juice-love-enabled", "juice-love-intimate",
-                    "juice-love-male-pre", "juice-love-open", "juice-character-preset", "juice-group-preset" }
                 : new[] { "juice-effects", "juice-lock-all", "juice-command-Fill", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
         };
     }
