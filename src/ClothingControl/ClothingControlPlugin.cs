@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -37,10 +35,6 @@ namespace ClothingControl {
         private static readonly string[] GarmentLabels = {
             "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
         };
-        private static readonly FieldInfo HSceneFemales = typeof(HSceneProc).GetField("lstFemale",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        private static readonly FieldInfo HSceneMale = typeof(HSceneProc).GetField("male",
-            BindingFlags.Instance | BindingFlags.NonPublic);
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
@@ -231,13 +225,13 @@ namespace ClothingControl {
                 if (active == null) return result;
                 // Use the HSceneProc's actual actor roster. Never scan every
                 // ChaControl (which could include inactive scene NPCs).
-                IList female = HSceneFemales == null ? null : HSceneFemales.GetValue(active) as IList;
-                if (female != null)
-                    foreach (object value in female) {
-                        ChaControl candidate = value as ChaControl;
+                // These fields are public in the installed game's
+                // Assembly-CSharp.dll, as already used by JuiceControl.
+                // Private-only reflection would silently return zero actors.
+                if (active.lstFemale != null)
+                    foreach (ChaControl candidate in active.lstFemale)
                         if (candidate != null && !result.Contains(candidate)) result.Add(candidate);
-                    }
-                ChaControl male = HSceneMale == null ? null : HSceneMale.GetValue(active) as ChaControl;
+                ChaControl male = active.male;
                 if (male != null && !result.Contains(male)) result.Add(male);
                 return result;
             }
