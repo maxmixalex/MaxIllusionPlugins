@@ -102,14 +102,18 @@ namespace JuiceControl {
                         m.ChangeLoveJuiceEnabled, "juice-love-enabled").ExpandWidth(),
                     new Button("详细设置", m.OpenLoveJuice, "juice-love-open").Width(92f)
                 }.Height(32f),
-                new HStack(1f) {
+                // Two compact rows preserve readable checkbox labels at the
+                // original 390px panel width; seven equally split columns clip.
+                new HStack(4f) {
                     new Checkbox("面部", m.LoveJuice.Face, m.ChangeLoveJuiceFace, "juice-love-face").ExpandWidth(),
                     new Checkbox("身体", m.LoveJuice.Body, m.ChangeLoveJuiceBody, "juice-love-body").ExpandWidth(),
                     new Checkbox("爱液", m.LoveJuice.Intimate, m.ChangeLoveJuiceIntimate, "juice-love-intimate").ExpandWidth(),
+                    new Checkbox("前液", m.LoveJuice.MalePre, m.ChangeLoveJuiceMalePre, "juice-love-male-pre").ExpandWidth()
+                }.Height(32f),
+                new HStack(4f) {
                     new Checkbox("乳液", m.LoveJuice.Milk, m.ChangeLoveJuiceMilk, "juice-love-milk").ExpandWidth(),
                     new Checkbox("淋浴", m.LoveJuice.Shower, m.ChangeLoveJuiceShower, "juice-love-shower").ExpandWidth(),
-                    new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth(),
-                    new Checkbox("前液", m.LoveJuice.MalePre, m.ChangeLoveJuiceMalePre, "juice-love-male-pre").ExpandWidth()
+                    new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth()
                 }.Height(32f)
             }.ExpandWidth();
         }
