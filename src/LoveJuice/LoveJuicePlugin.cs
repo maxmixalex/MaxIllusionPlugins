@@ -25,6 +25,8 @@ namespace LoveJuice {
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo MaleField = typeof(HSceneProc).GetField("male",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
         private ConfigEntry<bool> enabled, face, body, milk, shower, special, collision;
@@ -189,17 +191,22 @@ namespace LoveJuice {
             if (visuals != null) visuals.Attach(scene == null ? null : scene.transform);
         }
 
+        private void AddActorToRoster(ChaControl cha, HashSet<ChaControl> seen) {
+            if (cha == null || !cha.visibleAll || !cha.hiPoly || !seen.Add(cha)) return;
+            if (!actors.ContainsKey(cha)) actors.Add(cha, DiscoverActor(cha));
+        }
+
         private void RefreshRoster() {
-            if (scene == null || FemaleField == null) return;
-            IList female = FemaleField.GetValue(scene) as IList;
-            if (female == null) return;
+            if (scene == null) return;
             HashSet<ChaControl> seen = new HashSet<ChaControl>();
-            foreach (object entry in female) {
-                ChaControl cha = entry as ChaControl;
-                if (cha == null || !cha.visibleAll || !cha.hiPoly) continue;
-                seen.Add(cha);
-                if (!actors.ContainsKey(cha)) actors.Add(cha, DiscoverActor(cha));
-            }
+            // The vanilla H scene has a distinct male field in addition
+            // to the 1–2 heroine list. Read *both*; don't enumerate every
+            // ChaControl in the scene, which could include inactive NPCs.
+            IList female = FemaleField == null ? null : FemaleField.GetValue(scene) as IList;
+            if (female != null)
+                foreach (object entry in female) AddActorToRoster(entry as ChaControl, seen);
+            ChaControl male = MaleField == null ? null : MaleField.GetValue(scene) as ChaControl;
+            AddActorToRoster(male, seen);
             List<ChaControl> stale = null;
             foreach (ChaControl cha in actors.Keys)
                 if (!seen.Contains(cha)) {
@@ -285,7 +292,10 @@ namespace LoveJuice {
             foreach (Actor actor in actors.Values) {
                 if (face.Value) TickSource(actor, LoveJuiceChannel.Saliva, actor.FaceLevel, ref actor.FaceTime, dt);
                 if (body.Value) TickSource(actor, LoveJuiceChannel.Body, actor.BodyLevel, ref actor.BodyTime, dt);
-                if (milk.Value) TickSource(actor, LoveJuiceChannel.Milk, milkLevel, ref actor.MilkTime, dt);
+                // Do not turn a scene-wide female gauge into milk emissions
+                // on the male's fallback torso anchor.
+                if (milk.Value && actor.Character.sex == 1)
+                    TickSource(actor, LoveJuiceChannel.Milk, milkLevel, ref actor.MilkTime, dt);
                 if (shower.Value && showerActive)
                     TickSource(actor, LoveJuiceChannel.Shower, 1, ref actor.ShowerTime, dt);
                 if (special.Value) TickSource(actor, LoveJuiceChannel.Special,
