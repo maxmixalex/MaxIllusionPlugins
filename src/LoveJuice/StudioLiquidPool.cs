@@ -162,7 +162,9 @@ namespace LoveJuice {
                 // Preserve authored native particle renderer, shape and size.
                 // Emit exactly one native particle, not an entire looping jet.
                 ParticleSystem.EmitParams sample = new ParticleSystem.EmitParams();
-                sample.position = Vector3.zero;
+                // Preserve the Studio prefab's native shape/emitter origin.
+                // Explicit position=zero would place particles at world origin
+                // when simulationSpace is World.
                 sample.velocity = velocity;
                 sample.startLifetime = DropletPhysics.Clamp(duration, .2f, 8f);
                 if (kind == LoveJuiceChannel.Milk)
