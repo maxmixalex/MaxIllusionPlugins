@@ -46,6 +46,7 @@ namespace ClothingControl {
         private int lastHotkeyFrame = -1;
         private float lastHotkeyTime = -1f;
         private bool makerStateLogged;
+        private bool shiftTabWasHeld;
         private ConfigEntry<bool> showInMaker;
         private SidebarToggle makerToggle;
         private IDisposable makerSubscription;
@@ -337,8 +338,18 @@ namespace ClothingControl {
         }
 
         private bool RawDefaultShortcutDown() {
-            return UsesDefaultShortcut() && Input.GetKeyDown(KeyCode.Tab) &&
-                (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+            if (!UsesDefaultShortcut()) {
+                shiftTabWasHeld = false;
+                return false;
+            }
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool pressed = shift && Input.GetKey(KeyCode.Tab);
+            // Some runtime input blockers suppress GetKeyDown but leave the
+            // held-key state intact. Only use the rising edge, never toggle
+            // each frame while the combination remains held.
+            bool edge = pressed && !shiftTabWasHeld;
+            shiftTabWasHeld = pressed;
+            return edge || (shift && Input.GetKeyDown(KeyCode.Tab));
         }
 
         private bool HandleHotkey(string origin) {
