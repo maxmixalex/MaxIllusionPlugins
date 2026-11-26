@@ -4,17 +4,19 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class LoveJuiceViewTests {
-        internal const int TestCount = 3;
+        internal const int TestCount = 4;
         internal static void RunAll() {
             PreviewRequiresLiveActor();
             SettingsActionsUseRealWidgets();
             RetainedViewTracksNativeFeedback();
+            ActorSelectionUsesDedicatedNativeControls();
         }
 
         private static LoveJuiceViewModel Create() {
             return new LoveJuiceViewModel {
                 Version = "test", Enabled = true, HasScene = true,
                 Face = true, Body = true, ActorCount = 2, MaximumParticles = 48,
+                ActorNames = new[] { "1. Alice", "2. Bob" }, SelectedActorIndex = 0,
                 ActiveParticles = 4, ChangeEnabled = delegate { },
                 ChangeFace = delegate { }, ChangeBody = delegate { },
                 ChangeMilk = delegate { }, ChangeShower = delegate { },
@@ -23,7 +25,8 @@ namespace MaximumUI.Tests {
                 ChangeInterval = delegate { }, ChangeGravity = delegate { },
                 ChangeDamping = delegate { }, ChangeLifetime = delegate { },
                 ChangeScale = delegate { }, ChangeLaunchSpeed = delegate { },
-                ChangeMilkThreshold = delegate { }, Preview = delegate { }, Close = delegate { }
+                ChangeMilkThreshold = delegate { }, Preview = delegate { },
+                SelectActor = delegate { }, Close = delegate { }
             };
         }
 
@@ -64,6 +67,23 @@ namespace MaximumUI.Tests {
             Check(!a.SameDisplayAs(b), "Particle counts are live readback.");
             b = Create(); b.Integration = "Legacy SkinEffects";
             Check(!a.SameDisplayAs(b), "Optional integration state refreshes UI.");
+        }
+
+        private static void ActorSelectionUsesDedicatedNativeControls() {
+            LoveJuiceViewModel model = Create();
+            int selected = -1;
+            model.SelectActor = value => selected = value;
+            LoveJuiceView view = new LoveJuiceView { Model = model };
+            Widget ui = view.Build(null);
+            ComboBox<int> actors = Find<ComboBox<int>>(ui, "lovejuice-target");
+            Check(actors.Enabled && actors.Options.Count == 2, "Every active character is selectable.");
+            actors.OnChange(1);
+            Check(selected == 1, "Selected actor reaches the runtime callback.");
+            model.ActorNames = new string[0]; model.SelectedActorIndex = -1; model.ActorCount = 0;
+            ui = view.Build(null);
+            Check(!Find<ComboBox<int>>(ui, "lovejuice-target").Enabled &&
+                !Find<Button>(ui, "lovejuice-emit").Enabled,
+                "No old actor survives an empty scene.");
         }
 
         private static T Find<T>(Widget root, string key) where T : Widget {

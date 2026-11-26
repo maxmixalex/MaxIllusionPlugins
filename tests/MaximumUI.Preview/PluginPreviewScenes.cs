@@ -41,6 +41,7 @@ internal static class PluginPreviewScenes {
         LoveJuiceViewModel m = new LoveJuiceViewModel {
             Version = "0.3.0", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 21, MaximumParticles = 48,
+            ActorNames = new[] { "1. 示例角色 A", "2. 示例角色 B" }, SelectedActorIndex = 1,
             Interval = .26f, Gravity = 8f, Damping = 1f, Lifetime = 1.6f,
             Scale = .045f, LaunchSpeed = .35f, MilkThreshold = 65f,
             Face = true, Body = true, Collision = true, PreviewChannel = 1,
@@ -49,6 +50,7 @@ internal static class PluginPreviewScenes {
             ChangeBody = delegate { }, ChangeMilk = delegate { },
             ChangeShower = delegate { }, ChangeSpecial = delegate { },
             ChangeCollision = delegate { }, ChangeMaximum = delegate { },
+            SelectActor = delegate { },
             ChangePreviewChannel = delegate { }, ChangeInterval = delegate { },
             ChangeGravity = delegate { }, ChangeDamping = delegate { },
             ChangeLifetime = delegate { }, ChangeScale = delegate { },
@@ -58,6 +60,7 @@ internal static class PluginPreviewScenes {
         if (state == "disabled") { m.Enabled = false; m.Status = "已停用。"; }
         if (state == "empty") {
             m.HasScene = false; m.ActorCount = m.ActiveParticles = 0;
+            m.ActorNames = new string[0]; m.SelectedActorIndex = -1;
             m.Status = "尚未进入场景。";
             m.Integration = "SkinEffects：未连接，使用游戏自身状态。";
         }
@@ -68,7 +71,7 @@ internal static class PluginPreviewScenes {
             Detail = "Synthetic effect control fixture " + state,
             Widget = new LoveJuiceView { Model = m }.Build(new BuildContext()),
             StateId = state == "enabled" ? "default" : state,
-            RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-scroll",
+            RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-target", "lovejuice-scroll",
                 "lovejuice-face", "lovejuice-maximum", "lovejuice-preview-channel",
                 "lovejuice-emit", "lovejuice-active", "lovejuice-status" }
         };

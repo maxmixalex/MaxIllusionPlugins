@@ -6,10 +6,12 @@ namespace LoveJuice {
         internal string Version = "0.3.0", Status = "就绪", Integration = "未连接";
         internal bool Enabled, HasScene, Face, Body, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
+        internal string[] ActorNames = new string[0];
+        internal int SelectedActorIndex = -1;
         internal float Interval, Gravity, Damping, Lifetime, Scale, LaunchSpeed, MilkThreshold;
         internal Action<bool> ChangeEnabled, ChangeFace, ChangeBody, ChangeMilk,
             ChangeShower, ChangeSpecial, ChangeCollision;
-        internal Action<int> ChangeMaximum, ChangePreviewChannel;
+        internal Action<int> ChangeMaximum, ChangePreviewChannel, SelectActor;
         internal Action<float> ChangeInterval, ChangeGravity, ChangeDamping,
             ChangeLifetime, ChangeScale, ChangeLaunchSpeed, ChangeMilkThreshold;
         internal Action Preview, Close;
@@ -19,12 +21,21 @@ namespace LoveJuice {
                 Integration == other.Integration && Enabled == other.Enabled &&
                 HasScene == other.HasScene && ActorCount == other.ActorCount &&
                 ActiveParticles == other.ActiveParticles && MaximumParticles == other.MaximumParticles &&
-                PreviewChannel == other.PreviewChannel && Face == other.Face && Body == other.Body &&
+                PreviewChannel == other.PreviewChannel &&
+                SelectedActorIndex == other.SelectedActorIndex &&
+                SameNames(ActorNames, other.ActorNames) &&
+                Face == other.Face && Body == other.Body &&
                 Milk == other.Milk && Shower == other.Shower && Special == other.Special &&
                 Collision == other.Collision && Near(Interval, other.Interval) &&
                 Near(Gravity, other.Gravity) && Near(Damping, other.Damping) &&
                 Near(Lifetime, other.Lifetime) && Near(Scale, other.Scale) &&
                 Near(LaunchSpeed, other.LaunchSpeed) && Near(MilkThreshold, other.MilkThreshold);
+        }
+        private static bool SameNames(string[] a, string[] b) {
+            if (a == null || b == null) return a == b;
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
         }
         private static bool Near(float a, float b) { return Math.Abs(a - b) < .0001f; }
     }
@@ -32,6 +43,13 @@ namespace LoveJuice {
     // Production and headless preview share the exact same widget composition.
     internal sealed class LoveJuiceView : View {
         internal LoveJuiceViewModel Model = new LoveJuiceViewModel();
+
+        private static int[] ActorChoices(string[] names) {
+            int length = names == null ? 0 : names.Length;
+            int[] result = new int[length];
+            for (int i = 0; i < length; i++) result[i] = i;
+            return result;
+        }
 
         public override Widget Build(BuildContext context) {
             LoveJuiceViewModel m = Model;
@@ -77,6 +95,11 @@ namespace LoveJuice {
                     new Label("存活粒子：" + m.ActiveParticles + " / " + m.MaximumParticles,
                         "lovejuice-active").ExpandWidth()
                 }.Height(28f),
+                new ComboBox<int>("预览角色", m.SelectedActorIndex,
+                    ActorChoices(m.ActorNames),
+                    i => i >= 0 && i < m.ActorNames.Length ? m.ActorNames[i] : "无角色",
+                    m.SelectActor, "lovejuice-target")
+                    .Enabled(m.HasScene && m.ActorNames.Length > 0).ExpandWidth().Height(36f),
                 new ScrollView("lovejuice-scroll") { controls.ExpandWidth() }.ExpandWidth().ExpandHeight(),
                 new HStack(5f) {
                     new ComboBox<int>("预览类型", m.PreviewChannel, new[] { 0, 1, 2, 3, 4, 5 },

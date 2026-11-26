@@ -39,9 +39,27 @@ internal static class Program {
         Check(fixture.Writes == 0, "Readback never writes external SkinEffects state");
     }
 
+    private static void CheckActorSelection() {
+        object alice = new object(), bob = new object(), extra = new object();
+        LiveActorRoster<object> roster = new LiveActorRoster<object>();
+        Check(roster.Replace(new[] { alice, bob }) && roster.Count == 2 &&
+            ReferenceEquals(roster.Selected, alice), "First actual actor is selected.");
+        Check(roster.Select(1) && ReferenceEquals(roster.Selected, bob), "Select second actual actor.");
+        Check(roster.Replace(new[] { bob, extra, alice }) && roster.SelectedIndex == 0 &&
+            ReferenceEquals(roster.Selected, bob), "Reordering preserves the same performer identity.");
+        Check(!roster.Select(0) && !roster.Select(99), "No redundant or out-of-range selection.");
+        Check(roster.Replace(new[] { extra, alice }) && ReferenceEquals(roster.Selected, extra),
+            "Removing a selected actor does not redirect to an unrelated stale instance.");
+        Check(roster.Replace(new[] { extra, extra, alice }) && roster.Count == 2,
+            "Roster deduplicates identical actor references.");
+        Check(roster.Replace(null) && roster.Count == 0 && roster.SelectedIndex == -1 &&
+            roster.Selected == null, "Scene exit clears all previous actors.");
+    }
+
     public static int Main() {
         try {
             CheckLegacySkinEffects();
+            CheckActorSelection();
             Check(StudioLiquidCatalog.Bundle == "studio/00.unity3d" &&
                 StudioLiquidCatalog.Manifest == "studio00", "Verified installed bundle path/manifest");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Water) ==

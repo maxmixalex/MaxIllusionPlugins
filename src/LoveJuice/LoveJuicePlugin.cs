@@ -41,6 +41,7 @@ namespace LoveJuice {
         private const string MountId = GUID + ".window";
         private readonly OptionalEffectBridge integrations = new OptionalEffectBridge();
         private readonly Dictionary<ChaControl, Actor> actors = new Dictionary<ChaControl, Actor>();
+        private readonly LiveActorRoster<ChaControl> roster = new LiveActorRoster<ChaControl>();
         private StudioLiquidPool visuals;
         private HSceneProc scene;
         private float nextProbe, nextResolve;
@@ -186,27 +187,30 @@ namespace LoveJuice {
             panelStatus = next == null ? "尚未进入场景。" : "已连接当前场景。";
             scene = next;
             actors.Clear();
+            roster.Replace(null);
             integrations.Reset();
             nextResolve = 0f;
             if (visuals != null) visuals.Attach(scene == null ? null : scene.transform);
         }
 
-        private void AddActorToRoster(ChaControl cha, HashSet<ChaControl> seen) {
+        private void AddActorToRoster(ChaControl cha, HashSet<ChaControl> seen, List<ChaControl> order) {
             if (cha == null || !cha.visibleAll || !cha.hiPoly || !seen.Add(cha)) return;
+            order.Add(cha);
             if (!actors.ContainsKey(cha)) actors.Add(cha, DiscoverActor(cha));
         }
 
         private void RefreshRoster() {
             if (scene == null) return;
             HashSet<ChaControl> seen = new HashSet<ChaControl>();
+            List<ChaControl> order = new List<ChaControl>();
             // The vanilla H scene has a distinct male field in addition
             // to the 1–2 heroine list. Read *both*; don't enumerate every
             // ChaControl in the scene, which could include inactive NPCs.
             IList female = FemaleField == null ? null : FemaleField.GetValue(scene) as IList;
             if (female != null)
-                foreach (object entry in female) AddActorToRoster(entry as ChaControl, seen);
+                foreach (object entry in female) AddActorToRoster(entry as ChaControl, seen, order);
             ChaControl male = MaleField == null ? null : MaleField.GetValue(scene) as ChaControl;
-            AddActorToRoster(male, seen);
+            AddActorToRoster(male, seen, order);
             List<ChaControl> stale = null;
             foreach (ChaControl cha in actors.Keys)
                 if (!seen.Contains(cha)) {
@@ -214,6 +218,24 @@ namespace LoveJuice {
                     stale.Add(cha);
                 }
             if (stale != null) foreach (ChaControl cha in stale) actors.Remove(cha);
+            if (roster.Replace(order)) {
+                panelRevision++;
+                nextPanelRefresh = 0f;
+            }
+        }
+
+        private static string ActorDisplayName(ChaControl character) {
+            if (character == null) return "角色";
+            string name = character.chaFile != null && character.chaFile.parameter != null
+                ? character.chaFile.parameter.fullname : null;
+            return string.IsNullOrEmpty(name) ? character.name : name;
+        }
+
+        private string[] ActorNames() {
+            string[] names = new string[roster.Count];
+            for (int i = 0; i < names.Length; i++)
+                names[i] = (i + 1) + ". " + ActorDisplayName(roster.At(i));
+            return names;
         }
 
         private int SkinLevel(ChaControl cha, params string[] kinds) {
@@ -272,15 +294,8 @@ namespace LoveJuice {
                 RefreshRoster();
                 foreach (Actor actor in actors.Values) UpdateLevels(actor);
             }
-            if (preview.Value.IsDown() && !panelShortcut.Value.IsDown()) {
-                LoveJuiceChannel requested = (LoveJuiceChannel)previewChannel.Value;
-                if (StudioLiquidCatalog.Valid(requested)) {
-                    foreach (Actor actor in actors.Values) {
-                        for (int i = 0; i < 4; i++) EmitFrom(actor, requested, i);
-                        break;
-                    }
-                }
-            }
+            if (preview.Value.IsDown() && !panelShortcut.Value.IsDown())
+                PreviewFromPanel();
             float dt = DropletPhysics.Clamp(Time.deltaTime, 0f, .15f);
             string state = scene.flags.nowAnimStateName ?? string.Empty;
             bool showerActive = state.IndexOf("shower", StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -327,19 +342,19 @@ namespace LoveJuice {
         }
 
         private void PreviewFromPanel() {
-            if (!IsEnabled || scene == null || scene.flags == null || actors.Count == 0) {
+            if (!IsEnabled || scene == null || scene.flags == null || scene.isEnd ||
+                roster.Selected == null) {
                 panelStatus = "当前无可用角色或效果未启用。";
                 return;
             }
             LoveJuiceChannel channel = (LoveJuiceChannel)previewChannel.Value;
             int emitted = 0;
-            foreach (Actor actor in actors.Values) {
+            Actor actor;
+            if (actors.TryGetValue(roster.Selected, out actor))
                 for (int i = 0; i < 4; i++)
                     if (EmitFrom(actor, channel, i)) emitted++;
-                break;
-            }
             panelStatus = emitted > 0
-                ? "已向原生发射器发射 " + emitted + " 颗粒子。"
+                ? "已向 " + ActorDisplayName(roster.Selected) + " 发射 " + emitted + " 颗原生粒子。"
                 : "未发射：素材、粒子预算或骨骼不可用；请检查 BepInEx 日志。";
         }
 
@@ -350,7 +365,8 @@ namespace LoveJuice {
             LoveJuiceViewModel m = new LoveJuiceViewModel {
                 Version = Version, Enabled = IsEnabled,
                 HasScene = scene != null && scene.flags != null && !scene.isEnd,
-                ActorCount = actors.Count, ActiveParticles = ActiveDrops,
+                ActorCount = roster.Count, ActorNames = ActorNames(),
+                SelectedActorIndex = roster.SelectedIndex, ActiveParticles = ActiveDrops,
                 Status = panelStatus, Integration = integrations.HasSkinEffects
                     ? "SkinEffects：已连接（仅读取状态）。"
                     : "SkinEffects：未连接，使用游戏自身状态。",
@@ -378,6 +394,14 @@ namespace LoveJuice {
             m.ChangeMilkThreshold = value => { if (live()) { milkThreshold.Value = DropletPhysics.Clamp(value, 0f, 100f); RefreshPanel(); } };
             m.ChangeMaximum = value => { if (live()) { maxActive.Value = Mathf.Clamp(value, 1, 128); RefreshPanel(); } };
             m.ChangePreviewChannel = value => { if (live() && value >= 0 && value <= 5) { previewChannel.Value = value; RefreshPanel(); } };
+            m.SelectActor = value => {
+                if (!live() || scene == null || scene.flags == null || scene.isEnd) return;
+                if (roster.Select(value)) {
+                    panelRevision++;
+                    panelStatus = "当前预览角色：" + ActorDisplayName(roster.Selected);
+                    RefreshPanel();
+                }
+            };
             m.Preview = () => { if (live()) { PreviewFromPanel(); RefreshPanel(); } };
             if (!panel.Model.SameDisplayAs(m)) {
                 panel.Model = m;
