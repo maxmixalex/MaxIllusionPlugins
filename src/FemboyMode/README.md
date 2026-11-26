@@ -2,6 +2,13 @@
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
+## 0.5.7 Native transform handles
+
+- Replaced the IMGUI screen-space axis drawing with an actual Unity UI canvas and EventSystem-enabled X/Y/Z drag handles. The handles are raycast targets, with lightweight non-interactive axis lines and labels; dragging updates the per-card transforms immediately and synchronizes the Maker sliders.
+- Corrected screen-space Y projection to UGUI coordinates and added a guarded raw-input fallback for Maker variants without a working EventSystem. Native GUI hidden state also hides the gizmo.
+- Shift enables fine movement and Ctrl enables coarse movement. Dragging is clamped to the same numeric limits as the saved model and gracefully stops if Maker, the active card or the selected mode changes. A missing configured bone is surfaced as a visible warning.
+- New headless drag-math assertions cover scale/move/rotate, clamps, fine/coarse precision and invalid numbers. Real Maker pointer interaction still requires in-game testing.
+
 ## 0.5.6 Maker page layout
 
 - The Body > All page uses a clone of the game's own `03_ClothesTop/tglSocks/SocksTop/Scroll View`, the same source used by KKAPI's subcategory creation. All existing page rows share one vertical viewport; visibility of individual rows does not hide the original page.

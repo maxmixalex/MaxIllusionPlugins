@@ -8,5 +8,6 @@
   <ItemGroup>
     <Compile Include="../../src/FemboyMode/FemboyRules.cs" Link="FemboyRules.cs" />
     <Compile Include="../../src/FemboyMode/MakerPageScrollMath.cs" Link="MakerPageScrollMath.cs" />
+    <Compile Include="../../src/FemboyMode/FemboyMakerAxisMath.cs" Link="FemboyMakerAxisMath.cs" />
   </ItemGroup>
 </Project>

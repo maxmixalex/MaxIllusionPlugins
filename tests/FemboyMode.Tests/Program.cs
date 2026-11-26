@@ -58,6 +58,21 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        Check(Math.Abs(FemboyMakerAxisMath.DragValue(1f, 50f, 0, false, false) - 1.8f) < .001f,
+            "native scale handle updates the correct unit");
+        Check(Math.Abs(FemboyMakerAxisMath.DragValue(0f, 100f, 1, false, false) - .15f) < .001f,
+            "native move handle uses metres");
+        Check(Math.Abs(FemboyMakerAxisMath.DragValue(0f, 100f, 2, false, false) - 85f) < .001f,
+            "native rotation handle uses degrees");
+        Check(FemboyMakerAxisMath.DragValue(1f, 1000f, 0, false, false) == 4f &&
+            FemboyMakerAxisMath.DragValue(1f, -1000f, 0, false, false) == .25f,
+            "native scale handles enforce per-card bounds");
+        Check(Math.Abs(FemboyMakerAxisMath.DragValue(0f, 100f, 1, true, false) - .03f) < .001f &&
+            Math.Abs(FemboyMakerAxisMath.DragValue(0f, 50f, 1, false, true) - .225f) < .001f,
+            "fine and coarse drag modifiers have distinct calibrated sensitivities");
+        Check(FemboyMakerAxisMath.DragValue(float.NaN, 1f, 0, false, false) == 1f &&
+            FemboyMakerAxisMath.DragValue(0f, float.PositiveInfinity, 1, false, false) == 0f,
+            "invalid drag input cannot poison persistent geometry");
         Check(MakerPageScrollMath.ResolveHeight(500f, -100f, 952f, 8f) == 592f,
             "native viewport fits available page height");
         Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 1f,

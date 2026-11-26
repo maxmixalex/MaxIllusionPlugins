@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.5.6";
+        public const string Version = "0.5.7";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -259,11 +259,6 @@ namespace FemboyMode
                 GetController(MakerAPI.GetCharacterControl()) : null;
             axisPreview.Tick(controller != null && controller.IsFemboy
                 ? controller : null, axisVisible, axisModes, OnMakerAxisDragged);
-        }
-
-        private void OnGUI()
-        {
-            axisPreview.DrawOverlay();
         }
 
         private void OnDestroy()
