@@ -39,6 +39,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> EnableMaleGeometryTransforms;
         internal static ConfigEntry<bool> EnableBodyAllNativeScroll;
+        internal static ConfigEntry<float> NativeScrollWheelStep;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<string> MaleBallsBone;
         internal static ConfigEntry<bool> EnableMaleClimaxFX;
@@ -116,6 +117,9 @@ namespace FemboyMode
                 "Unified scrolling for ALL native Body > All rows and Femboy geometry controls. " +
                 "No original row is reparented. Turn off to restore the unmodified native page.");
             EnableBodyAllNativeScroll.SettingChanged += OnNativeMakerScrollSettingChanged;
+            NativeScrollWheelStep = Config.Bind("Maker", "Whole-page wheel step", 112f,
+                new ConfigDescription("One mouse-wheel notch scrolls this many Maker layout units. Default 112 (fast, immediate); range 40–320.",
+                    new AcceptableValueRange<float>(40f, 320f)));
             EnableMakerAssetUnlock = Config.Bind("Maker", "Unlock male-listed assets", true,
                 "Permit male-listed assets in a marked female character's Maker. Existing lists may need reopening.");
             EnableMaleBoneScale = Config.Bind("Maker", "Enable male geometry bone scaling", true,
