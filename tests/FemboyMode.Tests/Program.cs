@@ -73,6 +73,14 @@ internal static class Program
         Check(FemboyMakerAxisMath.DragValue(float.NaN, 1f, 0, false, false) == 1f &&
             FemboyMakerAxisMath.DragValue(0f, float.PositiveInfinity, 1, false, false) == 0f,
             "invalid drag input cannot poison persistent geometry");
+        Check(MakerPageScrollMath.ScopedViewportHeight(952f) == 620f,
+            "new scrollbar has a bounded 620px viewport under the stock layout");
+        Check(Math.Abs(MakerPageScrollMath.ScopedViewportHeight(600f) - 396f) < .01f,
+            "native template scaling preserves bounded partial viewports");
+        Check(MakerPageScrollMath.ScopedViewportHeight(300f) == 240f &&
+            MakerPageScrollMath.ScopedViewportHeight(float.NaN) == 520f &&
+            MakerPageScrollMath.ScopedViewportHeight(float.PositiveInfinity) == 520f,
+            "invalid or tiny source templates cannot cause an invisible scroll");
         Check(MakerPageScrollMath.ResolveHeight(500f, -100f, 952f, 8f) == 592f,
             "native viewport fits available page height");
         Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 952f,
