@@ -245,6 +245,10 @@ namespace FemboyMode
                         instance.wheelHandlers.Add(trigger);
                         trigger.enabled = false;
                     }
+                // A copied scrollbar may already be inactive because the
+                // Socks template had no overflow when KKAPI built its UI.
+                // Keep the owned track visible regardless of current rows.
+                vertical.gameObject.SetActive(true);
                 clone.SetActive(true);
                 holder.SetActive(true);
                 LayoutRebuilder.ForceRebuildLayoutImmediate(content);
