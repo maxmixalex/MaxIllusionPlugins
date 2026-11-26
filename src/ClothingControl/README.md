@@ -1,5 +1,8 @@
 # ClothingControl
 
+**0.5.2**：修复部分高插件量 RX18 Maker 环境中 Shift+Tab 虽已配置却未打开 MaximumUI 窗口的问题。保留原有 BepInEx KeyboardShortcut 路径，对原版默认 Shift+Tab 添加 Unity `Input.GetKeyDown` 和 `OnGUI KeyDown` 双兜底；按键同帧去重，不影响自定义快捷键。启动、Maker 载入、原生侧边栏开关、按键进入、打开／关闭和 MaximumUI mount 可见状态均增加有限诊断日志。未改服装功能、UI 组件或预设结构。若无按键日志，检查输入是否被其他插件/游戏捕获；若有“opening result”但界面不可见，则针对实际 MaximumUI 状态调查。
+
+
 **0.5.1**：默认开关快捷键改为与原版 Clothing State Menu 一致的 **LeftShift+Tab**。升级时若现有配置仍为旧版默认的 `F7`，会一次性迁移并保存为 `LeftShift+Tab`；用户自定义的其他快捷键不变。按键被原生 Maker 隐藏状态、MaximumUI 输入框／对话框或不支持的场景拦截时，现在会在 BepInEx 日志中说明原因。只修复入口，不改 MaximumUI 窗口及服装功能。若保留原版 `KK_ClothingStateMenu.dll`，两者会响应同一快捷键；用于替代时应禁用原版插件，避免两个窗口同时打开。
 
 **0.5.0**：新增 **Free H** 使用入口（默认 F7）。角色选择读取游戏当前 `HSceneProc` 的 `lstFemale` 及单独的 `male`，包括普通 3P 和具有 `male1` 字段的 MMF 场景第二位男性；字段不存在时安全跳过，不扫描不相关的 NPC。当前角色的九类衣物原生状态、饰品可见性和 XML 预设可以在播放期间管理。为了不破坏动画，Free H 不允许主动切换整套配装；不匹配当前配装的预设会拒绝应用，而不是强制角色重新加载。Maker 与 Studio 原有配装切换行为不变。
