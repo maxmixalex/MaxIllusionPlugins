@@ -23,7 +23,6 @@ namespace LoveJuice {
                 case "buttblushbody": case "buttlevel": return "ButtLevel";
                 default: return null;
             }
-            return null;
         }
 
         internal static bool TryReadLegacy(object controller, string name, out int level) {

@@ -39,9 +39,33 @@ internal static class Program {
         Check(fixture.Writes == 0, "Readback never writes external SkinEffects state");
     }
 
+    private static void CheckLiquidLevelEvents() {
+        var events = new LiquidLevelEvents();
+        LiquidLevelBursts first = events.Observe(3, 2, 2);
+        Check(first.Face == 0 && first.Body == 0 && first.Special == 0,
+            "A loaded card does not cause an initial burst.");
+        LiquidLevelBursts changed = events.Observe(4, 5, 3);
+        Check(changed.Face == 1 && changed.Body == 3 && changed.Special == 1,
+            "A real level increase triggers three independently bounded channels.");
+        changed = events.Observe(4, 5, 3);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "Unchanged level never retriggers.");
+        changed = events.Observe(0, 1, 0);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "Resetting a visual overlay does not emit.");
+        changed = events.Observe(255, 255, 255);
+        Check(changed.Face == 3 && changed.Body == 3 && changed.Special == 3,
+            "Large jumps remain bounded by the native particle budget.");
+        events.Reset();
+        changed = events.Observe(1, 2, 3);
+        Check(changed.Face == 0 && changed.Body == 0 && changed.Special == 0,
+            "New scene re-establishes a clean baseline.");
+    }
+
     public static int Main() {
         try {
             CheckLegacySkinEffects();
+            CheckLiquidLevelEvents();
             Check(StudioLiquidCatalog.Bundle == "studio/00.unity3d" &&
                 StudioLiquidCatalog.Manifest == "studio00", "Verified installed bundle path/manifest");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Water) ==

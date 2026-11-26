@@ -54,6 +54,6 @@ jobs:
           cp LICENSE artifacts/LoveJuice/LICENSE
       - uses: actions/upload-artifact@v4
         with:
-          name: KK_LoveJuice-0.2.2-native
+          name: KK_LoveJuice-0.2.3-native
           path: artifacts/LoveJuice/
           if-no-files-found: error

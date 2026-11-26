@@ -1,4 +1,4 @@
-# LoveJuice — 0.2.2 (Native Studio liquids)
+# LoveJuice — 0.2.3 (Native Studio liquids)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
@@ -27,7 +27,7 @@ The installed `KK_SkinEffects.dll` exposes `DroolLevel`, `SalivaLevel`, and `Swe
 
 - `General/Enabled` defaults to **false**. Toggle it to true to enable actual Studio liquid visuals. Default `F9` emits four native particles in the selected preview channel (water by default) from the current scene character; it is an active runtime test, not a mock image.
 - When `HSceneProc` is active, the plugin tracks **its actual current `lstFemale` character roster**, including multi-character scenes, and resolves per-character bones only when the roster changes. It never modifies a character card.
-- Face and body emission follows the current built-in `ChaControl.GetSiruFlags` and optional SkinEffects controller values, including changes made live through **JuiceControl**. This integration reads current values on the fly; neither optional mod is modified or required.
+- Face and body emission follows the current built-in `ChaControl.GetSiruFlags` and optional SkinEffects controller values, including changes made live through **JuiceControl**. Rising readback levels create immediate bounded native particle bursts in addition to interval-based drips; unchanged/reduced levels and initial card loads do not produce false bursts. This integration reads current values on the fly; neither optional mod is modified or required.
 - FemboyMode integration calls its public `IsFemboy(ChaControl)` via an optional runtime adapter. The separately switchable marked-geometry source resolves the matching game bone if present.
 - Separate optional milk/shower channels (disabled by default). Milk uses an independent female-gauge threshold during native loop states and reuses the water prefab with a white particle start color and owned material copies for `_Color` / legacy `_TintColor` shaders. A public `LoveJuicePlugin.Emit(character, channel, count)` API supports other mods.
 - Real world-space liquid motion: gravity, damping, source direction, native `ParticleSystem` collision, lifetime, hard emitted-particle limit, and no cross-scene effect leaks. Only one reusable native emitter is instantiated per visual channel; material copies for the optional milk tint are created once and explicitly disposed.
