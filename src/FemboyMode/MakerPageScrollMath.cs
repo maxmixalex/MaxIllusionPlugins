@@ -35,6 +35,18 @@ namespace FemboyMode
             return Clamp(candidate * parentScaleRatio, 18f, 64f);
         }
 
+        // Convert a point in CvsMenuTree LOCAL coordinates to the anchored
+        // position of the cloned root Scrollbar. In Unity, anchoredPosition
+        // is measured relative to the parent RECT's anchor reference corner,
+        // not the parent's world position or local coordinate origin.
+        internal static float OutsideBarAnchorCoordinate(float localPoint, float parentAnchorPoint)
+        {
+            if (float.IsNaN(localPoint) || float.IsInfinity(localPoint) ||
+                float.IsNaN(parentAnchorPoint) || float.IsInfinity(parentAnchorPoint))
+                return 0f;
+            return localPoint - parentAnchorPoint;
+        }
+
         // The original scrollbar is a sibling of the stock viewport.
         // Keep that visual separation even if the template used overlapping
         // anchors or has not been laid out during inactive Maker loading.

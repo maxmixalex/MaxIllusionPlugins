@@ -52,6 +52,7 @@ namespace FemboyMode
         private float nativeScrollSensitivity;
         private int lastScreenWidth, lastScreenHeight, lastChildCount, installedFrame;
         private int wheelHandledFrame = -1;
+        private bool hitRegionAudited;
 
         private static Transform FindMenu(Transform from)
         {
@@ -113,9 +114,21 @@ namespace FemboyMode
                 instance = host.gameObject.AddComponent<MakerPageScroll>();
                 instance.page = host;
                 instance.layout = vertical;
-                instance.scrollbarParent = host.parent as RectTransform;
-                if (instance.scrollbarParent == null)
-                    throw new InvalidOperationException("Native Body All tab has no scrollbar sibling parent.");
+                // In 0.6.3 the bar was a sibling of AllTop, but was STILL
+                // inside tglAll. The original Toggle/raycast hierarchy could
+                // filter pointer events outside tglAll's own rectangle even
+                // while Unity rendered the scrollbar there. The bar's visual
+                // location and interactive region then diverged.
+                //
+                // Place only the cloned scrollbar under the verified Maker
+                // CvsMenuTree instead. This is outside both the AllTop mask
+                // and its tab's raycast-filter hierarchy. Native AllTop rows
+                // and scripts remain exactly where KKAPI expects them.
+                instance.scrollbarParent = menu as RectTransform;
+                if (instance.scrollbarParent == null || instance.scrollbarParent == host ||
+                    instance.scrollbarParent == host.parent)
+                    throw new InvalidOperationException(
+                        "Cannot place native scrollbar outside the Body All tab raycast hierarchy.");
                 // Inherit Koikatsu's *serialized native ScrollRect setting*.
                 // Do not substitute an invented 112-unit wheel step or create
                 // another user preference for what should be stock behavior.
@@ -147,6 +160,10 @@ namespace FemboyMode
                     instance.scrollbarParent, false);
                 instance.ownedBar = barObject;
                 barObject.name = "FemboyMode.BodyAllScrollbar";
+                // In the original Maker hierarchy CvsMenuTree contains all
+                // tabs; keep the active All scrollbar above overlapping
+                // category graphics for both rendering AND event raycasts.
+                barObject.transform.SetAsLastSibling();
                 var barRect = barObject.transform as RectTransform;
                 if (barRect == null) throw new InvalidOperationException("Native scrollbar has no RectTransform.");
                 LayoutElement barLayout = barObject.GetComponent<LayoutElement>();
@@ -194,6 +211,13 @@ namespace FemboyMode
                 if (instance.scrollbar == null || instance.scrollbar.handleRect == null)
                     throw new InvalidOperationException("Cloned native scrollbar is missing a handle.");
                 instance.scrollbar.direction = Scrollbar.Direction.BottomToTop;
+                // Keep the native Scrollbar's actual visual root and handle
+                // as UI raycast targets. This is a real Scrollbar, not a
+                // disconnected invisible click proxy.
+                Graphic trackGraphic = barObject.GetComponent<Graphic>();
+                if (trackGraphic != null) trackGraphic.raycastTarget = true;
+                Graphic handleGraphic = instance.scrollbar.handleRect.GetComponent<Graphic>();
+                if (handleGraphic != null) handleGraphic.raycastTarget = true;
                 instance.scrollbar.onValueChanged = new Scrollbar.ScrollEvent();
                 instance.scrollbar.onValueChanged.AddListener(instance.OnScrollbarChanged);
                 barObject.SetActive(true);
@@ -241,8 +265,8 @@ namespace FemboyMode
                 instance.ResetRaycasts();
                 Debug.Log("Femboy Mode: unified Body > All scrolling installed; " +
                     instance.nativeRows.Count + " original rows and " + ownedWidgets.Count +
-                    " owned controls retain native parent; scrollbar outside viewport=" +
-                    (instance.scrollbarParent == host.parent) +
+                    " owned controls retain native parent; external scrollbar parent=" +
+                    instance.scrollbarParent.name +
                     "; stencil clipping=" + (instance.stencilMask != null &&
                     instance.stencilMask.enabled) +
                     "; native graphics forced maskable=" + instance.nativeGraphicMaskability.Count +
@@ -332,13 +356,60 @@ namespace FemboyMode
                 bar.sizeDelta = desiredSize;
             if (Quaternion.Angle(bar.rotation, page.rotation) > .01f)
                 bar.rotation = page.rotation;
-            // Top-left of the stock bar is outside the original content
-            // right edge. Because this is a sibling of AllTop, it cannot be
-            // cut off by the AllTop RectMask2D/stencil Mask.
-            Vector3 desiredPosition = page.TransformPoint(new Vector3(
+            // Place the same RectTransform that Scrollbar/GraphicRaycaster
+            // hit-test; do not position a graphic-only child separately.
+            // Converting the page's real world corner into the independent
+            // CvsMenuTree anchor space avoids visual/input offset from tglAll
+            // parent dimensions, driven layouts and masking.
+            Vector3 desiredWorld = page.TransformPoint(new Vector3(
                 page.rect.xMax + nativeBarGap, page.rect.yMax, 0f));
-            if ((bar.position - desiredPosition).sqrMagnitude > .0001f)
-                bar.position = desiredPosition;
+            Vector3 local = scrollbarParent.InverseTransformPoint(desiredWorld);
+            Vector2 anchored = new Vector2(
+                MakerPageScrollMath.OutsideBarAnchorCoordinate(
+                    local.x, scrollbarParent.rect.xMin),
+                MakerPageScrollMath.OutsideBarAnchorCoordinate(
+                    local.y, scrollbarParent.rect.yMax));
+            if ((bar.anchoredPosition - anchored).sqrMagnitude > .0001f)
+                bar.anchoredPosition = anchored;
+        }
+
+        private void AuditScrollbarHitRegion()
+        {
+            if (scrollbar == null || ownedBar == null || scrollbar.handleRect == null ||
+                EventSystem.current == null) return;
+            hitRegionAudited = true;
+            Canvas canvas = ownedBar.GetComponentInParent<Canvas>();
+            Camera eventCamera = canvas == null ||
+                canvas.renderMode == RenderMode.ScreenSpaceOverlay ?
+                null : canvas.worldCamera;
+            scrollbar.handleRect.GetWorldCorners(corners);
+            Vector3 center = (corners[0] + corners[2]) * .5f;
+            Vector2 screenCenter = RectTransformUtility.WorldToScreenPoint(
+                eventCamera, center);
+            var pointer = new PointerEventData(EventSystem.current);
+            pointer.position = screenCenter;
+            var raycasts = new List<RaycastResult>();
+            EventSystem.current.RaycastAll(pointer, raycasts);
+            bool hitOwnScrollbar = raycasts.Count > 0 &&
+                raycasts[0].gameObject != null &&
+                raycasts[0].gameObject.transform.IsChildOf(ownedBar.transform);
+            if (!hitOwnScrollbar)
+            {
+                string message = "Maker scrollbar hit-test mismatch: rendered handle center=" +
+                    screenCenter + "; top EventSystem hit=" +
+                    (raycasts.Count > 0 && raycasts[0].gameObject != null ?
+                        raycasts[0].gameObject.name : "<none>") +
+                    "; parent=" + (scrollbarParent == null ? "<missing>" :
+                        scrollbarParent.name) +
+                    ". The scrollbar visual and pointer targets must match.";
+                if (FemboyModePlugin.Log != null)
+                    FemboyModePlugin.Log.LogWarning(message);
+                else Debug.LogWarning(message);
+            }
+            else if (FemboyModePlugin.Log != null)
+                FemboyModePlugin.Log.LogInfo(
+                    "Maker scrollbar visual/interactive handle hitboxes aligned at " +
+                    screenCenter + " (external CvsMenuTree parent).");
         }
 
         private void DisableNativeWheelHandlers()
@@ -407,6 +478,7 @@ namespace FemboyMode
             SetViewportHeight(MeasureViewportHeight());
             nextRefresh = 0f;
             scrollOffset = 0f;
+            hitRegionAudited = false;
             PositionExternalScrollbar();
         }
 
@@ -452,6 +524,11 @@ namespace FemboyMode
             if (Screen.width != lastScreenWidth || Screen.height != lastScreenHeight)
                 SetViewportHeight(MeasureViewportHeight());
             PositionExternalScrollbar();
+            // Test the actual Unity EventSystem hit at the *rendered* handle
+            // center, not merely the cloned object's local RectTransform.
+            if (!hitRegionAudited && PageVisiblySelected() &&
+                Time.frameCount >= installedFrame + 4)
+                AuditScrollbarHitRegion();
             if (Time.unscaledTime >= nextRefresh || page.childCount != lastChildCount)
             {
                 nextRefresh = Time.unscaledTime + .25f;

@@ -1,6 +1,15 @@
-# Femboy Mode for Koikatsu — v0.6.3
+# Femboy Mode for Koikatsu — v0.6.4
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.4 — align scrollbar pointer target with its actual outer position
+
+**RX18 acceptance gate:** v0.6.3 fixed external positioning and native text clipping, but the user reported that dragging works at an offset from the *visible* scrollbar. The copied scrollbar was outside `AllTop` **visually** but was still a child of `tglAll`, where its ancestor UI/Toggle raycast filters could reject input outside the tab rectangle.
+
+- The actual cloned **native Scrollbar GameObject** now lives directly under the verified Maker `CvsMenuTree`, outside the entire `tglAll` raycast/layout/mask hierarchy. `AllTop`, its clipping mask, Femboy and vanilla rows, scroll range and native wheel sensitivity are unchanged.
+- Its root **RectTransform**, used by both Unity rendering and the built-in Scrollbar hit-test, is positioned in `CvsMenuTree` *anchored coordinates*: convert the original page's rendered top-right world point into the menu's local coordinates, then subtract the correct parent-rect anchor corner. This avoids visual/input displacement due to different parent pivots, scales and layout updates. The cloned bar is placed last in menu drawing/raycast order and its track/handle native Graphics remain raycast targets.
+- After the UI settles, a **one-shot real Unity EventSystem raycast** is performed at the rendered native scrollbar handle's screen center. The result, or the name of the occluding hit target, is written to the BepInEx log so a misleading purely-visual success cannot silently pass. This does not synthesize a custom input overlay or new scrollbar behavior.
+- Regression assertions cover parent-anchor coordinates with noncentered rectangles. A Windows RX18 test is still required before accepting the pointer hit area; if it fails, inspect the `Maker scrollbar hit-test mismatch` log, not unrelated plugin features. The original two already-accepted checks (bar outside content, stencil text clipping) must remain passing.
 
 ## 0.6.3 — external stock scrollbar + stencil clipping for native text
 
