@@ -39,6 +39,7 @@ namespace LoveJuice {
         private sealed class Actor {
             internal ChaControl Character;
             internal Transform Mouth, Torso, ChestLeft, ChestRight, Alternate;
+            internal bool ChestLeftIsFallback, ChestRightIsFallback;
             internal float FaceTime, BodyTime, MilkTime, ShowerTime, SpecialTime;
             internal int FaceLevel, BodyLevel, SpecialLevel;
         }
@@ -104,12 +105,15 @@ namespace LoveJuice {
             Transform faceRoot = cha.objHeadBone != null ? cha.objHeadBone.transform :
                 cha.objHead != null ? cha.objHead.transform : cha.transform;
             Transform bodyRoot = cha.objBodyBone != null ? cha.objBodyBone.transform : cha.transform;
+            Transform left = Bone(cha, "cf_J_Bust01_L", "cf_J_Bust00_L", "cf_s_bust03_L");
+            Transform right = Bone(cha, "cf_J_Bust01_R", "cf_J_Bust00_R", "cf_s_bust03_R");
             return new Actor {
                 Character = cha,
                 Mouth = Bone(cha, "cf_J_MouthBase", "cf_J_Mouth", "cf_J_MouthMove", "cf_J_Head") ?? faceRoot,
                 Torso = Bone(cha, "cf_J_Spine03", "cf_J_Spine02", "cf_J_Hips") ?? bodyRoot,
-                ChestLeft = Bone(cha, "cf_J_Bust01_L", "cf_J_Bust00_L", "cf_s_bust03_L") ?? bodyRoot,
-                ChestRight = Bone(cha, "cf_J_Bust01_R", "cf_J_Bust00_R", "cf_s_bust03_R") ?? bodyRoot,
+                ChestLeft = left ?? bodyRoot,
+                ChestRight = right ?? bodyRoot,
+                ChestLeftIsFallback = left == null, ChestRightIsFallback = right == null,
                 Alternate = Bone(cha, "cm_j_dan100", "cm_J_dan100", "cm_J_dan100_00")
             };
         }
@@ -142,10 +146,15 @@ namespace LoveJuice {
             Transform source = kind == LoveJuiceChannel.Saliva ? actor.Mouth :
                 kind == LoveJuiceChannel.Milk ? (n % 2 == 0 ? actor.ChestLeft : actor.ChestRight) :
                 kind == LoveJuiceChannel.Special && actor.Alternate != null ? actor.Alternate : actor.Torso;
-            if (source == null || visuals == null) return false;
+            if (source == null || visuals == null ||
+                (kind == LoveJuiceChannel.Special && actor.Alternate == null)) return false;
+            bool leftChest = n % 2 == 0;
             Vector3 local = kind == LoveJuiceChannel.Saliva ?
                 new Vector3(0f, -.035f, .045f) :
-                kind == LoveJuiceChannel.Milk ? new Vector3(0f, -.035f, .035f) :
+                kind == LoveJuiceChannel.Milk ?
+                    (leftChest ? actor.ChestLeftIsFallback : actor.ChestRightIsFallback)
+                        ? new Vector3(leftChest ? -.12f : .12f, .34f, .055f)
+                        : new Vector3(0f, -.035f, .035f) :
                 new Vector3(0f, -.08f, .025f);
             Vector3 origin = source.TransformPoint(local);
             Vector3 direction = source.TransformDirection(new Vector3(

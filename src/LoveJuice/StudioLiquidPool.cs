@@ -51,6 +51,11 @@ namespace LoveJuice {
                         Color current = material.GetColor("_Color");
                         material.SetColor("_Color", new Color(milk.r, milk.g, milk.b, current.a));
                     }
+                    // Unity 5.6 particle shaders often use _TintColor.
+                    if (material.HasProperty("_TintColor")) {
+                        Color current = material.GetColor("_TintColor");
+                        material.SetColor("_TintColor", new Color(milk.r, milk.g, milk.b, current.a));
+                    }
                     emitter.OwnedMaterials.Add(material);
                     copy[i] = material;
                 }
@@ -160,6 +165,8 @@ namespace LoveJuice {
                 sample.position = Vector3.zero;
                 sample.velocity = velocity;
                 sample.startLifetime = DropletPhysics.Clamp(duration, .2f, 8f);
+                if (kind == LoveJuiceChannel.Milk)
+                    sample.startColor = new Color32(245, 243, 235, 255);
                 system.Emit(sample, 1);
                 sent = true;
             }
