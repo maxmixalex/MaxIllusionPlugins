@@ -300,6 +300,10 @@ namespace FemboyMode
         private bool PageVisiblySelected()
         {
             if (page == null || !page.gameObject.activeInHierarchy) return false;
+            // The scrollbar is a sibling of AllTop, outside its CanvasGroup.
+            // The original tglAll toggle must explicitly control its visibility.
+            Toggle tab = page.parent == null ? null : page.parent.GetComponent<Toggle>();
+            if (tab != null && !tab.isOn) return false;
             for (Transform t = page; t != null; t = t.parent)
             {
                 CanvasGroup group = t.GetComponent<CanvasGroup>();
