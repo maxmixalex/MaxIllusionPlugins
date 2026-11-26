@@ -95,6 +95,8 @@ internal static class Program
             "unmeasured viewport falls back to the native template height");
         Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, float.NaN, 8f) == 160f,
             "invalid measurements use a bounded fallback");
+        Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, 1f, 8f) == 160f,
+            "near-zero source template height must use safe fallback instead of collapsing native page");
         Check(FemboyRules.FrontInsertStartIndex(false) == 0,
             "normal initiative uses buttons 0/1");
         Check(FemboyRules.FrontInsertStartIndex(true) == 7,
