@@ -8,7 +8,7 @@ This checklist describes **in-game** verification. Successful CI compilation, sc
 | --- | --- | --- |
 | BepInEx Configuration Manager | **F1** | Most game screens; see and edit plugin settings |
 | JuiceControl | **top-row 0** (`Alpha0`, not numpad 0) | Effect editor |
-| ClothingControl | **F7** | Maker, Studio, Free H |
+| ClothingControl | **LeftShift+Tab** | Maker, Studio, Free H; matches original Clothing State Menu |
 | HSControl | **Ctrl+F8**, or native **HS** button beside Config | Free H |
 | LoveJuice panel | **Ctrl+F9** | Enables/disables the configuration window, *not* the effect itself |
 | LoveJuice sample | **F9** | Emit native Studio drops at selected character, when LoveJuice is enabled |
