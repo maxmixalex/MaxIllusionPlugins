@@ -384,6 +384,15 @@ namespace ClothingControl {
                     !NativeMakerHidden() + ", preference=" + showInMaker.Value +
                     ", visible=" + visible + ", mounted=" +
                     MaximumUIRuntime.IsMounted(MountId) + ".");
+                // MakerFinishedLoading may occur before KKAPI marks Maker
+                // InsideAndLoaded, or a competing plugin may reorder startup.
+                // Respect the saved preference even if the one-time callback
+                // was missed; only auto-open once on this Maker session.
+                if (showInMaker != null && showInMaker.Value && !visible)
+                {
+                    Logger.LogInfo("ClothingControl restoring saved Maker window visibility.");
+                    Open();
+                }
             }
             UpdateMakerPresentation();
             bool configuredKey = shortcut != null && shortcut.Value.IsDown();
