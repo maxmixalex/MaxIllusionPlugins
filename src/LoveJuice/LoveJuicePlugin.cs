@@ -110,7 +110,7 @@ namespace LoveJuice {
             masterEnabled = Config.Bind("General", "Enabled", false,
                 "Enable native Studio liquid drips in active H scenes. Off by default until selected by the user.");
             preview = Config.Bind("General", "Preview key", new KeyboardShortcut(KeyCode.F9),
-                "Emit native Studio particles from the first active H scene actor.");
+                "Emit native Studio particles from the currently selected active H scene actor.");
             panelShortcut = Config.Bind("General", "Control panel key",
                 new KeyboardShortcut(KeyCode.F9, KeyCode.LeftControl),
                 "Ctrl+F9 toggles the LoveJuice window; F9 emits the selected preview.");
