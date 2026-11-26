@@ -11,6 +11,7 @@ using UnityEngine;
 
 namespace LoveJuice {
     [BepInDependency(KoikatuAPI.GUID)]
+    [BepInDependency("Marco.SkinEffects", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("MaxMixAlex.JuiceControl", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("MaxMixAlex.FemboyMode", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
@@ -19,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.2.1";
+        public const string Version = "0.2.2";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.NonPublic);

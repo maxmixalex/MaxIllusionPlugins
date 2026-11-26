@@ -8,8 +8,40 @@ internal static class Program {
         if (!condition) throw new InvalidOperationException("LoveJuice: " + message);
     }
 
+    private sealed class LegacySkinEffectsFixture {
+        internal int Writes;
+        private int _drool = 2;
+        public int DroolLevel { get { return _drool; } set { Writes++; _drool = value; } }
+        public int SalivaLevel { get { return 3; } }
+        public int SweatLevel { get { return 1; } }
+        public int PussyJuiceLevel { get { return 0; } }
+        public int TearLevel { get { throw new InvalidOperationException("unavailable"); } }
+    }
+    private static void CheckLegacySkinEffects() {
+        Check(SkinEffectValueReader.LegacyProperty("DroolFace") == "DroolLevel" &&
+              SkinEffectValueReader.LegacyProperty("SalivaFace") == "SalivaLevel" &&
+              SkinEffectValueReader.LegacyProperty("WetBody") == "SweatLevel",
+              "Installed SkinEffects property mappings");
+        var fixture = new LegacySkinEffectsFixture();
+        int level;
+        Check(SkinEffectValueReader.TryReadLegacy(fixture, "DroolFace", out level) && level == 2,
+              "Read installed legacy drool property");
+        Check(SkinEffectValueReader.TryReadLegacy(fixture, "SalivaFace", out level) && level == 3,
+              "Read installed legacy saliva property");
+        Check(SkinEffectValueReader.TryReadLegacy(fixture, "WetBody", out level) && level == 1,
+              "Read installed legacy sweat property");
+        Check(SkinEffectValueReader.TryReadLegacy(fixture, "PussyJuiceBody", out level) && level == 0,
+              "Explicit zero is distinct from absent data");
+        Check(!SkinEffectValueReader.TryReadLegacy(fixture, "Unknown", out level) && level == -1,
+              "Unknown source does not become zero");
+        Check(!SkinEffectValueReader.TryReadLegacy(fixture, "TearFace", out level) && level == -1,
+              "Unreadable property is not mistaken for zero");
+        Check(fixture.Writes == 0, "Readback never writes external SkinEffects state");
+    }
+
     public static int Main() {
         try {
+            CheckLegacySkinEffects();
             Check(StudioLiquidCatalog.Bundle == "studio/00.unity3d" &&
                 StudioLiquidCatalog.Manifest == "studio00", "Verified installed bundle path/manifest");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Water) ==

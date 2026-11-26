@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/LoveJuice/StudioLiquidCatalog.cs" Link="StudioLiquidCatalog.cs" />
+    <Compile Include="../../src/LoveJuice/SkinEffectValueReader.cs" Link="SkinEffectValueReader.cs" />
   </ItemGroup>
 </Project>
