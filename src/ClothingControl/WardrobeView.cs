@@ -80,17 +80,40 @@ namespace ClothingControl {
     internal sealed class WardrobeView : View {
         internal WardrobeViewModel Model = new WardrobeViewModel();
 
-        private static Widget Selector(string label, string key, string[] values, int selected, Action<int> changed, bool enabled, Widget prefix = null) {
-            int[] ids = new int[values.Length];
-            for (int i = 0; i < ids.Length; i++) ids[i] = i;
-            bool active = enabled && values.Length > 0 && changed != null;
-            Action<int> choose = i => { if (active && i >= 0 && i < values.Length) changed(i); };
+        // A compact native MaximumUI cycle selector: left/right arrows plus
+        // the currently selected value as a button (clicking it advances).
+        // Unlike ComboBox, it never opens a dropdown or steals keyboard focus.
+        private static int NextIndex(int selected, int count, int direction) {
+            if (count <= 0) return -1;
+            if (selected < 0 || selected >= count) return direction < 0 ? count - 1 : 0;
+            return (selected + (direction < 0 ? count - 1 : 1)) % count;
+        }
+
+        private static HStack CycleButtons(string key, string[] values, int selected,
+            Action<int> changed, bool enabled) {
+            int count = values == null ? 0 : values.Length;
+            bool active = enabled && count > 1 && changed != null;
+            string current = selected >= 0 && selected < count ? values[selected] : "无";
+            Action<int> choose = i => {
+                if (active && i >= 0 && i < count && i != selected) changed(i);
+            };
+            return new HStack(4f, key + "-cycle") {
+                new ArrowButton(ArrowDirection.Left,
+                    () => choose(NextIndex(selected, count, -1)),
+                    key + "-previous").Enabled(active).Width(28f),
+                new Button(current, () => choose(NextIndex(selected, count, 1)),
+                    key + "-current").Enabled(active).ExpandWidth(),
+                new ArrowButton(ArrowDirection.Right,
+                    () => choose(NextIndex(selected, count, 1)),
+                    key + "-next").Enabled(active).Width(28f)
+            }.Height(32f);
+        }
+
+        private static Widget Selector(string label, string key, string[] values,
+            int selected, Action<int> changed, bool enabled, Widget prefix = null) {
             return new HStack(4f, key + "-row") {
                 prefix ?? new Label(label).Width(60f),
-                new ArrowButton(ArrowDirection.Left, () => choose(selected <= 0 ? values.Length - 1 : selected - 1), key + "-previous").Enabled(active).Width(28f),
-                new ComboBox<int>(string.Empty, selected, ids, i => i >= 0 && i < values.Length ? values[i] : "无",
-                    choose, key).Enabled(active).ExpandWidth(),
-                new ArrowButton(ArrowDirection.Right, () => choose(selected >= values.Length - 1 ? 0 : selected + 1), key + "-next").Enabled(active).Width(28f)
+                CycleButtons(key, values, selected, changed, enabled).ExpandWidth()
             }.Height(32f);
         }
 
@@ -99,11 +122,11 @@ namespace ClothingControl {
             bool canEdit = m.HasTarget && !m.Busy;
             bool hasPreset = m.PresetIndex >= 0 && m.PresetIndex < m.Presets.Length;
             bool canPreset = !m.Busy && (m.Scope == 1 ? m.CanScenePresets && m.HasSceneTargets : m.HasTarget);
-            Widget scope = m.CanScenePresets ? new ComboBox<int>(string.Empty, m.Scope, new[] { 0, 1 },
-                i => i == 0 ? "角色预设" : "场景预设", i => {
-                    if (!m.Busy && m.ChangeScope != null && i >= 0 && i <= 1) m.ChangeScope(i);
+            Widget scope = m.CanScenePresets ? new Button(
+                m.Scope == 0 ? "角色预设" : "场景预设", () => {
+                    if (!m.Busy && m.ChangeScope != null) m.ChangeScope(1 - m.Scope);
                 }, "wardrobe-preset-scope").Enabled(!m.Busy).Width(96f) : null;
-            Window window = new Window("ClothingControl " + m.Version, 430f, 720f, "clothing-window",
+            Window window = new Window("ClothingControl " + m.Version, 430f, 900f, "clothing-window",
                 minWidth: 370f, minHeight: 700f, closable: true,
                 onVisibleChange: value => { if (!value && m.Close != null) m.Close(); });
             VStack body = new VStack(6f) {
@@ -111,9 +134,9 @@ namespace ClothingControl {
                 Selector("配装", "wardrobe-coordinate", m.Coordinates, m.CoordinateIndex, m.SelectCoordinate,
                     canEdit && m.CanChangeCoordinate),
                 new Separator(),
-                new SegmentedControl<int>(m.Page, new[] { 0, 1 }, i => i == 0 ? "饰品" : "服装",
+                new SegmentedControl<int>(m.Page, new[] { 0, 1 }, i => i == 0 ? "服装" : "饰品",
                     value => { if (!m.Busy && m.ChangePage != null) m.ChangePage(value); }, "wardrobe-page").Enabled(!m.Busy).Height(32f),
-                m.Page == 1 ? BuildGarments(m, canEdit) : BuildAccessories(m, canEdit),
+                m.Page == 0 ? BuildGarments(m, canEdit) : BuildAccessories(m, canEdit),
                 new Separator(),
                 Selector("预设", "wardrobe-preset", m.Presets, m.PresetIndex, m.SelectPreset, !m.Busy, scope),
                 new TextField(m.Name, m.ChangeName, "wardrobe-name") { Placeholder = "新预设名称", MaxLength = 80 }.Enabled(m.CanWrite && !m.Busy).Height(32f),
@@ -151,9 +174,9 @@ namespace ClothingControl {
                     new TextField(m.AccessoryQuery, m.ChangeAccessoryQuery, "wardrobe-accessory-search") {
                         Placeholder = "名称 / 槽位", MaxLength = 80
                     }.Enabled(canEdit).ExpandWidth(),
-                    new ComboBox<int>("", m.AccessoryGroup, new[] { 0, 1, 2, 3 },
-                        i => new[] { "全部", "主", "副", "其他" }[Math.Max(0, Math.Min(3, i))],
-                        m.ChangeAccessoryGroup, "wardrobe-accessory-group").Enabled(canEdit).Width(100f)
+                    CycleButtons("wardrobe-accessory-group",
+                        new[] { "全部", "主", "副", "其他" },
+                        m.AccessoryGroup, m.ChangeAccessoryGroup, canEdit).Width(152f)
                 }.Height(32f),
                 new HStack(4f) {
                     new Button("全部显示", () => {
@@ -176,6 +199,36 @@ namespace ClothingControl {
 
         private static Widget BuildGarments(WardrobeViewModel m, bool canEdit) {
             var body = new VStack(4f, "wardrobe-garment-panel");
+            if (m.Garments.Count == 0) {
+                body.Add(new Label("当前配装没有可调整的服装部位。", "wardrobe-no-garments") {
+                    WordWrap = true
+                }.ExpandWidth());
+            } else {
+                // There are at most nine native garment kinds. Rendering them
+                // directly avoids VirtualList's independent scroll area and
+                // keeps the shoe/restore actions below the last garment row.
+                var garmentRows = new VStack(4f, "wardrobe-garment-rows");
+                foreach (WardrobeRow row in m.Garments) {
+                    bool editable = canEdit && row.ChangeState != null && row.AllowedStates.Length > 1;
+                    int selected = Array.IndexOf(row.AllowedStates, row.State);
+                    string[] labels = new string[row.AllowedStates.Length];
+                    for (int i = 0; i < labels.Length; i++) {
+                        int state = row.AllowedStates[i];
+                        labels[i] = state == 0 ? "穿好" : state == 1 ? "半脱" :
+                            state == 2 ? "挂下" : "脱掉";
+                    }
+                    Action<int> change = index => {
+                        if (editable && index >= 0 && index < row.AllowedStates.Length)
+                            row.ChangeState(row.AllowedStates[index]);
+                    };
+                    garmentRows.Add(new HStack(4f, "garment-" + row.Slot) {
+                        new Label(row.Label).Width(94f),
+                        CycleButtons("garment-state-" + row.Slot, labels,
+                            selected, change, editable).ExpandWidth()
+                    }.Height(36f));
+                }
+                body.Add(garmentRows.ExpandWidth());
+            }
             if (m.ShoeMode >= 0) body.Add(new HStack(4f) {
                 new Label("鞋型").Width(60f),
                 new SegmentedControl<int>(m.ShoeMode, new[] { 0, 1 }, i => i == 0 ? "室内" : "室外",
@@ -184,22 +237,6 @@ namespace ClothingControl {
             body.Add(new Button("恢复完整穿着", () => {
                 if (canEdit && m.RestoreClothing != null) m.RestoreClothing();
             }, "wardrobe-restore-clothing").Enabled(canEdit && m.RestoreClothing != null).ExpandWidth().Height(32f));
-            if (m.Garments.Count == 0)
-                body.Add(new Label("当前配装没有可调整的服装部位。", "wardrobe-no-garments") { WordWrap = true }.ExpandWidth());
-            else body.Add(new VirtualList(m.Garments.Count, 36f, i => {
-                WardrobeRow row = m.Garments[i];
-                bool editable = canEdit && row.ChangeState != null && row.AllowedStates.Length > 0;
-                return new HStack(4f, "garment-" + row.Slot) {
-                    new Label(row.Label).Width(94f),
-                    new ComboBox<int>(string.Empty, row.State, row.AllowedStates,
-                        state => state == 0 ? "穿好" : state == 1 ? "半脱" :
-                            state == 2 ? "挂下" : "脱掉",
-                        state => {
-                            if (editable && Array.IndexOf(row.AllowedStates, state) >= 0)
-                                row.ChangeState(state);
-                        }, "garment-state-" + row.Slot).Enabled(editable).ExpandWidth()
-                }.Height(36f);
-            }, "wardrobe-garments") { Height = 0f }.MinHeight(120f).ExpandWidth().ExpandHeight());
             return body.ExpandWidth().ExpandHeight();
         }
     }
