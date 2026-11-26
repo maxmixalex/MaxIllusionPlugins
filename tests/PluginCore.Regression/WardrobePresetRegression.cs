@@ -121,13 +121,13 @@ internal static class WardrobePresetRegression {
             Require(reloaded.Reload(), "Legacy XML without garment or shoe fields is valid.");
             WardrobePreset legacy = reloaded.Find("Legacy");
             Require(legacy.ShoeMode == -1 && legacy.Garments.Count == 0, "Legacy preset does not manufacture garment settings.");
+            Require(reloaded.SceneNames().Length == 0, "Old XML loads without scene presets.");
+            SceneRoundTrip(path, reloaded);
             File.WriteAllText(path,
                 "<ClothingPresets><Preset Name=\"OldVisible\" Coordinate=\"0\"><Garment Kind=\"gloves\" Item=\"42\" Visible=\"false\" /></Preset></ClothingPresets>");
             Require(reloaded.Reload() && reloaded.Find("OldVisible").Garments[0].State == -1 &&
                 !reloaded.Find("OldVisible").Garments[0].Visible,
                 "Legacy boolean-only garment XML does not invent an explicit state.");
-            Require(reloaded.SceneNames().Length == 0, "Old XML loads without scene presets.");
-            SceneRoundTrip(path, reloaded);
         } finally { Directory.Delete(directory, true); }
     }
 }
