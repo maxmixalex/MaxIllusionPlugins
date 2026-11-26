@@ -30,7 +30,7 @@ namespace JuiceControl {
         public bool AllLocked;
         public LoveJuiceSettings LoveJuice;
         public Action<bool> ChangeLoveJuiceEnabled, ChangeLoveJuiceFace, ChangeLoveJuiceBody,
-            ChangeLoveJuiceMilk, ChangeLoveJuiceShower, ChangeLoveJuiceSpecial;
+            ChangeLoveJuiceIntimate, ChangeLoveJuiceMilk, ChangeLoveJuiceShower, ChangeLoveJuiceSpecial;
         public Action OpenLoveJuice;
         public string[] CharacterPresets = new string[0];
         public string[] GroupPresets = new string[0];
@@ -104,6 +104,7 @@ namespace JuiceControl {
                 new HStack(1f) {
                     new Checkbox("面部", m.LoveJuice.Face, m.ChangeLoveJuiceFace, "juice-love-face").ExpandWidth(),
                     new Checkbox("身体", m.LoveJuice.Body, m.ChangeLoveJuiceBody, "juice-love-body").ExpandWidth(),
+                    new Checkbox("爱液", m.LoveJuice.Intimate, m.ChangeLoveJuiceIntimate, "juice-love-intimate").ExpandWidth(),
                     new Checkbox("乳液", m.LoveJuice.Milk, m.ChangeLoveJuiceMilk, "juice-love-milk").ExpandWidth(),
                     new Checkbox("淋浴", m.LoveJuice.Shower, m.ChangeLoveJuiceShower, "juice-love-shower").ExpandWidth(),
                     new Checkbox("附加", m.LoveJuice.Special, m.ChangeLoveJuiceSpecial, "juice-love-special").ExpandWidth()

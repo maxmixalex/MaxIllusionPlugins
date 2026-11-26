@@ -4,12 +4,12 @@ using System.Reflection;
 namespace JuiceControl {
     // Optional API adapter: never changes other plugins while building UI.
     internal struct LoveJuiceSettings {
-        internal bool Available, Enabled, Face, Body, Milk, Shower, Special;
+        internal bool Available, Enabled, Face, Body, Intimate, Milk, Shower, Special;
 
         internal bool SameValues(LoveJuiceSettings other) {
             return Available == other.Available && (!Available ||
                 Enabled == other.Enabled && Face == other.Face &&
-                Body == other.Body && Milk == other.Milk &&
+                Body == other.Body && Intimate == other.Intimate && Milk == other.Milk &&
                 Shower == other.Shower && Special == other.Special);
         }
     }
@@ -23,7 +23,7 @@ namespace JuiceControl {
         private static bool KnownKey(string key) {
             switch (key) {
                 case "Enabled": case "Face": case "Body":
-                case "Milk": case "Shower": case "Special": return true;
+                case "Intimate": case "Milk": case "Shower": case "Special": return true;
                 default: return false;
             }
         }
@@ -74,6 +74,7 @@ namespace JuiceControl {
             if (!TryGet("Enabled", out state.Enabled) ||
                 !TryGet("Face", out state.Face) ||
                 !TryGet("Body", out state.Body) ||
+                !TryGet("Intimate", out state.Intimate) ||
                 !TryGet("Milk", out state.Milk) ||
                 !TryGet("Shower", out state.Shower) ||
                 !TryGet("Special", out state.Special)) return new LoveJuiceSettings();
