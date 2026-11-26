@@ -102,7 +102,13 @@ namespace LoveJuice {
                     main.playOnAwake = false;
                     main.simulationSpace = ParticleSystemSimulationSpace.World;
                     var emission = system.emission;
-                    emission.enabled = false;
+                    // Keep the module enabled for explicit Emit(EmitParams, 1).
+                    // Turn every automatic stream/burst off instead; a disabled
+                    // EmissionModule is not a reliable manual-emission contract.
+                    emission.rateOverTime = new ParticleSystem.MinMaxCurve(0f);
+                    emission.rateOverDistance = new ParticleSystem.MinMaxCurve(0f);
+                    emission.SetBursts(new ParticleSystem.Burst[0]);
+                    emission.enabled = true;
                     system.Stop();
                     system.Clear();
                 }
