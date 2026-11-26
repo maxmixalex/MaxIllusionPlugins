@@ -36,6 +36,7 @@ namespace FemboyMode
         private int padLeft, padRight, padTop, padBottom;
         private Vector2 originalSize, originalPosition;
         private Scrollbar scrollbar;
+        private GameObject ownedBar;
         private readonly List<ObservableScrollTrigger> wheelTriggers = new List<ObservableScrollTrigger>();
         private readonly List<Transform> nativeRows = new List<Transform>();
         private readonly Vector3[] corners = new Vector3[4];
@@ -121,6 +122,7 @@ namespace FemboyMode
                 // Clone ONLY the stock scrollbar, not its Scroll View, content,
                 // masking panel, or scripts. All native controls stay in host.
                 GameObject barObject = Object.Instantiate(source.verticalScrollbar.gameObject, host, false);
+                instance.ownedBar = barObject;
                 barObject.name = "FemboyMode.BodyAllScrollbar";
                 var barRect = barObject.transform as RectTransform;
                 if (barRect == null) throw new InvalidOperationException("Native scrollbar has no RectTransform.");
@@ -253,6 +255,9 @@ namespace FemboyMode
         private void OnEnable()
         {
             if (!installed) return;
+            // Body > All is normally inactive when Maker first loads. Its
+            // actual screen bounds become trustworthy after activation.
+            SetViewportHeight(MeasureViewportHeight());
             nextRefresh = 0f;
             scrollOffset = 0f;
         }
@@ -317,17 +322,16 @@ namespace FemboyMode
 
         internal void Uninstall()
         {
-            if (!installed && page == null) return;
+            if (!installed && page == null) { Object.Destroy(this); return; }
             installed = false;
             foreach (ObservableScrollTrigger trigger in wheelTriggers)
                 if (trigger != null) trigger.enabled = true;
             wheelTriggers.Clear();
             if (scrollbar != null)
-            {
                 scrollbar.onValueChanged.RemoveListener(OnScrollbarChanged);
-                Object.Destroy(scrollbar.gameObject);
-                scrollbar = null;
-            }
+            if (ownedBar != null) Object.Destroy(ownedBar);
+            ownedBar = null;
+            scrollbar = null;
             if (page != null)
             {
                 if (layout != null)
