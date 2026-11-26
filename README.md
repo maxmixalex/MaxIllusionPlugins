@@ -13,6 +13,7 @@
 | [ClothingCompression](src/ClothingCompression/README.md) | 身体勒肉/局部网格形变，支持服装饰品绑定、左右侧控制和配置保存 | 编辑器“勒肉形变”页，`F8` 高级面板 |
 | [ExpressionControl](src/ExpressionControl/README.md) | 角色表情编辑、表情程序、H/Studio 场景中的表情控制和 XML 预设 | 默认 `L`，可在 XML 中修改 |
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
+| [LoveJuice](src/LoveJuice/README.md) | 独立 BepInEx 插件框架（配置与加载入口，尚无运行时效果） | BepInEx 配置文件 |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
 | [MaximumUIGallery](src/MaximumUIGallery/README.md) | MaximumUI 控件、布局、对话框和调试工具的游戏内示例 | 默认 `F8` |
 | [MaximumUI.Tests](src/MaximumUI.Tests/README.md) | MaximumUI 布局、输入、选择、绘制及导航的无界面断言测试 | `scripts/Test-MaximumUI.ps1` |

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPluginArtifact>false</IsPluginArtifact>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/LoveJuice/StudioLiquidCatalog.cs" Link="StudioLiquidCatalog.cs" />
+    <Compile Include="../../src/LoveJuice/SkinEffectValueReader.cs" Link="SkinEffectValueReader.cs" />
+    <Compile Include="../../src/LoveJuice/LiquidLevelEvents.cs" Link="LiquidLevelEvents.cs" />
+    <Compile Include="../../src/LoveJuice/NativeParticleBudget.cs" Link="NativeParticleBudget.cs" />
+  </ItemGroup>
+</Project>

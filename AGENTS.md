@@ -1,6 +1,6 @@
 # Agent development notes
 
-- Read `README.md` for all nine projects and `docs/Development.md` for build and validation details.
+- Read `README.md` for all projects and `docs/Development.md` for build and validation details.
 - Restore/build with `dotnet restore MaxIllusionPlugins.sln` and `dotnet build MaxIllusionPlugins.sln -c Release --no-restore`.
 - Run the existing assertions with `pwsh -NoProfile -File scripts/Test-MaximumUI.ps1`. The harness is a class library; `dotnet test` alone does not execute it.
 - Most code targets .NET Framework 3.5 / Unity 5.6. Preserve compatibility when adding language/runtime features. Package versions are centralized.
