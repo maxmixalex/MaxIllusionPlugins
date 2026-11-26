@@ -392,16 +392,22 @@ namespace FemboyMode
                 raycasts[0].gameObject != null &&
                 raycasts[0].gameObject.transform.IsChildOf(ownedBar.transform);
             if (!hitOwnScrollbar)
-                Debug.LogWarning("Femboy Mode: native external scrollbar handle hit-test is blocked. " +
-                    "Handle screen center=" + screenCenter +
-                    "; top raycast=" + (raycasts.Count > 0 && raycasts[0].gameObject != null ?
+            {
+                string message = "Maker scrollbar hit-test mismatch: rendered handle center=" +
+                    screenCenter + "; top EventSystem hit=" +
+                    (raycasts.Count > 0 && raycasts[0].gameObject != null ?
                         raycasts[0].gameObject.name : "<none>") +
                     "; parent=" + (scrollbarParent == null ? "<missing>" :
                         scrollbarParent.name) +
-                    ". The actual scrollbar is outside tglAll; inspect UI raycast occlusion.");
-            else
-                Debug.Log("Femboy Mode: native external scrollbar visual handle and " +
-                    "EventSystem raycast agree at " + screenCenter + ".");
+                    ". The scrollbar visual and pointer targets must match.";
+                if (FemboyModePlugin.Log != null)
+                    FemboyModePlugin.Log.LogWarning(message);
+                else Debug.LogWarning(message);
+            }
+            else if (FemboyModePlugin.Log != null)
+                FemboyModePlugin.Log.LogInfo(
+                    "Maker scrollbar visual/interactive handle hitboxes aligned at " +
+                    screenCenter + " (external CvsMenuTree parent).");
         }
 
         private void DisableNativeWheelHandlers()
