@@ -13,7 +13,8 @@ namespace HSControl
         internal bool AutoStrength, ManualOverride, AutoMaleFinish, AutoFemaleFinish = true, AutoReplay;
         internal float ManualSpeed = .5f;
         internal float StrengthMinSeconds = 10f, StrengthMaxSeconds = 30f;
-        internal float TargetMinSeconds = 1.5f, TargetMaxSeconds = 4.5f;
+        // Installed KK_HCtrl AutoSpeed .ctor: randomized destination every 2-10 s.
+        internal float TargetMinSeconds = 2f, TargetMaxSeconds = 10f;
 
         internal HSControlSettings Copy() {
             return (HSControlSettings)MemberwiseClone();
@@ -65,7 +66,7 @@ namespace HSControl
         internal void Reset(float startingSpeed) {
             current = target = HSControlSettings.Clamp(startingSpeed, 0f, 1f);
             timer = strengthTimer = elapsed = 0f;
-            frequency = .7f; amplitude = .05f; easing = 1.5f;
+            frequency = .7f; amplitude = .05f; easing = .02f;
             highBand = false;
             lastMode = lastBand = -1;
             lastRangeMin = lastRangeMax = -1f;
@@ -99,15 +100,17 @@ namespace HSControl
         }
 
         private float ChooseTarget(HSControlSettings settings) {
+            const float minimum = .05f, halfLow = .4999f, halfHigh = .5001f;
             if (settings.Mode == (int)SpeedMode.Range)
-                return Next(settings.RangeMin, settings.RangeMax);
-            // Original "half" values 0/1/2 correspond to slow,
-            // alternating full and fast, and fast ranges.
-            if (settings.Band == 0) return Next(0f, .45f);
-            if (settings.Band == 2) return Next(.65f, 1f);
-            // Full switches between the two bands on a randomized timer.
+                return HSControlSettings.Clamp(Next(settings.RangeMin, settings.RangeMax), minimum, 1f);
+            // Same normalized cutoffs as the installed KK_HCtrl AutoSpeed:
+            // speedMin=.05, halfLow=.4999, halfHigh=.5001.
+            if (settings.Band == 0) return Next(minimum, halfLow);
+            if (settings.Band == 2) return Next(halfHigh, 1f);
+            // Keep full range useful: choose between the two halves on
+            // randomized destination changes, not every render frame.
             if (random.Next(0, 5) == 0) highBand = !highBand;
-            return highBand ? Next(.65f, 1f) : Next(0f, .45f);
+            return highBand ? Next(halfHigh, 1f) : Next(minimum, halfLow);
         }
 
         internal bool Step(float deltaSeconds, int mode, string animationState, bool rely,
@@ -135,22 +138,24 @@ namespace HSControl
             lastBand = settings.Band;
             lastRangeMin = settings.RangeMin;
             lastRangeMax = settings.RangeMax;
-            if (settings.Mode == (int)SpeedMode.GaugeLink) {
-                target = LinkedTarget(mode, settings.Linkage, maleGauge, femaleGauge);
-            } else {
-                timer -= deltaSeconds;
-                if (timer <= 0f) {
+            timer -= deltaSeconds;
+            if (timer <= 0f) {
+                if (settings.Mode != (int)SpeedMode.GaugeLink)
                     target = ChooseTarget(settings);
-                    timer = Next(settings.TargetMinSeconds, settings.TargetMaxSeconds);
-                    amplitude = Next(.05f, .2f);
-                    frequency = Next(.5f, 1.5f);
-                    easing = Next(1.5f, 5f);
-                }
+                timer = Next(settings.TargetMinSeconds, settings.TargetMaxSeconds);
+                amplitude = Next(.05f, .2f);
+                frequency = Next(.5f, 1.5f);
+                // Installed KK_HCtrl uses Mathf.Lerp(now,dest,.005-.05)
+                // once per frame. Convert to a per-second exponential so
+                // 30/60/120 FPS keep comparable animation pace.
+                easing = Next(.005f, .05f);
             }
+            if (settings.Mode == (int)SpeedMode.GaugeLink)
+                target = LinkedTarget(mode, settings.Linkage, maleGauge, femaleGauge);
             double oscillation = Math.Sin(elapsed * frequency) * amplitude;
-            float desired = HSControlSettings.Clamp(target + (float)oscillation, 0f, 1f);
-            float alpha = 1f - (float)Math.Exp(-deltaSeconds * easing);
-            current = HSControlSettings.Clamp(current + (desired - current) * alpha, 0f, 1f);
+            float desired = HSControlSettings.Clamp(target + (float)oscillation, .05f, 1f);
+            float alpha = 1f - (float)Math.Pow(1f - easing, deltaSeconds * 60f);
+            current = HSControlSettings.Clamp(current + (desired - current) * alpha, .05f, 1f);
             Driving = true;
 
             if (settings.AutoStrength && mode != 0) {

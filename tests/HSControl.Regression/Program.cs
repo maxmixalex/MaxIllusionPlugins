@@ -136,6 +136,41 @@ internal static class Program
             "Disabling auto replay cancels pending actions");
     }
 
+    private static void OriginalSpeedCalibration() {
+        var settings = new HSControlSettings { Mode = (int)SpeedMode.Bands, Band = 0 };
+        Check(settings.TargetMinSeconds == 2f && settings.TargetMaxSeconds == 10f,
+            "Random destination timing matches installed KK_HCtrl constructor.");
+        var engine = new HSControlMotionEngine(2026);
+        engine.Reset(.2f);
+        Check(engine.Step(1f / 60f, 2, "WLoop", false, 0f, 0f, settings),
+            "Native slow mode starts in an active loop.");
+        Check(engine.Target >= .05f && engine.Target <= .4999f,
+            "Slow band uses original 0.05–0.4999 range.");
+        settings.Band = 2;
+        engine.Step(1f / 60f, 2, "WLoop", false, 0f, 0f, settings);
+        Check(engine.Target >= .5001f && engine.Target <= 1f,
+            "Fast band uses original 0.5001–1.0 range.");
+        settings.Mode = (int)SpeedMode.Range;
+        settings.RangeMin = settings.RangeMax = 0f;
+        engine.Step(1f / 60f, 2, "WLoop", false, 0f, 0f, settings);
+        Check(Math.Abs(engine.Target - .05f) < .00001f,
+            "Original engine speed floor applies to automatic ranges.");
+        settings.RangeMin = .7f; settings.RangeMax = .7f;
+        engine.Step(1f / 60f, 2, "WLoop", false, 0f, 0f, settings);
+        Check(Math.Abs(engine.Target - .7f) < .00001f,
+            "Exact fixed range remains deterministic.");
+        var fast = new HSControlMotionEngine(42);
+        var slow = new HSControlMotionEngine(42);
+        settings.Mode = (int)SpeedMode.GaugeLink;
+        fast.Reset(.1f); slow.Reset(.1f);
+        for (int i = 0; i < 60; i++)
+            fast.Step(1f / 60f, 2, "WLoop", false, 80f, 40f, settings);
+        for (int i = 0; i < 30; i++)
+            slow.Step(1f / 30f, 2, "WLoop", false, 80f, 40f, settings);
+        Check(Math.Abs(fast.Current - slow.Current) < .03f,
+            "Native Lerp calibration stays stable at 30 and 60 FPS.");
+    }
+
     private static void IniTests() {
         string path = Path.Combine(Path.GetTempPath(), "hscontrol-test-" + Guid.NewGuid().ToString("N") + ".ini");
         try {
@@ -161,6 +196,7 @@ internal static class Program
     public static int Main() {
         try {
             EngineTests();
+            OriginalSpeedCalibration();
             IniTests();
             ReplayTests();
             Console.WriteLine("HSControl state-machine and legacy-config assertions passed: " + assertions);
