@@ -97,26 +97,25 @@ namespace JuiceControl {
             }
         }
 
-        // Retained for the existing explicit preset-capture format; automatic
-        // synchronization and lock operations must use TryGetLevel instead.
-        public static int GetLevel(ChaControl cha, SkinEffectInfo effect) {
-            int level;
-            return TryGetLevel(cha, effect, out level) ? level : 0;
-        }
-
-        public static void SetLevel(ChaControl cha, SkinEffectInfo effect, int level) {
-            object controller = GetController(cha);
-            if (controller == null || effect == null) return;
+        public static bool SetLevel(ChaControl cha, SkinEffectInfo effect, int level) {
+            int current;
+            if (effect == null || level < 0 || level > effect.MaxLevel ||
+                !TryGetLevel(cha, effect, out current)) return false;
+            if (current == level) return true;
 
             try {
-                level = Mathf.Clamp(level, 0, effect.MaxLevel);
+                object controller = GetController(cha);
+                if (controller == null) return false;
                 if (effect.LevelProperty != null) {
                     effect.LevelProperty.SetValue(controller, level, null);
                 } else {
                     setEffectLevelMethod.Invoke(controller, new object[] { effect.EnumValue, level, true });
                 }
+                int actual;
+                return TryGetLevel(cha, effect, out actual) && actual == level;
             } catch (Exception ex) {
                 JuiceControl.LogDebug("Failed to set SkinEffects level: " + ex);
+                return false;
             }
         }
 

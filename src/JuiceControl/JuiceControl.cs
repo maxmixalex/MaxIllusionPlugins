@@ -24,7 +24,7 @@ namespace JuiceControl {
     [BepInPlugin(GUID, "JuiceControl", Version)]
     public partial class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.2.2";
+        public const string Version = "0.2.3";
 
         private const string DefaultPresetFileName = GUID + ".presets.xml";
         private const int SiruMaxLevel = 3;
@@ -250,7 +250,7 @@ namespace JuiceControl {
             }
 
             preset.Name = name;
-            preset.State = CaptureState(selectedCharacter);
+            preset.State = CaptureState(selectedCharacter, preset.State);
             characterPresetName = name;
             presetStore.Save();
             statusText = "已覆盖汁液预设: " + preset.Name;
@@ -298,16 +298,21 @@ namespace JuiceControl {
         }
 
         private void SaveGroupPresetData(GroupPreset preset, List<CharacterEntry> characters) {
-            preset.Characters.Clear();
+            List<RolePreset> next = new List<RolePreset>();
             for (int i = 0; i < characters.Count; i++) {
                 CharacterEntry entry = characters[i];
-                preset.Characters.Add(new RolePreset {
+                RolePreset previous = preset.FindRole(entry.Role);
+                // An overwrite may refer to a different character in the same
+                // slot. Do not inherit unavailable values from another actor.
+                CharaSkinState known = previous != null &&
+                    string.Equals(previous.DisplayName, entry.Name, StringComparison.Ordinal) ? previous.State : null;
+                next.Add(new RolePreset {
                     Role = entry.Role,
                     DisplayName = entry.Name,
-                    State = CaptureState(entry.Character)
+                    State = CaptureState(entry.Character, known)
                 });
             }
-
+            preset.Characters = next;
             presetStore.Save();
         }
 
@@ -624,40 +629,56 @@ namespace JuiceControl {
             return Mathf.RoundToInt(level * 100f / BlushMaxLevel) + "%";
         }
 
-        private void ApplyState(ChaControl cha, CharaSkinState state) {
-            if (cha == null || state == null) return;
+        private int ApplyState(ChaControl cha, CharaSkinState state, bool clearMissingExternal = false) {
+            if (cha == null || state == null) return 0;
 
             bool siruChanged = false;
             for (int i = 0; i < SiruParts.Length; i++) {
                 byte level = (byte)Mathf.Clamp(state.GetSiruLevel(SiruParts[i].Part), 0, SiruMaxLevel);
-                if (cha.GetSiruFlags(SiruParts[i].Part) == level) continue;
-
-                cha.SetSiruFlags(SiruParts[i].Part, level);
-                siruChanged = true;
+                if (cha.GetSiruFlags(SiruParts[i].Part) != level) {
+                    cha.SetSiruFlags(SiruParts[i].Part, level);
+                    siruChanged = true;
+                }
+                UpdateLockedEffectValue(cha, "siru:" + SiruParts[i].Part, cha.GetSiruFlags(SiruParts[i].Part));
             }
 
             if (siruChanged) cha.UpdateSiru(true);
             SetTearLevel(cha, state.TearLevel);
             SetBlushLevel(cha, state.BlushLevel);
 
+            UpdateLockedEffectValue(cha, "tear", cha.tearsLv);
+            UpdateLockedEffectValue(cha, "blush", GetBlushLevel(cha));
+            int skipped = 0;
             if (SkinEffectsBridge.IsAvailable) {
                 for (int i = 0; i < SkinEffectsBridge.Effects.Count; i++) {
                     SkinEffectInfo effect = SkinEffectsBridge.Effects[i];
-                    SkinEffectsBridge.SetLevel(cha, effect, state.GetSkinEffectLevel(effect.Name));
+                    int desired;
+                    if (!state.TryResolveSkinEffectLevel(effect.Name, clearMissingExternal, out desired)) continue;
+                    if (!SkinEffectsBridge.SetLevel(cha, effect, desired)) { skipped++; continue; }
+                    // Only the fields actually applied by this operation may
+                    // replace locks. Omitted or unavailable fields remain intact.
+                    int accepted;
+                    if (SkinEffectsBridge.TryGetLevel(cha, effect, out accepted))
+                        UpdateLockedEffectValue(cha, SkinEffectsBridge.GetEffectId(effect), accepted);
                 }
-            }
-            // A manual preset change should also become the value kept by active
-            // locks, rather than being undone by the next LateUpdate.
-            RefreshCurrentState(cha);
+            } else if (state.SkinEffects != null) skipped = state.SkinEffects.Count;
+            return skipped;
         }
 
-        private CharaSkinState CaptureState(ChaControl cha) {
+        private static string ReadbackWarning(int skipped) {
+            return skipped > 0 ? "（" + skipped + " 项外部状态未应用）" : string.Empty;
+        }
+
+        private CharaSkinState CaptureState(ChaControl cha, CharaSkinState previous = null) {
             CharaSkinState state = new CharaSkinState {
                 TearLevel = cha == null ? (byte)0 : cha.tearsLv,
                 BlushLevel = GetBlushLevel(cha)
             };
 
             if (cha != null) {
+                // Preserve known values from a previously saved preset, even
+                // if this optional integration is currently unavailable.
+                state.InheritKnownSkinEffects(previous);
                 for (int i = 0; i < SiruParts.Length; i++) {
                     state.SetSiruLevel(SiruParts[i].Part, cha.GetSiruFlags(SiruParts[i].Part));
                 }
@@ -665,7 +686,9 @@ namespace JuiceControl {
                 if (SkinEffectsBridge.IsAvailable) {
                     for (int i = 0; i < SkinEffectsBridge.Effects.Count; i++) {
                         SkinEffectInfo effect = SkinEffectsBridge.Effects[i];
-                        state.SetSkinEffectLevel(effect.Name, SkinEffectsBridge.GetLevel(cha, effect));
+                        int observed;
+                        if (SkinEffectsBridge.TryGetLevel(cha, effect, out observed))
+                            state.SetSkinEffectLevel(effect.Name, observed);
                     }
                 }
             }
@@ -677,25 +700,25 @@ namespace JuiceControl {
             CharacterPreset preset = GetCurrentCharacterPreset();
             if (selectedCharacter == null || preset == null) return;
 
-            ApplyState(selectedCharacter, preset.State);
-            statusText = "已应用角色预设到选中角色: " + preset.Name;
+            int skipped = ApplyState(selectedCharacter, preset.State);
+            statusText = "已应用角色预设到选中角色: " + preset.Name + ReadbackWarning(skipped);
         }
 
         private void ApplyCurrentGroupPreset(List<CharacterEntry> characters) {
             GroupPreset preset = GetCurrentGroupPreset();
             if (preset == null) return;
 
-            int applied = 0;
+            int applied = 0, skipped = 0;
             for (int i = 0; i < characters.Count; i++) {
                 CharacterEntry entry = characters[i];
                 RolePreset rolePreset = preset.FindRole(entry.Role);
                 if (rolePreset == null) continue;
 
-                ApplyState(entry.Character, rolePreset.State);
+                skipped += ApplyState(entry.Character, rolePreset.State);
                 applied++;
             }
 
-            statusText = "已一键替换全部角色: " + preset.Name + " (" + applied + " 个槽位)";
+            statusText = "已一键替换全部角色: " + preset.Name + " (" + applied + " 个槽位)" + ReadbackWarning(skipped);
         }
 
         private void DeleteCurrentCharacterPreset() {
