@@ -263,11 +263,29 @@ namespace FemboyMode
             if (DumpRigHotkey != null && DumpRigHotkey.Value.IsDown())
                 FemboyDiagnostics.DumpCurrent();
             bool active = MakerAPI.InsideAndLoaded &&
-                          EnableMaleGeometryTransforms != null && EnableMaleGeometryTransforms.Value;
+                          EnableMaleGeometryTransforms != null && EnableMaleGeometryTransforms.Value &&
+                          BodyAllTabVisible();
             FemboyCharacterController controller = active ?
                 GetController(MakerAPI.GetCharacterControl()) : null;
             axisPreview.Tick(controller != null && controller.IsFemboy
                 ? controller : null, axisVisible, axisModes, OnMakerAxisDragged);
+        }
+
+        private bool BodyAllTabVisible()
+        {
+            GameObject marker = GetMakerWidget(bodyFlagToggle);
+            if (marker == null || !marker.activeInHierarchy) return false;
+            // An inactive Maker tab often keeps its GameObjects alive but
+            // hides them using CanvasGroup alpha. Never leave the native
+            // manipulator active above an unrelated tab or a hidden Maker UI.
+            for (Transform node = marker.transform; node != null; node = node.parent)
+            {
+                CanvasGroup group = node.GetComponent<CanvasGroup>();
+                if (group != null && (group.alpha < .01f ||
+                    !group.interactable)) return false;
+                if (node.name == "CvsMenuTree") break;
+            }
+            return true;
         }
 
         private void OnDestroy()
