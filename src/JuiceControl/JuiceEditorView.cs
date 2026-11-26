@@ -94,7 +94,7 @@ namespace JuiceControl {
 
         private static Widget BuildLoveJuice(JuiceEditorModel m) {
             if (!m.LoveJuice.Available)
-                return new Label("LoveJuice：未连接（安装 KK_LoveJuice 后可控制动态滴落）",
+                return new Label("LoveJuice：未安装或未连接",
                     "juice-love-unavailable").Height(24f);
             return new VStack(3f, "juice-love-controls") {
                 new HStack(4f) {

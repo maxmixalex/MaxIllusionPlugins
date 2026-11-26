@@ -15,11 +15,13 @@ internal static class PluginPreviewScenes {
         yield return Liquid("disabled");
         yield return Liquid("empty");
         yield return Liquid("milk");
+        yield return Liquid("male-pre");
         yield return HS("live");
         yield return HS("manual");
         yield return HS("range");
         yield return HS("unavailable");
         yield return Juice("main");
+        yield return Juice("lovejuice");
         yield return Juice("name");
         yield return Juice("xml-error");
         yield return Juice("empty");
@@ -40,15 +42,16 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Liquid(string state) {
         LoveJuiceViewModel m = new LoveJuiceViewModel {
-            Version = "0.3.0", Enabled = true, HasScene = true,
+            Version = "0.3.3", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 21, MaximumParticles = 48,
             ActorNames = new[] { "1. 示例角色 A", "2. 示例角色 B" }, SelectedActorIndex = 1,
             Interval = .26f, Gravity = 8f, Damping = 1f, Lifetime = 1.6f,
-            Scale = .045f, LaunchSpeed = .35f, MilkThreshold = 65f,
+            Scale = .045f, LaunchSpeed = .35f, MilkThreshold = 65f, MalePreThreshold = 45f,
             Face = true, Body = true, Collision = true, PreviewChannel = 1,
             Status = "已发射 4 颗粒子。", Integration = "SkinEffects：已连接（仅读取状态）。",
             ChangeEnabled = delegate { }, ChangeFace = delegate { },
-            ChangeBody = delegate { }, ChangeMilk = delegate { },
+            ChangeBody = delegate { }, ChangeIntimate = delegate { },
+            ChangeMalePre = delegate { }, ChangeMilk = delegate { },
             ChangeShower = delegate { }, ChangeSpecial = delegate { },
             ChangeCollision = delegate { }, ChangeMaximum = delegate { },
             SelectActor = delegate { },
@@ -56,6 +59,7 @@ internal static class PluginPreviewScenes {
             ChangeGravity = delegate { }, ChangeDamping = delegate { },
             ChangeLifetime = delegate { }, ChangeScale = delegate { },
             ChangeLaunchSpeed = delegate { }, ChangeMilkThreshold = delegate { },
+            ChangeMalePreThreshold = delegate { },
             Preview = delegate { }, Close = delegate { }
         };
         if (state == "disabled") { m.Enabled = false; m.Status = "已停用。"; }
@@ -66,15 +70,22 @@ internal static class PluginPreviewScenes {
             m.Integration = "SkinEffects：未连接，使用游戏自身状态。";
         }
         if (state == "milk") { m.Milk = true; m.Special = true; m.PreviewChannel = 4; }
+        if (state == "male-pre") {
+            m.MalePre = true; m.MalePreThreshold = 55f; m.PreviewChannel = 7;
+            m.Status = "男性前液已启用（达到阈值时触发）。";
+        }
         return new PreviewScene {
             Slug = "lovejuice-" + state + "-preview", Title = "LoveJuice",
             Source = "LoveJuice.LoveJuiceView.Build",
             Detail = "Synthetic effect control fixture " + state,
             Widget = new LoveJuiceView { Model = m }.Build(new BuildContext()),
             StateId = state == "enabled" ? "default" : state,
-            RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-target", "lovejuice-scroll",
-                "lovejuice-face", "lovejuice-maximum", "lovejuice-preview-channel",
-                "lovejuice-emit", "lovejuice-active", "lovejuice-status" }
+            RequiredKeys = state == "male-pre"
+                ? new[] { "lovejuice-enabled", "lovejuice-male-pre", "lovejuice-male-pre-threshold",
+                    "lovejuice-preview-channel", "lovejuice-emit", "lovejuice-status" }
+                : new[] { "lovejuice-enabled", "lovejuice-target", "lovejuice-scroll",
+                    "lovejuice-face", "lovejuice-maximum", "lovejuice-preview-channel",
+                    "lovejuice-emit", "lovejuice-active", "lovejuice-status" }
         };
     }
 
@@ -184,7 +195,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Juice(string state) {
         JuiceEditorModel model = new JuiceEditorModel {
-            Version = "0.2.1", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
+            Version = "0.2.6", Characters = new[] { "示例角色 A", "示例角色 B", "示例角色 C" },
             CharacterIndex = 0, HasCharacter = true, AllLocked = false,
             CharacterPresets = new[] { "自然效果", "雨后", "舞台妆容" },
             GroupPresets = new[] { "场景示例 A", "场景示例 B" },
@@ -206,6 +217,17 @@ internal static class PluginPreviewScenes {
                 Change = delegate { }, Lock = delegate { }
             });
         }
+        if (state == "lovejuice") {
+            model.LoveJuice = new LoveJuiceSettings {
+                Available = true, Enabled = true, Face = true, Body = true,
+                Intimate = true, MalePre = true, Milk = false, Shower = false, Special = false
+            };
+            model.ChangeLoveJuiceEnabled = delegate { }; model.ChangeLoveJuiceFace = delegate { };
+            model.ChangeLoveJuiceBody = delegate { }; model.ChangeLoveJuiceIntimate = delegate { };
+            model.ChangeLoveJuiceMalePre = delegate { }; model.ChangeLoveJuiceMilk = delegate { };
+            model.ChangeLoveJuiceShower = delegate { }; model.ChangeLoveJuiceSpecial = delegate { };
+            model.OpenLoveJuice = delegate { };
+        }
         if (state == "name") {
             model.NameDialogVisible = true; model.NamePrompt = "请输入汁液预设名"; model.Name = "自然效果";
         } else if (state == "xml-error") {
@@ -221,6 +243,8 @@ internal static class PluginPreviewScenes {
             Source = "JuiceControl.JuiceEditorView.Build", Detail = "Anonymous fixture; restored pre-migration single window, " + state,
             Widget = view.Build(new BuildContext()), StateId = state == "main" ? "default" : state,
             RequiredKeys = state == "empty" ? new[] { "juice-no-character", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
+                : state == "lovejuice" ? new[] { "juice-effects", "juice-love-enabled", "juice-love-intimate",
+                    "juice-love-male-pre", "juice-love-open", "juice-character-preset", "juice-group-preset" }
                 : new[] { "juice-effects", "juice-lock-all", "juice-command-Fill", "juice-character-preset", "juice-group-preset", "juice-command-ReloadXml" }
         };
     }
