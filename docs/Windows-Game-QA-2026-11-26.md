@@ -36,6 +36,16 @@ The shortcut entries can be changed with F1 or in their corresponding `BepInEx/c
 
 Version 0.5.8 sometimes left the original Maker Body > All panel blank. 0.5.9 therefore **keeps every native and third-party control in place** and only wraps the 24 FemboyMode geometry controls in an independent scrollable section under the same tab. Full-page native scrolling is deliberately not claimed. Verify that the Femboy marker and all vanilla rows are still present.
 
+## Blocked acceptance checkpoint: FemboyMode 0.6.4 — scrollbar drag hit-region
+
+The prior two tests were accepted: the scrollbar is outside the content and native text clips correctly. **Do not retest the other plugins or start the XYZ axis gate.**
+
+1. Install 0.6.4, open Maker > Body > All, and **click/drag on the visible scrollbar thumb** at its center and ends. The mouse hit region must exactly follow the drawn thumb and track, without requiring a click to its left or right.
+2. Verify the bar remains visually outside the content, that overflowing native text still disappears at the top/bottom, and that it hides when leaving Body > All.
+3. Check `BepInEx/LogOutput.log` for `Maker scrollbar visual/interactive handle hitboxes aligned` or `Maker scrollbar hit-test mismatch`. These messages are emitted only after the live Unity EventSystem raycast at the rendered thumb center.
+
+This acceptance point is **blocked** until real-game dragging matches the visible position. Source assertions and GitHub Actions cannot substitute for this check.
+
 ## Blocked acceptance checkpoint: FemboyMode 0.6.3 (first gate)
 
 The user has **already confirmed that the single scroll area exists and its basic controls work** in 0.6.2. The next required two checks, before any other acceptance work, are:
