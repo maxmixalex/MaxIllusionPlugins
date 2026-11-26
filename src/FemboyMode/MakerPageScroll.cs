@@ -178,11 +178,8 @@ namespace FemboyMode
                 null : canvas.worldCamera;
             Vector3 top = page.TransformPoint(new Vector3(page.rect.xMin, page.rect.yMax, 0f));
             float topPixels = RectTransformUtility.WorldToScreenPoint(camera, top).y;
-            float available = (topPixels - EdgeMarginPx) / scale;
-            if (float.IsNaN(available) || float.IsInfinity(available) ||
-                available < MinimumViewport || topPixels > Screen.height * 1.5f)
-                return 520f;
-            return Mathf.Clamp(available, MinimumViewport, 900f);
+            return MakerPageScrollMath.ViewportFromScreen(
+                topPixels, Screen.height, scale, EdgeMarginPx);
         }
 
         private void SetViewportHeight(float height)
@@ -227,7 +224,7 @@ namespace FemboyMode
                 Uninstall();
                 return;
             }
-            maximumOffset = Mathf.Max(0f, preferred - viewportHeight);
+            maximumOffset = MakerPageScrollMath.MaxOffset(preferred, viewportHeight);
             lastChildCount = page.childCount;
             SetOffset(scrollOffset);
         }
@@ -235,24 +232,22 @@ namespace FemboyMode
         private void SetOffset(float offset)
         {
             if (!installed || layout == null) return;
-            scrollOffset = Mathf.Clamp(offset, 0f, maximumOffset);
+            scrollOffset = MakerPageScrollMath.ClampOffset(offset, maximumOffset);
             layout.padding.top = padTop - Mathf.RoundToInt(scrollOffset);
             LayoutRebuilder.MarkLayoutForRebuild(page);
             if (scrollbar == null) return;
             updatingBar = true;
             try
             {
-                scrollbar.size = maximumOffset <= 0.01f ? 1f :
-                    Mathf.Clamp01(viewportHeight / (viewportHeight + maximumOffset));
-                scrollbar.value = maximumOffset <= 0.01f ? 1f :
-                    1f - scrollOffset / maximumOffset;
+                scrollbar.size = MakerPageScrollMath.ScrollbarSize(viewportHeight, maximumOffset);
+                scrollbar.value = MakerPageScrollMath.ScrollbarValue(scrollOffset, maximumOffset);
             }
             finally { updatingBar = false; }
         }
 
         private void OnScrollbarChanged(float value)
         {
-            if (!updatingBar) SetOffset((1f - value) * maximumOffset);
+            if (!updatingBar) SetOffset(MakerPageScrollMath.FromScrollbar(value, maximumOffset));
         }
 
         private void OnEnable()
