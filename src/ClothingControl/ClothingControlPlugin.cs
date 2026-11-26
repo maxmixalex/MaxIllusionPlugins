@@ -6,6 +6,8 @@ using BepInEx.Configuration;
 using KKAPI;
 using KKAPI.Chara;
 using KKAPI.Maker;
+using KKAPI.Maker.UI.Sidebar;
+using UniRx;
 using MaximumUI;
 using Studio;
 using UnityEngine;
@@ -32,6 +34,10 @@ namespace ClothingControl {
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
+        private ConfigEntry<bool> showInMaker;
+        private SidebarToggle makerToggle;
+        private IDisposable makerSubscription;
+        private bool pendingMakerPreference, syncingMakerPreference, makerPresentationSuppressed;
         private WardrobePresetStore store;
         private WardrobeView view;
         private ChaControl target;
@@ -70,6 +76,7 @@ namespace ClothingControl {
 
         private void Awake() {
             shortcut = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F7), "Open the wardrobe editor in Maker or Studio.");
+            showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
         }
@@ -77,9 +84,85 @@ namespace ClothingControl {
         private void OnEnable() {
             CharacterApi.CharacterReloaded += OnCharacterReloaded;
             CharacterApi.CoordinateLoaded += OnCoordinateLoaded;
+            MakerAPI.RegisterCustomSubCategories += OnRegisterMaker;
+            MakerAPI.MakerFinishedLoading += OnMakerLoaded;
+            MakerAPI.MakerExiting += OnMakerExiting;
+            if (showInMaker != null) showInMaker.SettingChanged += OnMakerPreferenceChanged;
+            pendingMakerPreference = MakerAPI.InsideAndLoaded;
+        }
+
+        private void OnRegisterMaker(object sender, RegisterSubCategoriesEvent e) {
+            ReleaseMakerToggle();
+            makerToggle = e.AddSidebarControl(new SidebarToggle("ClothingControl", showInMaker.Value, this));
+            makerSubscription = makerToggle.ValueChanged.Subscribe(OnMakerToggleChanged);
+        }
+
+        private void OnMakerToggleChanged(bool value) {
+            if (syncingMakerPreference || !MakerAPI.InsideAndLoaded) return;
+            SetMakerPreference(value);
+            if (value && !visible) Open();
+            else if (!value && visible) Close();
+        }
+
+        private void OnMakerLoaded(object sender, EventArgs e) {
+            // KKAPI raises this before InsideAndLoaded becomes true.
+            pendingMakerPreference = true;
+        }
+
+        private void OnMakerPreferenceChanged(object sender, EventArgs e) {
+            if (!syncingMakerPreference && MakerAPI.InsideMaker) pendingMakerPreference = true;
+        }
+
+        private void SetMakerPreference(bool value) {
+            if (showInMaker == null || syncingMakerPreference) return;
+            syncingMakerPreference = true;
+            try {
+                if (showInMaker.Value != value) showInMaker.Value = value;
+                if (makerToggle != null && MakerAPI.InsideAndLoaded && makerToggle.Value != value)
+                    makerToggle.SetValue(value, false);
+            } finally { syncingMakerPreference = false; }
+        }
+
+        private void ReleaseMakerToggle() {
+            if (makerSubscription != null) makerSubscription.Dispose();
+            makerSubscription = null; makerToggle = null;
+        }
+
+        private void OnMakerExiting(object sender, EventArgs e) {
+            pendingMakerPreference = false;
+            Close(false);
+            ReleaseMakerToggle();
+            target = null;
+            previousCharacters.Clear();
+        }
+
+        private bool NativeMakerHidden() {
+            return MakerAPI.InsideAndLoaded && !MakerAPI.IsInterfaceVisible();
+        }
+
+        private void UpdateMakerPresentation() {
+            if (pendingMakerPreference && MakerAPI.InsideAndLoaded) {
+                pendingMakerPreference = false;
+                bool requested = showInMaker.Value;
+                SetMakerPreference(requested);
+                if (requested && !visible) Open();
+                else if (!requested && visible) Close(false);
+            }
+            if (!visible || view == null) return;
+            bool suppressed = NativeMakerHidden();
+            if (suppressed == makerPresentationSuppressed) return;
+            makerPresentationSuppressed = suppressed;
+            generation++;
+            MaximumUIRuntime.SetVisible(MountId, !suppressed);
+            if (!suppressed) { nextPoll = 0f; Refresh(); }
         }
 
         private void OnCharacterReloaded(object sender, CharaReloadEventArgs e) {
+            if (e.ReloadedCharacter == null) {
+                if (batch != null) CancelOperations("角色场景重新载入，停止剩余应用。");
+                generation++; nextPoll = 0f;
+                return;
+            }
             ObserveReload(e.ReloadedCharacter);
         }
 
@@ -99,7 +182,13 @@ namespace ClothingControl {
         private void OnDisable() {
             CharacterApi.CharacterReloaded -= OnCharacterReloaded;
             CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
-            Close();
+            MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
+            MakerAPI.MakerFinishedLoading -= OnMakerLoaded;
+            MakerAPI.MakerExiting -= OnMakerExiting;
+            if (showInMaker != null) showInMaker.SettingChanged -= OnMakerPreferenceChanged;
+            pendingMakerPreference = false;
+            Close(false);
+            ReleaseMakerToggle();
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             target = null;
@@ -183,7 +272,8 @@ namespace ClothingControl {
         }
 
         private void Update() {
-            if (shortcut.Value.IsDown() && !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
+            UpdateMakerPresentation();
+            if (!NativeMakerHidden() && shortcut.Value.IsDown() && !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
                 if (visible) Close();
                 else if (SupportedScene()) Open();
             }
@@ -194,7 +284,7 @@ namespace ClothingControl {
             else if (batch != null) AdvanceSceneBatch();
             if (Time.unscaledTime < nextPoll) return;
             nextPoll = Time.unscaledTime + .25f;
-            if (!SupportedScene()) { Close(); return; }
+            if (!SupportedScene()) { Close(false); return; }
             Refresh();
         }
 
@@ -207,22 +297,26 @@ namespace ClothingControl {
                 });
             }
             visible = true;
+            makerPresentationSuppressed = NativeMakerHidden();
+            if (MakerAPI.InsideAndLoaded) SetMakerPreference(true);
             generation++;
             nextPoll = 0f;
             Refresh();
-            MaximumUIRuntime.SetVisible(MountId, true);
-            MaximumUIRuntime.Focus(MountId);
+            MaximumUIRuntime.SetVisible(MountId, !makerPresentationSuppressed);
+            if (!makerPresentationSuppressed) MaximumUIRuntime.Focus(MountId);
         }
 
-        private void Close() {
+        private void Close(bool remember = true) {
             visible = false;
+            makerPresentationSuppressed = false;
             generation++;
+            if (remember && MakerAPI.InsideAndLoaded) SetMakerPreference(false);
             if (Busy) CancelOperations("已取消剩余操作。");
             if (view != null) MaximumUIRuntime.SetVisible(MountId, false);
         }
 
         private bool SessionCurrent(int token, ChaControl character) {
-            return visible && token == generation && ReferenceEquals(target, character) && SupportedScene();
+            return visible && !makerPresentationSuppressed && token == generation && ReferenceEquals(target, character) && SupportedScene();
         }
 
         private bool TargetCurrent(int token, ChaControl character) {
