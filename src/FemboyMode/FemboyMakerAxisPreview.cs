@@ -26,15 +26,16 @@ namespace FemboyMode
     {
         private GameObject root;
         private CustomGuideObject guide;
-        private FemboyCharacterController actor, dragActor;
+        private FemboyCharacterController dragActor;
         private Action<int, int, int, float> notify;
-        private bool warnedMissingSource, dragging, fallbackDragging;
+        private bool warnedMissingSource, warnedCloneFailure, dragging, fallbackDragging;
+        private readonly bool[] warnedMissingBone = new bool[2];
         private int fallbackAxis, fallbackPart, fallbackMode;
         private float fallbackStartValue;
         private Vector2 fallbackStartScreen, fallbackScreenAxis;
         private FemboyCharacterController fallbackActor;
         private int part = -1, mode = -1;
-        private Vector3 anchorWorld, anchorWorldEuler, baseLocalEuler;
+        private Vector3 anchorWorld, baseLocalEuler;
         private Quaternion parentWorldRotation;
         private readonly float[] baseValues = new float[3];
 
@@ -50,7 +51,7 @@ namespace FemboyMode
 
         private void EnsureNativeGuide()
         {
-            if (root != null) return;
+            if (root != null || warnedCloneFailure) return;
             CustomGuideObject source = OriginalGuide();
             if (source == null)
             {
@@ -93,6 +94,7 @@ namespace FemboyMode
             catch (Exception ex)
             {
                 if (created != null) UnityEngine.Object.Destroy(created);
+                warnedCloneFailure = true;
                 Debug.LogWarning("Femboy Mode: cannot clone native Maker guide safely: " + ex);
                 root = null;
                 guide = null;
@@ -108,7 +110,6 @@ namespace FemboyMode
                 return;
             }
             notify = changed;
-            actor = current;
             if (current == null || visible == null || modes == null ||
                 !MakerAPI.IsInterfaceVisible())
             {
@@ -126,9 +127,16 @@ namespace FemboyMode
             Transform bone = current.GetGeometryBone(target);
             if (bone == null)
             {
+                if (!warnedMissingBone[target])
+                {
+                    warnedMissingBone[target] = true;
+                    Debug.LogWarning("Femboy Mode: native guide target bone is missing for " +
+                        (target == 0 ? "Penis" : "Balls") + "; model geometry/selection must load first.");
+                }
                 HideAll();
                 return;
             }
+            warnedMissingBone[target] = false;
             EnsureNativeGuide();
             if (guide == null) return;
             int targetMode = Mathf.Clamp(modes[target], 0, 2);
@@ -167,8 +175,7 @@ namespace FemboyMode
                 dragging = true;
                 dragActor = current;
                 anchorWorld = bone.position;
-                anchorWorldEuler = bone.eulerAngles;
-                parentWorldRotation = bone.parent == null ?
+                 parentWorldRotation = bone.parent == null ?
                     Quaternion.identity : bone.parent.rotation;
                 baseLocalEuler = bone.localEulerAngles;
                 for (int i = 0; i < 3; i++)
@@ -316,10 +323,11 @@ namespace FemboyMode
             if (root != null) UnityEngine.Object.Destroy(root);
             root = null;
             guide = null;
-            actor = null;
-            notify = null;
+             notify = null;
             part = mode = -1;
             warnedMissingSource = false;
+            warnedCloneFailure = false;
+            warnedMissingBone[0] = warnedMissingBone[1] = false;
         }
     }
 }
