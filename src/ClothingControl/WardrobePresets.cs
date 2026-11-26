@@ -130,7 +130,9 @@ namespace ClothingControl {
         internal WardrobePreset Copy() {
             WardrobePreset result = new WardrobePreset { Name = Name, Coordinate = Coordinate, ShoeMode = ShoeMode };
             foreach (GarmentVisibility entry in Garments)
-                result.Garments.Add(new GarmentVisibility { Kind = entry.Kind, Item = entry.Item, Visible = entry.Visible });
+                result.Garments.Add(new GarmentVisibility {
+                    Kind = entry.Kind, Item = entry.Item, Visible = entry.Visible, State = entry.State
+                });
             foreach (AccessoryVisibility entry in Accessories)
                 result.Accessories.Add(new AccessoryVisibility { Slot = entry.Slot, Type = entry.Type, Item = entry.Item, Visible = entry.Visible });
             return result;
@@ -141,7 +143,8 @@ namespace ClothingControl {
                 throw new InvalidDataException("Invalid outfit.");
             HashSet<string> garmentKinds = new HashSet<string>(StringComparer.Ordinal);
             foreach (GarmentVisibility entry in Garments)
-                if (entry == null || !GarmentVisibility.IsSupported(entry.Kind) || entry.Item <= 0 || !garmentKinds.Add(entry.Kind))
+                if (entry == null || !GarmentVisibility.IsSupported(entry.Kind) || entry.Item <= 0 ||
+                    entry.State < -1 || entry.State > 3 || !garmentKinds.Add(entry.Kind))
                     throw new InvalidDataException("Invalid or duplicate garment.");
             HashSet<int> slots = new HashSet<int>();
             foreach (AccessoryVisibility entry in Accessories)
@@ -154,9 +157,13 @@ namespace ClothingControl {
         [XmlAttribute] public string Kind;
         [XmlAttribute] public int Item;
         [XmlAttribute] public bool Visible;
+        [XmlAttribute] public int State = -1;
+        public bool ShouldSerializeState() { return State >= 0; }
 
         internal static bool IsSupported(string kind) {
-            return kind == "gloves" || kind == "socks" || kind == "shoes_inner" || kind == "shoes_outer";
+            return kind == "top" || kind == "bot" || kind == "bra" ||
+                kind == "shorts" || kind == "gloves" || kind == "panst" ||
+                kind == "socks" || kind == "shoes_inner" || kind == "shoes_outer";
         }
 
         internal bool Matches(string kind, int item) {

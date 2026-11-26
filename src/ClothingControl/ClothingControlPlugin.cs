@@ -24,13 +24,17 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.3.0";
+        public const string Version = "0.4.0";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
         };
-        private static readonly string[] GarmentKinds = { "gloves", "socks", "shoes_inner", "shoes_outer" };
-        private static readonly string[] GarmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+        private static readonly string[] GarmentKinds = {
+            "top", "bot", "bra", "shorts", "gloves", "panst", "socks", "shoes_inner", "shoes_outer"
+        };
+        private static readonly string[] GarmentLabels = {
+            "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
+        };
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
@@ -456,12 +460,15 @@ namespace ClothingControl {
                     string kind = GarmentKinds[i];
                     GarmentVisibility entry;
                     if (!TryReadGarment(character, kind, out entry)) continue;
+                    int[] states = ReadGarmentOptions(character, kind);
                     model.Garments.Add(new WardrobeRow {
-                        Slot = i, Item = entry.Item, Label = GarmentLabels[i], Visible = entry.Visible,
-                        Change = value => {
-                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                        Slot = i, Item = entry.Item, Label = GarmentLabels[i],
+                        Visible = entry.Visible, State = entry.State, AllowedStates = states,
+                        ChangeState = value => {
+                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate ||
+                                Array.IndexOf(states, value) < 0) return;
                             TryEdit(() => SetMatchingGarment(character, new GarmentVisibility {
-                                Kind = entry.Kind, Item = entry.Item, Visible = value
+                                Kind = entry.Kind, Item = entry.Item, Visible = value == 0, State = value
                             }), "已更新服装状态。");
                         }
                     });
@@ -524,21 +531,33 @@ namespace ClothingControl {
             var states = character.fileStatus.clothesState;
             if (slot < 0 || slot >= parts.Length || slot >= states.Length || parts[slot] == null ||
                 parts[slot].id <= 0 || !character.IsClothesStateKind(slot)) return false;
-            if (states[slot] != 0 && states[slot] != 3) return false;
-            if (!character.IsClothesStateType(slot, 0) || !character.IsClothesStateType(slot, 3)) return false;
-            entry = new GarmentVisibility { Kind = kind, Item = parts[slot].id, Visible = states[slot] == 0 };
+            int current = states[slot];
+            if (current < 0 || current > 3 || !character.IsClothesStateType(slot, (byte)current)) return false;
+            entry = new GarmentVisibility {
+                Kind = kind, Item = parts[slot].id, Visible = current == 0, State = current
+            };
             return true;
+        }
+
+        private static int[] ReadGarmentOptions(ChaControl character, string kind) {
+            List<int> states = new List<int>();
+            if (character == null || !GarmentVisibility.IsSupported(kind)) return states.ToArray();
+            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), kind);
+            for (int state = 0; state < 4; state++)
+                if (character.IsClothesStateType(slot, (byte)state)) states.Add(state);
+            return states.ToArray();
         }
 
         private static bool SetMatchingGarment(ChaControl character, GarmentVisibility entry) {
             GarmentVisibility current;
             if (entry == null || !TryReadGarment(character, entry.Kind, out current) ||
                 !entry.Matches(current.Kind, current.Item)) return false;
-            if (entry.Visible == current.Visible) return true;
             int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), entry.Kind);
-            byte requested = entry.Visible ? (byte)0 : (byte)3;
-            // Both states were explicitly confirmed supported by the actual
-            // garment. No fallback cycling through other clothing states.
+            int state = entry.State >= 0 ? entry.State : (entry.Visible ? 0 : 3);
+            if (state < 0 || state > 3 || !character.IsClothesStateType(slot, (byte)state)) return false;
+            if (current.State == state) return true;
+            byte requested = (byte)state;
+            // Never invoke the native fallback cycling for unsupported states.
             character.SetClothesState(slot, requested, true);
             return character.fileStatus.clothesState[slot] == requested;
         }

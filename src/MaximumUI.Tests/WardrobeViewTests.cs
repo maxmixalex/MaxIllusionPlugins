@@ -4,7 +4,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 6;
+        internal const int TestCount = 7;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
@@ -12,6 +12,7 @@ namespace MaximumUI.Tests {
             DisplayEqualityIncludesBusinessIdentity();
             FiltersAndBatchOperateOnDisplayedRows();
             GarmentPageDispatchesNativeCommands();
+            ClothingStateOptionsInvalidateTheRetainedUi();
             SceneScopeAndCancelAreIndependent();
         }
 
@@ -105,21 +106,42 @@ namespace MaximumUI.Tests {
             int writes = 0, restored = 0, shoe = -1;
             m.ChangeShoeMode = value => shoe = value;
             m.RestoreClothing = () => restored++;
-            m.Garments.Add(new WardrobeRow { Slot = 0, Label = "Gloves", Item = 12, Visible = true, Change = value => {
-                Require(!value, "Explicit garment change."); writes++;
-            }});
+            m.Garments.Add(new WardrobeRow { Slot = 0, Label = "Gloves", Item = 12,
+                State = 0, Visible = true, AllowedStates = new[] { 0, 1, 3 },
+                ChangeState = value => { Require(value == 3, "Explicit native garment state."); writes++; }
+            });
             WardrobeView view = new WardrobeView { Model = m };
             Widget root = view.Build(null);
             ((SegmentedControl<int>)Find(root, "wardrobe-shoe-mode")).OnChange(1);
             ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
-            ((Checkbox)((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0)).OnChange(false);
+            ((ComboBox<int>)Find(((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0),
+                "garment-state-0")).OnChange(3);
             Require(shoe == 1 && restored == 1 && writes == 1, "Garment page dispatches all three actions.");
             m.Busy = true; root = view.Build(null);
             Require(!Find(root, "wardrobe-restore-clothing").Enabled && !Find(root, "wardrobe-shoe-mode").Enabled,
                 "Pending load blocks garment editing.");
             ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
-            ((Checkbox)((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0)).OnChange(false);
+            ((ComboBox<int>)Find(((VirtualList)Find(root, "wardrobe-garments")).BuildItem(0),
+                "garment-state-0")).OnChange(3);
             Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
+        }
+
+        private static void ClothingStateOptionsInvalidateTheRetainedUi() {
+            WardrobeViewModel a = Create(), b = Create();
+            a.Garments.Add(new WardrobeRow {
+                Slot = 0, Item = 42, Label = "top", State = 1,
+                AllowedStates = new[] { 0, 1, 2, 3 }, ChangeState = delegate { }
+            });
+            b.Garments.Add(new WardrobeRow {
+                Slot = 0, Item = 42, Label = "top", State = 1,
+                AllowedStates = new[] { 0, 1, 2, 3 }, ChangeState = delegate { }
+            });
+            Require(a.SameDisplayAs(b), "Identical native garment values retain widgets.");
+            b.Garments[0].State = 2;
+            Require(!a.SameDisplayAs(b), "Changing a partial clothing state invalidates the view.");
+            b.Garments[0].State = 1;
+            b.Garments[0].AllowedStates = new[] { 0, 3 };
+            Require(!a.SameDisplayAs(b), "Native capabilities changes invalidate options.");
         }
 
         private static void SceneScopeAndCancelAreIndependent() {

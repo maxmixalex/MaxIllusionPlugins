@@ -29,7 +29,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.3.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.4.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -46,9 +46,14 @@ internal static class PluginPreviewScenes {
         });
         if (state == "garments") {
             model.Page = 1; model.ShoeMode = 0;
-            string[] garmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+            string[] garmentLabels = {
+                "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
+            };
             for (int i = 0; i < garmentLabels.Length; i++) model.Garments.Add(new WardrobeRow {
-                Slot = i, Item = i + 1, Label = garmentLabels[i], Visible = i % 2 == 0, Change = delegate { }
+                Slot = i, Item = i + 1, Label = garmentLabels[i],
+                State = i < 4 ? i % 4 : i % 2 == 0 ? 0 : 3,
+                AllowedStates = i < 4 ? new[] { 0, 1, 2, 3 } : new[] { 0, 3 },
+                ChangeState = delegate { }
             });
         }
         if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
