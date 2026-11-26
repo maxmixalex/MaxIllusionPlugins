@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -24,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.4.0";
+        public const string Version = "0.5.0";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -35,6 +37,10 @@ namespace ClothingControl {
         private static readonly string[] GarmentLabels = {
             "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
         };
+        private static readonly FieldInfo HSceneFemales = typeof(HSceneProc).GetField("lstFemale",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly FieldInfo HSceneMale = typeof(HSceneProc).GetField("male",
+            BindingFlags.Instance | BindingFlags.NonPublic);
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
@@ -79,7 +85,7 @@ namespace ClothingControl {
         }
 
         private void Awake() {
-            shortcut = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F7), "Open the wardrobe editor in Maker or Studio.");
+            shortcut = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F7), "Open the wardrobe editor in Maker, Studio or Free H.");
             showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
@@ -202,7 +208,16 @@ namespace ClothingControl {
         private void OnDestroy() { OnDisable(); }
 
         private static bool IsStudio() { return UnityEngine.Object.FindObjectOfType<StudioScene>() != null; }
-        private static bool SupportedScene() { return MakerAPI.InsideAndLoaded || IsStudio(); }
+
+        private static HSceneProc ActiveHScene() {
+            HSceneProc current = UnityEngine.Object.FindObjectOfType<HSceneProc>();
+            return current != null && current.flags != null && !current.isEnd ? current : null;
+        }
+
+        private static bool IsHScene() { return ActiveHScene() != null; }
+        private static bool SupportedScene() {
+            return MakerAPI.InsideAndLoaded || IsStudio() || IsHScene();
+        }
 
         private static List<ChaControl> Characters() {
             List<ChaControl> result = new List<ChaControl>();
@@ -211,7 +226,21 @@ namespace ClothingControl {
                 if (character != null) result.Add(character);
                 return result;
             }
-            if (!IsStudio()) return result;
+            if (!IsStudio()) {
+                HSceneProc active = ActiveHScene();
+                if (active == null) return result;
+                // Use the HSceneProc's actual actor roster. Never scan every
+                // ChaControl (which could include inactive scene NPCs).
+                IList female = HSceneFemales == null ? null : HSceneFemales.GetValue(active) as IList;
+                if (female != null)
+                    foreach (object value in female) {
+                        ChaControl candidate = value as ChaControl;
+                        if (candidate != null && !result.Contains(candidate)) result.Add(candidate);
+                    }
+                ChaControl male = HSceneMale == null ? null : HSceneMale.GetValue(active) as ChaControl;
+                if (male != null && !result.Contains(male)) result.Add(male);
+                return result;
+            }
             Studio.Studio studio = Singleton<Studio.Studio>.Instance;
             if (studio == null || studio.dicObjectCtrl == null) return result;
             List<int> keys = new List<int>(studio.dicObjectCtrl.Keys);
@@ -367,6 +396,7 @@ namespace ClothingControl {
                 CoordinateIndex = Coordinate(character), Presets = presets, PresetIndex = presetIndex,
                 Name = draft, Status = status, Error = store.Error, CanWrite = store.CanWrite,
                 Busy = Busy, HasTarget = character != null && coordinateCount > 0,
+                CanChangeCoordinate = !IsHScene() && (MakerAPI.InsideAndLoaded || IsStudio()),
                 Scope = presetScope, CanScenePresets = sceneSupported, HasSceneTargets = characters.Count > 0,
                 Page = page, AccessoryGroup = accessoryGroup, AccessoryQuery = accessoryQuery,
                 Close = delegate { if (visible && token == generation) Close(); },
@@ -381,7 +411,9 @@ namespace ClothingControl {
                 Refresh();
             };
             model.SelectCoordinate = index => {
-                if (!TargetCurrent(token, character)) return;
+                // Never reload an entire coordinate during a running Free H
+                // animation; this would invalidate the current native rig.
+                if (!TargetCurrent(token, character) || IsHScene()) return;
                 if (Coordinate(character) != index) BeginCoordinateChange(character, index, null);
             };
             int capturedScope = presetScope;
@@ -596,7 +628,7 @@ namespace ClothingControl {
                 maker.customCtrl.ddCoordinate.value = index;
                 return true;
             }
-            if (!IsStudio()) return false;
+            if (!IsStudio() || IsHScene()) return false;
             character.ChangeCoordinateTypeAndReload((ChaFileDefine.CoordinateType)index);
             return true;
         }
@@ -641,6 +673,11 @@ namespace ClothingControl {
             }
             if (Coordinate(character) == preset.Coordinate) {
                 ApplyAccessories(character, preset);
+                return;
+            }
+            if (IsHScene()) {
+                status = "Free H 中只可应用当前配装的状态；无法重载整套配装。";
+                Refresh();
                 return;
             }
             BeginCoordinateChange(character, preset.Coordinate, preset);

@@ -22,6 +22,7 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("empty");
         yield return Wardrobe("xml-error");
         yield return Wardrobe("garments");
+        yield return Wardrobe("free-h");
         yield return Wardrobe("filtered");
         yield return Wardrobe("scene");
         yield return Wardrobe("scene-applying");
@@ -29,7 +30,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.4.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -44,7 +45,14 @@ internal static class PluginPreviewScenes {
             Slot = i, Type = 121, Item = i + 1, Group = i % 2, Label = (i + 1) + ". " + names[i % names.Length],
             Visible = i % 3 != 0, Change = delegate { }
         });
-        if (state == "garments") {
+        if (state == "free-h") {
+            model.Page = 1;
+            model.CanChangeCoordinate = false;
+            model.Targets = new[] { "1. 活动角色 A", "2. 活动角色 B", "3. 活动角色 C" };
+            model.HasTarget = true;
+            model.Status = "Free H：当前配装的服装状态可编辑，配装重载已禁用。";
+        }
+        if (state == "garments" || state == "free-h") {
             model.Page = 1; model.ShoeMode = 0;
             string[] garmentLabels = {
                 "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
@@ -81,7 +89,7 @@ internal static class PluginPreviewScenes {
             Widget = window, StateId = state == "main" ? "default" : state,
             Width = state == "xml-error" ? window.MinWidth : 0f,
             Height = state == "xml-error" ? window.MinHeight : 0f,
-            RequiredKeys = state == "garments"
+            RequiredKeys = state == "garments" || state == "free-h"
                 ? new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-garments", "wardrobe-shoe-mode", "wardrobe-restore-clothing", "wardrobe-preset" }
                 : new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories", "wardrobe-preset",
                     "wardrobe-name", "wardrobe-apply", "wardrobe-reload", "wardrobe-accessory-search", "wardrobe-hide-filtered" }
