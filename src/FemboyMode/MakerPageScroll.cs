@@ -9,8 +9,9 @@ using Object = UnityEngine.Object;
 namespace FemboyMode
 {
     /// <summary>
-    /// Whole-page Maker scrolling using an existing game-native Scroll View.
-    /// Native controls keep their original instances and event handlers.
+    /// Non-invasive scrolling for FemboyMode-owned extension rows only.
+    /// Native Body > All rows, including any third-party widgets, stay
+    /// under the original parent with their layout and scripts untouched.
     /// </summary>
     internal sealed class MakerPageScroll : MonoBehaviour
     {
@@ -18,14 +19,14 @@ namespace FemboyMode
         private const string HolderName = "MaxMixAlex.NativeMakerPageScroll";
         private readonly List<Row> rows = new List<Row>();
         private readonly List<ObservableScrollTrigger> wheelHandlers = new List<ObservableScrollTrigger>();
-        private readonly Vector3[] corners = new Vector3[4];
-        private RectTransform host, slot;
+         private RectTransform host, slot;
         private VerticalLayoutGroup hostLayout;
         private LayoutElement slotLayout;
         private ScrollRect scroll;
         private bool oldForceExpand, installed, resetPosition = true;
-        private bool missingStableViewportReported;
-        private float templateHeight, appliedHeight;
+        private bool validated;
+        private int installedFrame;
+         private float templateHeight, appliedHeight;
 
         private sealed class Row
         {
@@ -86,7 +87,7 @@ namespace FemboyMode
             return false;
         }
 
-        internal static MakerPageScroll Install(Transform anchor)
+        internal static MakerPageScroll Install(Transform anchor, IList<Transform> pluginWidgets)
         {
             RectTransform page = anchor == null ? null : anchor.parent as RectTransform;
             if (page == null) return null;
@@ -103,14 +104,31 @@ namespace FemboyMode
                 source.viewport == null || source.verticalScrollbar == null)
                 throw new InvalidOperationException("Native Maker scroll template is unavailable.");
 
+            // The 0.5.6-0.5.8 regression moved EVERY child of the
+            // native AllTop root into a cloned ScrollRect. The game still
+            // expects the original hierarchy, so this could make the whole
+            // page disappear without raising any exception.
+            // Never move anything except our 24 explicitly registered
+            // geometry widgets. The Femboy flag remains visible at the top.
+            if (pluginWidgets == null || pluginWidgets.Count != 24)
+                throw new InvalidOperationException("Expected exactly 24 owned geometry widgets.");
+            var used = new HashSet<Transform>();
             List<Row> original = new List<Row>();
-            foreach (Transform child in page)
+            foreach (Transform child in pluginWidgets)
             {
                 RectTransform rect = child as RectTransform;
-                if (rect == null) throw new InvalidOperationException("Unsupported child in native page.");
+                if (rect == null || rect.parent != page || !used.Add(rect))
+                    throw new InvalidOperationException("An owned widget was missing or moved.");
                 original.Add(new Row(rect));
             }
-            if (original.Count == 0) return null;
+            original.Sort((left, right) => left.Index.CompareTo(right.Index));
+            // Snapshot stock + other-plugin rows, including the Femboy flag.
+            // These must remain children of the exact same native AllTop.
+            List<Transform> nativeRows = new List<Transform>();
+            foreach (Transform child in page)
+                if (!used.Contains(child)) nativeRows.Add(child);
+            if (!nativeRows.Contains(anchor))
+                throw new InvalidOperationException("Femboy marker would no longer be a native row.");
 
             GameObject holder = null;
             MakerPageScroll instance = null;
@@ -163,7 +181,9 @@ namespace FemboyMode
                 nativeScroll.horizontal = false;
                 nativeScroll.vertical = true;
                 nativeScroll.movementType = ScrollRect.MovementType.Clamped;
-                nativeScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+                // Always keep the bar visible: AutoHide previously hid it
+                // when an inactive Maker tab reported zero content height.
+                nativeScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
 
                 RectTransform root = (RectTransform)clone.transform;
                 root.anchorMin = Vector2.zero;
@@ -210,14 +230,20 @@ namespace FemboyMode
                 instance.slotLayout.flexibleWidth = 1f;
                 instance.slotLayout.flexibleHeight = 0f;
                 instance.scroll = nativeScroll;
-                instance.templateHeight = MakerPageScrollMath.ResolveHeight(
-                    float.NaN, float.NaN, ((RectTransform)source.transform).rect.height, 0f);
+                // Stable, bounded extension viewport. Its height must NOT
+                // be inferred from the content-sized native host.
+                instance.templateHeight = MakerPageScrollMath.ScopedViewportHeight(
+                    ((RectTransform)source.transform).rect.height);
                 instance.rows.AddRange(original);
                 instance.installed = true;
-                layout.childForceExpandHeight = false;
+                instance.installedFrame = Time.frameCount;
+                // No modification to the native layout's force-expand policy.
                 instance.SetHeight(instance.templateHeight);
 
                 foreach (Row row in original) row.Rect.SetParent(content, false);
+                foreach (Transform native in nativeRows)
+                    if (native == null || native.parent != page)
+                        throw new InvalidOperationException("Native Maker hierarchy changed while installing scroll.");
                 // As in KKAPI's scrollable sidebar, a slider's wheel should
                 // scroll the page rather than alter a numeric value. Restore
                 // exactly the handlers we changed when removing the wrapper.
@@ -229,10 +255,18 @@ namespace FemboyMode
                         instance.wheelHandlers.Add(trigger);
                         trigger.enabled = false;
                     }
+                // A copied scrollbar may already be inactive because the
+                // Socks template had no overflow when KKAPI built its UI.
+                // Keep the owned track visible regardless of current rows.
+                vertical.gameObject.SetActive(true);
                 clone.SetActive(true);
                 holder.SetActive(true);
+                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
                 LayoutRebuilder.MarkLayoutForRebuild(page);
                 ResetRaycasts(page);
+                Debug.Log("Femboy Mode: scoped native scrollbar installed (" +
+                    original.Count + " owned extension widgets; " + nativeRows.Count +
+                    " original Maker/third-party rows retained in native parent).");
                 return instance;
             }
             catch
@@ -267,57 +301,25 @@ namespace FemboyMode
         private void LateUpdate()
         {
             if (!installed || host == null || slot == null || scroll == null || scroll.content == null) return;
-            slot.GetWorldCorners(corners);
-            float top = host.InverseTransformPoint(corners[1]).y;
-            float bottom = float.NegativeInfinity;
-            // The host is itself sized by the scroll slot. Treating the
-            // host as a viewport creates a height = height - margin feedback
-            // loop every frame, ultimately collapsing the entire Maker page.
-            // Only use an actual stable clipping ancestor outside that host.
-            for (Transform t = host.parent; t != null; t = t.parent)
-            {
-                RectTransform rect = t as RectTransform;
-                RectMask2D rectMask = t.GetComponent<RectMask2D>();
-                Mask mask = t.GetComponent<Mask>();
-                bool activeClip = (rectMask != null && rectMask.enabled) ||
-                    (mask != null && mask.enabled);
-                ContentSizeFitter fitter = t.GetComponent<ContentSizeFitter>();
-                bool contentDriven = (fitter != null && fitter.enabled &&
-                    fitter.verticalFit != ContentSizeFitter.FitMode.Unconstrained) ||
-                    t.GetComponent<LayoutGroup>() != null;
-                if (rect != null && MakerPageScrollMath.IsStableViewport(
-                    activeClip, contentDriven, rect.rect.height))
-                {
-                    rect.GetWorldCorners(corners);
-                    float min = float.PositiveInfinity, max = float.NegativeInfinity;
-                    for (int i = 0; i < corners.Length; i++)
-                    {
-                        float y = host.InverseTransformPoint(corners[i]).y;
-                        min = Mathf.Min(min, y);
-                        max = Mathf.Max(max, y);
-                    }
-                    if (max >= top - 2f && min < top) bottom = Mathf.Max(bottom, min);
-                }
-                Canvas canvas = t.GetComponent<Canvas>();
-                if (canvas != null && canvas.isRootCanvas) break;
-            }
-            if (float.IsNegativeInfinity(bottom) && !missingStableViewportReported)
-            {
-                missingStableViewportReported = true;
-                Debug.LogWarning("Femboy Mode: Maker Body > All has no stable masked viewport; " +
-                    "keeping the native scroll template height instead of measuring itself.");
-            }
-            float height = MakerPageScrollMath.ResolveHeight(top, bottom, templateHeight, 8f);
-            if (Mathf.Abs(height - appliedHeight) > 1f)
-            {
-                SetHeight(height);
-                LayoutRebuilder.MarkLayoutForRebuild(host);
-            }
             if (resetPosition)
             {
                 resetPosition = false;
                 LayoutRebuilder.ForceRebuildLayoutImmediate(scroll.content);
                 scroll.verticalNormalizedPosition = 1f;
+            }
+            // Runtime fail-open. Never leave a corrupted extension scroll
+            // installed when the live Unity canvas reports invalid geometry.
+            if (!validated && Time.frameCount - installedFrame >= 3 &&
+                host.gameObject.activeInHierarchy)
+            {
+                validated = true;
+                RectTransform viewport = scroll.viewport;
+                if (viewport == null || viewport.rect.height < 96f ||
+                    viewport.rect.width < 140f)
+                {
+                    Debug.LogWarning("Femboy Mode: invalid scoped viewport; restoring original extension rows.");
+                    Uninstall();
+                }
             }
         }
 
@@ -329,7 +331,6 @@ namespace FemboyMode
             gameObject.SetActive(false);
             if (host != null)
             {
-                transform.SetAsLastSibling();
                 foreach (Row row in rows) row.Restore(host);
                 // Any rows appended by another plugin while the page was
                 // wrapped also belong to the Maker, not to the scroll clone.

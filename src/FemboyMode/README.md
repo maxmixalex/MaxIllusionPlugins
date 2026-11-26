@@ -1,6 +1,15 @@
-# Femboy Mode for Koikatsu — v0.5.8
+# Femboy Mode for Koikatsu — v0.5.9
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.5.9 — isolate Femboy extensions from native Maker layout
+
+The second RX18 screenshot proved the invasive 0.5.8 wrapper could hide the *entire* Body > All content, despite logging successful installation. This release **stops moving any original Maker or third-party rows**: the owned scroller may reparent only the 24 FemboyMode geometry widgets. The persistent Femboy flag remains directly under the native Body > All parent.
+
+- Scrollbar uses a bounded 240–620 local-unit viewport derived from the native Socks template and is explicitly kept visible even when most additional controls are inactive.
+- The original Maker page's layout settings and other plugins' widgets are not modified. Incompatible or partially initialized controls cause a safe no-op; invalid viewport dimensions trigger rollback of extension rows.
+- Existing F1 > Femboy Mode > Maker > `Enable Body All native scrolling` can still disable/re-enable the *owned* extension scrollbar at runtime.
+- **Scope:** this is now a scrollable *FemboyMode extension section* inside the existing Body > All tab, not the former full-page native-rows scrolling. Whole-page scrolling will only be reconsidered after verifying the actual Maker hierarchy. This version needs graphical in-game validation and must not be considered E2E complete based on compilation.
 
 ## 0.5.8 Native Maker scroll layout repair
 

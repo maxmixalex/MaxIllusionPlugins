@@ -4,6 +4,15 @@ namespace FemboyMode
 {
     internal static class MakerPageScrollMath
     {
+        // Clamped size for an *independent* group of new controls. The native
+        // page is never used as a viewport because its size is content-driven.
+        internal static float ScopedViewportHeight(float nativeTemplateHeight)
+        {
+            if (float.IsNaN(nativeTemplateHeight) || float.IsInfinity(nativeTemplateHeight) ||
+                nativeTemplateHeight < 240f) return 520f;
+            return Math.Max(240f, Math.Min(620f, nativeTemplateHeight * .66f));
+        }
+
         // A content-driven layout cannot be used as its own viewport.
         internal static bool IsStableViewport(bool hasActiveMask, bool contentDriven, float height)
         {
