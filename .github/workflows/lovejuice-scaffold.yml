@@ -1,10 +1,11 @@
-name: LoveJuice scaffold build
+name: LoveJuice native Studio liquid build
 
 on:
   push:
     branches: [feat/lovejuice-scaffold]
     paths:
       - 'src/LoveJuice/**'
+      - 'tests/LoveJuice.Regression/**'
       - '.github/workflows/lovejuice-scaffold.yml'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'src/LoveJuice/**'
+      - 'tests/LoveJuice.Regression/**'
       - '.github/workflows/lovejuice-scaffold.yml'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -31,11 +33,15 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
-      - name: Restore public dependencies
-        run: dotnet restore src/LoveJuice/LoveJuice.csproj
-      - name: Build the plugin scaffold
+      - name: Restore public compilation references
+        run: |
+          dotnet restore src/LoveJuice/LoveJuice.csproj
+          dotnet restore tests/LoveJuice.Regression/LoveJuice.Regression.csproj
+      - name: Build real Studio asset droplet runtime
         run: dotnet build src/LoveJuice/LoveJuice.csproj -c Release --no-restore
-      - name: Check both output locations
+      - name: Test native Studio catalogue and ballistic trajectory
+        run: dotnet run --project tests/LoveJuice.Regression/LoveJuice.Regression.csproj -c Release --no-restore
+      - name: Check plugin metadata and both output locations
         run: |
           test -s bin/Release/LoveJuice/KK_LoveJuice.dll
           test -s bin/Release/KK/KK_LoveJuice.dll
@@ -48,6 +54,6 @@ jobs:
           cp LICENSE artifacts/LoveJuice/LICENSE
       - uses: actions/upload-artifact@v4
         with:
-          name: KK_LoveJuice-0.1.0-scaffold
+          name: KK_LoveJuice-0.2.0-native
           path: artifacts/LoveJuice/
           if-no-files-found: error

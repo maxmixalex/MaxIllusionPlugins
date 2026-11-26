@@ -1,31 +1,43 @@
-# LoveJuice
+# LoveJuice — 0.2.0 (Native Studio liquids)
 
-独立的 Koikatsu / Koikatsu Party BepInEx 插件工程。
+Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
 
-## 当前状态
+## Native source assets
 
-0.1.0 为工程框架：包含插件元数据、游戏进程过滤、BepInEx 配置、加载日志及统一构建入口。当前不会修改游戏场景、角色或其他插件的状态，也不会生成任何视觉效果。
+Inspected the original game's `abdata/studio/info/00.unity3d` in the authorized Koikatsu installation. This inventory identifies bundle `studio/00.unity3d` and manifest `studio00` with the following exact names:
 
-- 插件 GUID：`MaxMixAlex.LoveJuice`
-- 目标：.NET Framework 3.5 / Unity 5.6 / BepInEx 5
-- 运行依赖：KKAPI
-- 配置：`BepInEx/config/MaxMixAlex.LoveJuice.cfg`，`[General] Enabled` 默认关闭。当前为预留总开关。
-- 不依赖 JuiceControl、FemboyMode 或 MaximumUI。
+| Channel | Installed Studio prefab |
+| --- | --- |
+| Water / preview | `p_koi_syu_LiquidWater_00_00` |
+| Saliva/light liquid | `p_koi_syu_LiquidSio_00_00` |
+| Body liquid | `p_koi_syu_LiquidSiru_00_00` |
+| Shower | `p_koi_syu_LiquidShower_01_00` |
+| Milk (optional, white-tinted only if supported by the native prefab) | `p_koi_syu_LiquidWater_00_00` |
+| Marked geometry (optional) | `p_koi_syu_LiquidKancho_00_00` |
 
-## 构建
+Runtime loads through the *same native* `CommonLib.LoadAsset<GameObject>(bundle, name, true, manifest)` API used by the game's Studio `AddObjectItem`, then pools the GameObjects. No original assets are copied into the source tree or installer.
 
-在仓库根目录执行：
+## Working runtime behavior
+
+- `General/Enabled` defaults to **false**. Toggle it to true to enable actual Studio liquid visuals. Default `F9` previews four water instances on the current scene character; it is an active runtime test, not a mock image.
+- When `HSceneProc` is active, the plugin tracks **its actual current `lstFemale` character roster**, including multi-character scenes, and resolves per-character bones only when the roster changes. It never modifies a character card.
+- Face and body emission follows the current built-in `ChaControl.GetSiruFlags` and optional SkinEffects controller values, including changes made live through **JuiceControl**. This integration reads current values on the fly; neither optional mod is modified or required.
+- FemboyMode integration calls its public `IsFemboy(ChaControl)` via an optional runtime adapter. The separately switchable marked-geometry source resolves the matching game bone if present.
+- Separate optional milk/shower channels (disabled by default), plus a public `LoveJuicePlugin.Emit(character, channel, count)` API for other mods.
+- Real world-space ballistic motion: gravity, air drag, initial orientation, scene collision, object recycling, lifetime/size shrink, hard active-object limit, no per-frame allocation of new materials, no cross-scene droplet leaks.
+- Missing assets produce a warning and disable only that visual channel, rather than falling back to generated effects. `Enabled=false` tears down the active pool.
+
+## Configuration
+
+`BepInEx/config/MaxMixAlex.LoveJuice.cfg`: `Enabled`; `Preview key`; per-channel Face/Body/Milk/Shower/Marked-geometry toggles; max active drops (default 48), interval (default 0.26 sec), collision, gravity, damping, lifetime, visual prefab scale and launch speed.
+
+## Verification boundaries
+
+The C# compilation and deterministic trajectory/catalog tests check source compatibility and safety under missing data. **The exact game's Studio prefab may require further runtime adjustment of visual scale, material compatibility and attachment bones**; no Koikatsu graphical E2E was run. The built-in F9 preview is intended to make this check immediately possible on the installed game. Studio itself should not load this process-filtered plugin; only its asset bundles are read in the game scene.
 
 ```sh
 dotnet build src/LoveJuice/LoveJuice.csproj -c Release
+dotnet run --project tests/LoveJuice.Regression/LoveJuice.Regression.csproj -c Release
 ```
 
-使用仓库的集中 NuGet 版本及统一输出设置，预期输出 `bin/Release/LoveJuice/KK_LoveJuice.dll` 和 `bin/Release/KK/KK_LoveJuice.dll`。
-
-## 加载验收
-
-在安装 BepInEx 5 和 KKAPI 的 Koikatsu / Koikatsu Party 中，将 DLL 放入 `BepInEx/plugins/`，启动游戏后检查 `LogOutput.log` 的 LoveJuice 加载消息和配置文件。Studio 不应加载此插件。0.1.0 不应产生场景变化。
-
-GitHub Actions 的 `LoveJuice scaffold build` 工作流负责编译、检查两个输出目录的 DLL 一致性，并生成只含本仓插件及许可/安装说明的安装产物。编译验证不代表已经完成游戏内加载验收。
-
-本次框架尚未经过游戏内验收。
+Output: `bin/Release/LoveJuice/KK_LoveJuice.dll`. The standalone GitHub Actions workflow publishes a distributable installer. Third-party game assets and configuration are not distributed.
