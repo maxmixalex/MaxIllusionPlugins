@@ -33,7 +33,7 @@ namespace HSControl
         private NativeSceneButton sceneButton;
         private float nextButtonProbe;
         private Harmony harmony;
-        private bool visible, didMaleFinish, replayPending, strengthPending;
+        private bool visible, didMaleFinish, replayPending, replayIssued, strengthPending;
         private float replayElapsed, nextViewPoll;
         private int generation, sceneCheck;
         private string status = "就绪";
@@ -140,6 +140,7 @@ namespace HSControl
             scene = next;
             didMaleFinish = false;
             replayPending = false;
+            replayIssued = false;
             strengthPending = false;
             generation++;
             if (next != null && next.flags != null) {
@@ -184,22 +185,25 @@ namespace HSControl
         private void HandleReplay(HFlag flags, HSControlSettings settings) {
             if (!settings.AutoReplay || !HSControlMotionEngine.IsSupportedMode((int)flags.mode)) {
                 replayPending = false;
+                replayIssued = false;
                 replayElapsed = 0f;
                 return;
             }
             string state = flags.nowAnimStateName ?? string.Empty;
             if (state.IndexOf("Loop", StringComparison.Ordinal) >= 0) {
                 replayPending = false;
+                replayIssued = false;
                 replayElapsed = 0f;
                 return;
             }
-            if (!state.EndsWith("_A", StringComparison.Ordinal)) return;
+            if (replayIssued || !state.EndsWith("_A", StringComparison.Ordinal)) return;
             if (!replayPending) { replayPending = true; replayElapsed = 0f; }
             replayElapsed += Time.deltaTime;
             if (replayElapsed >= 1.5f && flags.click == HFlag.ClickKind.none) {
                 flags.click = HFlag.ClickKind.again;
                 replayPending = false;
-                replayElapsed = -100f;
+                replayIssued = true;
+                replayElapsed = 0f;
             }
         }
 
@@ -238,6 +242,48 @@ namespace HSControl
             if (view != null) MaximumUIRuntime.SetVisible(MountId, false);
         }
 
+        private bool CanNativeCommands(HFlag flags, bool needsLoop) {
+            if (flags == null || flags.nowAnimationInfo == null ||
+                !HSControlActionRules.CanStartLoop((int)flags.mode, flags.rely, true)) return false;
+            return !needsLoop || HSControlActionRules.IsLoop(flags.nowAnimStateName);
+        }
+
+        private void PerformSceneCommand(int version, HSceneProc owner, int kind) {
+            if (!SessionCurrent(version, owner) || !master.Value || owner.flags == null) return;
+            HFlag flags = owner.flags;
+            if (!CanNativeCommands(flags, kind >= 2)) return;
+            try {
+                bool okay;
+                if (kind <= 1) {
+                    okay = HSControlNativeActions.TryStartLoop(owner, kind == 1);
+                    if (okay) motion.Reset(flags.speedCalc);
+                } else {
+                    if (flags.click != HFlag.ClickKind.none) return;
+                    if (kind == 2 || kind == 4) flags.gaugeMale = Math.Max(flags.gaugeMale, 70f);
+                    if (kind == 3 || kind == 4) flags.gaugeFemale = Math.Max(flags.gaugeFemale, 70f);
+                    if (kind >= 5) {
+                        if (kind == 6 || kind == 7) {
+                            if (!autoFemaleFinish.Value || (int)flags.mode != 2) return;
+                            flags.gaugeFemale = 100f;
+                        }
+                        if (kind == 5 || kind == 7) {
+                            flags.gaugeMale = 100f;
+                            didMaleFinish = false;
+                            HSControlSettings forced = Settings();
+                            forced.AutoMaleFinish = true;
+                            HandleFinish(flags, forced);
+                        }
+                    }
+                    okay = true;
+                }
+                status = okay ? "已向原生场景发送操作：" + kind : "当前动作暂不可执行。";
+            } catch (Exception ex) {
+                status = "原生操作失败：" + ex.GetBaseException().Message;
+                Logger.LogWarning(ex);
+            }
+            RefreshView();
+        }
+
         private void RefreshView() {
             if (view == null || !visible) return;
             HSceneProc owner = scene;
@@ -249,6 +295,10 @@ namespace HSControl
                 Available = flags != null, Enabled = master.Value,
                 AnimationState = flags == null ? string.Empty : flags.nowAnimStateName,
                 SceneMode = flags == null ? -1 : (int)flags.mode,
+                CanForceLoop = master.Value && CanNativeCommands(flags, false),
+                CanStage = master.Value && CanNativeCommands(flags, true),
+                CanFemaleFinish = master.Value && flags != null && (int)flags.mode == 2 &&
+                    autoFemaleFinish.Value && CanNativeCommands(flags, true),
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,
                 GaugeFemale = flags == null ? 0f : flags.gaugeFemale,
@@ -280,6 +330,14 @@ namespace HSControl
                 flags.gaugeFemale = Mathf.Clamp(value, 0f, autoFemaleFinish.Value ? 100f : 99f); RefreshView();
             }};
             model.Reroll = () => { if (live()) { motion.Reset(flags.speedCalc); RefreshView(); } };
+            model.PlayWeak = () => PerformSceneCommand(token, owner, 0);
+            model.PlayStrong = () => PerformSceneCommand(token, owner, 1);
+            model.StageMale = () => PerformSceneCommand(token, owner, 2);
+            model.StageFemale = () => PerformSceneCommand(token, owner, 3);
+            model.StageBoth = () => PerformSceneCommand(token, owner, 4);
+            model.FinishMale = () => PerformSceneCommand(token, owner, 5);
+            model.FinishFemale = () => PerformSceneCommand(token, owner, 6);
+            model.FinishBoth = () => PerformSceneCommand(token, owner, 7);
             if (!view.Model.SameDisplay(model)) {
                 view.Model = model;
                 MaximumUIRuntime.MarkDirty(view);

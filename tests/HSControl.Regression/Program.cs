@@ -11,6 +11,15 @@ internal static class Program
     }
 
     private static void EngineTests() {
+        Check(HSControlActionRules.CanStartLoop(1, false, true) &&
+            HSControlActionRules.CanStartLoop(2, false, true), "native loop actions supported in Houshi/Sonyu");
+        Check(!HSControlActionRules.CanStartLoop(1, true, true) &&
+            !HSControlActionRules.CanStartLoop(7, false, true) &&
+            !HSControlActionRules.CanStartLoop(1, false, false), "native loop guard rejects rely, unsupported modes or missing action");
+        Check(HSControlActionRules.LoopName(2, true, true) == "A_SLoop" &&
+            HSControlActionRules.LoopName(1, false, false) == "WLoop", "native loop state name uses the original action family");
+        Check(HSControlActionRules.IsLoop("A_WLoop") &&
+            !HSControlActionRules.IsLoop("Stop_Idle"), "only loop animations accept gated finish actions");
         Check(HSControlMotionEngine.CanDrive(0, "M_Idle", false), "native Aibu idle is supported");
         Check(HSControlMotionEngine.CanDrive(1, "WLoop", false), "Houshi loop supported");
         Check(!HSControlMotionEngine.CanDrive(1, "Stop_Idle", false), "no edits during transitions");

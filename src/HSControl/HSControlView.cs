@@ -8,6 +8,7 @@ namespace HSControl
         internal string Version = "0.1.0", Status = "Ready", AnimationState = string.Empty;
         internal bool Available, Enabled, ManualOverride, AutoStrength;
         internal bool AutoMaleFinish, AutoFemaleFinish, AutoReplay, Driving;
+        internal bool CanForceLoop, CanStage, CanFemaleFinish;
         internal float ManualSpeed, CurrentSpeed, TargetSpeed, GaugeMale, GaugeFemale;
         internal float RangeMin, RangeMax, StrengthMinSeconds, StrengthMaxSeconds;
         internal int Mode, Band, Linkage, SceneMode;
@@ -17,6 +18,8 @@ namespace HSControl
         internal Action<float> ChangeRangeMin, ChangeRangeMax, ChangeStrengthMin, ChangeStrengthMax;
         internal Action<int> ChangeMode, ChangeBand, ChangeLinkage;
         internal Action Close, Reroll;
+        internal Action PlayWeak, PlayStrong, StageMale, StageFemale, StageBoth;
+        internal Action FinishMale, FinishFemale, FinishBoth;
 
         internal bool SameDisplay(HSControlViewModel other) {
             return other != null && Version == other.Version && Status == other.Status &&
@@ -24,7 +27,9 @@ namespace HSControl
                 Enabled == other.Enabled && ManualOverride == other.ManualOverride &&
                 AutoStrength == other.AutoStrength && AutoMaleFinish == other.AutoMaleFinish &&
                 AutoFemaleFinish == other.AutoFemaleFinish && AutoReplay == other.AutoReplay &&
-                Driving == other.Driving && Mode == other.Mode && Band == other.Band &&
+                Driving == other.Driving && CanForceLoop == other.CanForceLoop &&
+                CanStage == other.CanStage && CanFemaleFinish == other.CanFemaleFinish &&
+                Mode == other.Mode && Band == other.Band &&
                 Linkage == other.Linkage && SceneMode == other.SceneMode &&
                 Math.Abs(ManualSpeed-other.ManualSpeed) < .001f &&
                 Math.Abs(CurrentSpeed-other.CurrentSpeed) < .005f &&
@@ -74,7 +79,7 @@ namespace HSControl
                     i => i == 0 ? "平均状态" : "较高状态",
                     m.ChangeLinkage, "hscontrol-linkage").Enabled(m.Enabled && m.Mode == 3).ExpandWidth().Height(36f),
                 new Label("当前速度（实时）"),
-                new ProgressBar(m.CurrentSpeed, null, "hscontrol-current").Height(12f),
+                new ProgressBar(m.CurrentSpeed, null, "hscontrol-current").Height(28f),
                 new HStack(4f) {
                     new Label("当前 " + m.CurrentSpeed.ToString("0.00")).ExpandWidth(),
                     new Label("目标 " + m.TargetSpeed.ToString("0.00")).ExpandWidth(),
@@ -98,7 +103,23 @@ namespace HSControl
                 new Checkbox("自动女性结束", m.AutoFemaleFinish, m.ChangeAutoFemaleFinish,
                     "hscontrol-female-finish").Height(30f),
                 new Checkbox("完成后自动继续", m.AutoReplay, m.ChangeAutoReplay,
-                    "hscontrol-replay").Height(30f)
+                    "hscontrol-replay").Height(30f),
+                new Separator(),
+                new Label("原生动作", "hscontrol-actions-heading"),
+                new HStack(4f) {
+                    new Button("弱循环", m.PlayWeak, "hscontrol-play-weak").Enabled(m.CanForceLoop).ExpandWidth(),
+                    new Button("强循环", m.PlayStrong, "hscontrol-play-strong").Enabled(m.CanForceLoop).ExpandWidth()
+                }.Height(34f),
+                new HStack(4f) {
+                    new Button("男结束前", m.StageMale, "hscontrol-stage-male").Enabled(m.CanStage).ExpandWidth(),
+                    new Button("女结束前", m.StageFemale, "hscontrol-stage-female").Enabled(m.CanStage).ExpandWidth(),
+                    new Button("双方结束前", m.StageBoth, "hscontrol-stage-both").Enabled(m.CanStage).ExpandWidth()
+                }.Height(34f),
+                new HStack(4f) {
+                    new Button("男性结束", m.FinishMale, "hscontrol-finish-male").Enabled(m.CanStage).ExpandWidth(),
+                    new Button("女性结束", m.FinishFemale, "hscontrol-finish-female").Enabled(m.CanFemaleFinish).ExpandWidth(),
+                    new Button("双方结束", m.FinishBoth, "hscontrol-finish-both").Enabled(m.CanFemaleFinish).ExpandWidth()
+                }.Height(34f)
             };
             window.Add(new VStack(5f) {
                 new ScrollView("hscontrol-scroll") { controls.ExpandWidth() }.ExpandHeight().ExpandWidth(),

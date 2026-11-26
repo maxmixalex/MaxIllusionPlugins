@@ -7,5 +7,6 @@
   <ItemGroup>
     <Compile Include="../../src/HSControl/HSControlMotionEngine.cs" Link="Production/HSControlMotionEngine.cs" />
     <Compile Include="../../src/HSControl/HSLegacyIni.cs" Link="Production/HSLegacyIni.cs" />
+    <Compile Include="../../src/HSControl/HSControlActionRules.cs" Link="Production/HSControlActionRules.cs" />
   </ItemGroup>
 </Project>

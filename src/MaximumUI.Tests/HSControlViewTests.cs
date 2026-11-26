@@ -4,11 +4,12 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class HSControlViewTests {
-        internal const int TestCount = 3;
+        internal const int TestCount = 4;
         internal static void RunAll() {
             OriginalControlModesRemainReachable();
             DisabledAndManualStatesGuardActions();
             RetainedComparisonDetectsNativeStateUpdates();
+            SceneActionButtonsRespectTheNativeReadinessGate();
         }
 
         private static HSControlViewModel Make() {
@@ -69,6 +70,30 @@ namespace MaximumUI.Tests {
             Check(!model.SameDisplay(same), "The progress widget must refresh after a speed change");
             same = Make(); same.AnimationState = "SLoop";
             Check(!model.SameDisplay(same), "Animation transitions refresh the status");
+        }
+
+        private static void SceneActionButtonsRespectTheNativeReadinessGate() {
+            HSControlViewModel model = Make();
+            int calls = 0;
+            model.CanForceLoop = true;
+            model.CanStage = true;
+            model.CanFemaleFinish = false;
+            model.PlayWeak = delegate { calls++; };
+            model.PlayStrong = delegate { calls++; };
+            model.FinishFemale = delegate { calls += 100; };
+            HSControlView view = new HSControlView { Model = model };
+            Widget widget = view.Build(null);
+            Check(Find<Button>(widget, "hscontrol-play-weak").Enabled &&
+                Find<Button>(widget, "hscontrol-play-strong").Enabled, "Loop actions enabled for native HActionBase.");
+            Check(!Find<Button>(widget, "hscontrol-finish-female").Enabled,
+                "Unsupported female-only finish remains disabled.");
+            Find<Button>(widget, "hscontrol-play-weak").OnClick();
+            Find<Button>(widget, "hscontrol-play-strong").OnClick();
+            Check(calls == 2, "Native motion commands dispatch directly.");
+            model.CanForceLoop = false;
+            widget = view.Build(null);
+            Check(!Find<Button>(widget, "hscontrol-play-weak").Enabled,
+                "Lost scene readiness disables native motion action.");
         }
 
         private static T Find<T>(Widget root, string key) where T : Widget {
