@@ -75,8 +75,22 @@ internal static class Program
             "invalid drag input cannot poison persistent geometry");
         Check(MakerPageScrollMath.ResolveHeight(500f, -100f, 952f, 8f) == 592f,
             "native viewport fits available page height");
-        Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 1f,
-            "small viewport never forces a height outside its boundary");
+        Check(MakerPageScrollMath.ResolveHeight(500f, 498f, 952f, 8f) == 952f,
+            "regression: invalid near-zero Maker viewport must not collapse the page");
+        Check(!MakerPageScrollMath.IsStableViewport(false, false, 500f),
+            "regression: the content-sized host cannot be its own viewport");
+        Check(!MakerPageScrollMath.IsStableViewport(true, true, 500f),
+            "regression: a content-driven masked ancestor is not stable");
+        Check(!MakerPageScrollMath.IsStableViewport(true, false, 1f) &&
+            MakerPageScrollMath.IsStableViewport(true, false, 320f),
+            "only substantial fixed masked regions are eligible");
+        float stableHeight = 320f;
+        for (int frame = 0; frame < 120; frame++)
+            stableHeight = MakerPageScrollMath.IsStableViewport(false, true, stableHeight)
+                ? MakerPageScrollMath.ResolveHeight(0f, -stableHeight, 320f, 8f)
+                : 320f;
+        Check(stableHeight == 320f,
+            "120 frames of content-driven layout cannot erode native scroll height");
         Check(MakerPageScrollMath.ResolveHeight(500f, float.NegativeInfinity, 600f, 8f) == 600f,
             "unmeasured viewport falls back to the native template height");
         Check(MakerPageScrollMath.ResolveHeight(float.NaN, 0f, float.NaN, 8f) == 160f,
