@@ -5,8 +5,8 @@ namespace HSControl
 {
     internal sealed class HSControlViewModel
     {
-        internal string Version = "0.1.5", Status = "就绪", AnimationState = string.Empty;
-        internal bool Available, Enabled, ManualOverride, AutoStrength;
+        internal string Version = "0.1.6", Status = "就绪", AnimationState = string.Empty;
+        internal bool Available, Enabled, ManualOverride, AutoStrength, AutoArmed;
         internal bool AutoMaleFinish, AutoFemaleFinish, AutoReplay, Driving;
         internal bool MaleLocked, FemaleLocked;
         internal bool CanForceLoop, CanStageMale, CanStageFemale, CanStageBoth;
@@ -27,6 +27,7 @@ namespace HSControl
             return other != null && Version == other.Version && Status == other.Status &&
                 AnimationState == other.AnimationState && Available == other.Available &&
                 Enabled == other.Enabled && ManualOverride == other.ManualOverride &&
+                AutoArmed == other.AutoArmed &&
                 AutoStrength == other.AutoStrength &&
                 AutoMaleFinish == other.AutoMaleFinish && AutoFemaleFinish == other.AutoFemaleFinish &&
                 AutoReplay == other.AutoReplay && Driving == other.Driving &&
@@ -152,7 +153,8 @@ namespace HSControl
             }
 
             controls.Add(new HStack(6f) {
-                new Label("自动速度同步爱抚",
+                new Label(m.AutoArmed ? "本场景速度控制已启用" :
+                    "尚未操作速度控件 · 保持原生控制",
                     "hscontrol-aibu-explain").ExpandWidth(),
                 new Label("速度 " + m.CurrentSpeed.ToString("0.00") +
                     " → " + m.TargetSpeed.ToString("0.00"),
