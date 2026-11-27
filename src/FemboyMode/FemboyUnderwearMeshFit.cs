@@ -149,7 +149,9 @@ namespace FemboyMode
             nextFitProbe = Time.frameCount + 20;
             bool enabled = IsFemboy &&
                 FemboyModePlugin.EnableUnderwearMeshFit != null &&
-                FemboyModePlugin.EnableUnderwearMeshFit.Value;
+                FemboyModePlugin.EnableUnderwearMeshFit.Value &&
+                (FemboyModePlugin.UnderwearFitStrength == null ||
+                 FemboyModePlugin.UnderwearFitStrength.Value > 0f);
             if (!enabled)
             {
                 if (clothingFits.Count > 0 || lastFitSignature != null)
