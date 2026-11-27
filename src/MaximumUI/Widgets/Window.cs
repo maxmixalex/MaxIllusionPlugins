@@ -12,6 +12,9 @@ namespace MaximumUI {
         public bool Closable;
         public bool Visible;
         public bool Resizable;
+        // All MaximumUI windows support a per-window translucent mode.
+        public bool Translucency;
+        public float TranslucentOpacity;
         public Action<bool> OnVisibleChange;
 
         public Window(
@@ -35,6 +38,8 @@ namespace MaximumUI {
             Closable = closable;
             Visible = true;
             Resizable = true;
+            Translucency = true;
+            TranslucentOpacity = .55f;
             OnVisibleChange = onVisibleChange;
         }
     }
