@@ -1,6 +1,14 @@
-# LoveJuice — 0.3.8 (dynamic saliva filaments with falling tears)
+# LoveJuice — 0.3.9 (independent 3D saliva and native metaball fluid)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects borrow the **materials** of installed Studio item prefabs without invoking the original continuous emitters. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+
+## 0.3.9 — no CyuNoVR runtime coupling, no default sprite/billboard rendering
+
+- Removed all CyuNoVR/BeroIto class reflection, external scene-state lookup and material borrowing. CyuNoVR is ONLY an implementation/visual reference; it is never required or invoked by LoveJuice.
+- Saliva is now a **procedurally rebuilt 3D mesh** (24 lengthwise rings × 10 sides) with circular physical cross-sections, lit/translucent material, gravity sag, radius necking and detach-and-fall 3D tear-drop meshes. It is no longer a LineRenderer strip animated by wiggling a texture.
+- Other fluid sources now invoke Koikatsu's **native MetaballShoot/UpdateMeta** physics on an isolated source root under the game's existing metaball seed. The normal path reuses the game's actual physical projectile prefab, not the original fake Studio shower, Sprite, sphere or trail. Each emitter clones the native preset, registers with the seed while active, and unregisters/clears only its own children when the scene ends. An unavailable native metaball environment is reported rather than silently falling back to bad visuals.
+- The historical sphere+trail renderer remains ONLY under the clearly marked Experimental switch and remains disabled by default. Native metaballs are used otherwise.
+- **Runtime acceptance is still open:** validate the native metaball host exists and operates for each Free H scene type, body source and character; check collisions/retention, actual tear shape/translucency, and performance on the installed game.
 
 ## 0.3.8 — kinetic saliva, necking and gravity drops
 
