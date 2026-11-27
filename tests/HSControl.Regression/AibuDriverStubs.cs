@@ -40,6 +40,8 @@ internal sealed class HandCtrl
 {
     public int action;
     public TestArea[] useAreaItems = { new TestArea() };
+    public TestArea[] useItems = { new TestArea { idUse = 0 },
+        new TestArea { idUse = 1 }, new TestArea { idUse = 2 } };
     public int actionUseItem = -1;
     public TestMotion nowMES = new TestMotion();
 }
