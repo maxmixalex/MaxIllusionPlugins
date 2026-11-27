@@ -153,6 +153,26 @@ namespace ClothingControl {
         }
     }
 
+    // One-piece tops (ChaControl.notBot) own both top/bottom clothing
+    // state channels. The game itself builds dictStateType[1] from the
+    // top model even when coordinate.clothes.parts[1].id is 0.
+    // This logic mirrors ChaControl.AddClothesStateKind and
+    // SetClothesState's notBot handling. It is NOT a synthetic garment.
+    internal static class WardrobeGarmentIdentity {
+        internal static bool IsLinkedBottom(string kind, bool topOwnsBottom,
+            int topItem, bool bottomStateChannelExists) {
+            return kind == "bot" && topOwnsBottom && topItem > 0 &&
+                bottomStateChannelExists;
+        }
+
+        internal static int EffectiveItem(string kind, int ownItem,
+            int topItem, bool linkedBottom) {
+            if (kind == "bot" && linkedBottom)
+                return topItem > 0 ? topItem : 0;
+            return ownItem > 0 ? ownItem : 0;
+        }
+    }
+
     public sealed class GarmentVisibility {
         [XmlAttribute] public string Kind;
         [XmlAttribute] public int Item;
