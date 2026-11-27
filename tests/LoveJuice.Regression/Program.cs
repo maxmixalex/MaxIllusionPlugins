@@ -120,12 +120,18 @@ internal static class Program {
                 LiquidSourceTriggers.KissAnimationSignal("ベロチュー", false) &&
                 !LiquidSourceTriggers.KissAnimationSignal("Orgasm_Loop", false),
                 "saliva strings require native kissing cues, never generic caress");
+            Check(LiquidSourceTriggers.SalivaActive(false, true, false, false, true) &&
+                LiquidSourceTriggers.SalivaActive(false, false, true, false, true) &&
+                LiquidSourceTriggers.SalivaActive(false, false, false, true, true) &&
+                !LiquidSourceTriggers.SalivaActive(false, true, true, true, false) &&
+                LiquidSourceTriggers.SalivaActive(true, false, false, false, false),
+                "saliva can be triggered by oral, wet face or preview, not just kisses");
             Check(LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, false) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(true, false, .035f, false) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(true, true, .20f, false) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, true) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(false, true, .035f, false),
-                "reuse an existing CyuNoVR filament; never create overlapping spray");
+                "native kiss string suppresses only overlapping original thread");
             Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 65f, 45f) == 2,
                 "Active primary male with sufficient gauge emits at a bounded level");
             Check(LiquidSourceTriggers.MalePreLevel(1, true, true, 100f, 0f) == 0 &&
