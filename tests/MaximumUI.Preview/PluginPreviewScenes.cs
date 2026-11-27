@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using AccessoryBatchManager;
 using ClothingControl;
-using HSControl;
 using JuiceControl;
 using MaximumUI;
 
@@ -10,10 +9,6 @@ using MaximumUI;
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
-        yield return HS("live");
-        yield return HS("manual");
-        yield return HS("range");
-        yield return HS("unavailable");
         yield return Juice("main");
         yield return Juice("name");
         yield return Juice("xml-error");
@@ -27,49 +22,15 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("empty");
         yield return Wardrobe("xml-error");
         yield return Wardrobe("garments");
+        yield return Wardrobe("free-h");
         yield return Wardrobe("filtered");
         yield return Wardrobe("scene");
         yield return Wardrobe("scene-applying");
     }
 
-    private static PreviewScene HS(string state) {
-        HSControlViewModel model = new HSControlViewModel {
-            Version = "0.1.1", Available = true, Enabled = true, Status = "已连接场景",
-            AnimationState = "WLoop", Mode = 3, Band = 1, Linkage = 1,
-            ManualSpeed = .42f, CurrentSpeed = .55f, TargetSpeed = .68f,
-            GaugeMale = 53f, GaugeFemale = 76f, RangeMin = .20f, RangeMax = .82f,
-            AutoStrength = true, StrengthMinSeconds = 10f, StrengthMaxSeconds = 30f,
-            AutoFemaleFinish = true, AutoMaleFinish = false, AutoReplay = false,
-            ChangeEnabled = delegate { }, ChangeMode = delegate { },
-            ChangeBand = delegate { }, ChangeLinkage = delegate { },
-            ChangeManualOverride = delegate { }, ChangeManualSpeed = delegate { },
-            ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
-            ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
-            ChangeStrengthMax = delegate { }, ChangeGaugeMale = delegate { },
-            ChangeGaugeFemale = delegate { }, ChangeAutoMaleFinish = delegate { },
-            ChangeAutoFemaleFinish = delegate { }, ChangeAutoReplay = delegate { },
-            Reroll = delegate { }, Close = delegate { }
-        };
-        if (state == "manual") { model.ManualOverride = true; model.Mode = 0; }
-        if (state == "range") { model.Mode = 2; }
-        if (state == "unavailable") {
-            model.Available = false; model.Enabled = false;
-            model.AnimationState = ""; model.Status = "当前场景无可用的 H 控制器";
-        }
-        return new PreviewScene {
-            Slug = "hscontrol-" + state + "-preview", Title = "HSControl",
-            Source = "HSControl.HSControlView.Build", Detail = "Synthetic HSControl fixture " + state,
-            Widget = new HSControlView { Model = model }.Build(new BuildContext()),
-            StateId = state == "live" ? "default" : state,
-            RequiredKeys = new[] { "hscontrol-scroll", "hscontrol-enabled",
-                "hscontrol-speed-mode", "hscontrol-current", "hscontrol-strength",
-                "hscontrol-gauge-male", "hscontrol-replay", "hscontrol-status" }
-        };
-    }
-
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.3.0", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.5", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -84,11 +45,25 @@ internal static class PluginPreviewScenes {
             Slot = i, Type = 121, Item = i + 1, Group = i % 2, Label = (i + 1) + ". " + names[i % names.Length],
             Visible = i % 3 != 0, Change = delegate { }
         });
-        if (state == "garments") {
-            model.Page = 1; model.ShoeMode = 0;
-            string[] garmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+        // Clothing is now tab 0; accessory-heavy previews use tab 1.
+        model.Page = state == "main" || state == "garments" ||
+            state == "free-h" ? 0 : 1;
+        if (state == "free-h") {
+            model.CanChangeCoordinate = false;
+            model.Targets = new[] { "1. 活动角色 A", "2. 活动角色 B", "3. 活动角色 C" };
+            model.HasTarget = true;
+            model.Status = "Free H：当前配装的服装状态可编辑，配装重载已禁用。";
+        }
+        if (state == "main" || state == "garments" || state == "free-h") {
+            model.ShoeMode = 0;
+            string[] garmentLabels = {
+                "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
+            };
             for (int i = 0; i < garmentLabels.Length; i++) model.Garments.Add(new WardrobeRow {
-                Slot = i, Item = i + 1, Label = garmentLabels[i], Visible = i % 2 == 0, Change = delegate { }
+                Slot = i, Item = i + 1, Label = garmentLabels[i],
+                State = i < 4 ? i % 4 : i % 2 == 0 ? 0 : 3,
+                AllowedStates = i < 4 ? new[] { 0, 1, 2, 3 } : new[] { 0, 3 },
+                ChangeState = delegate { }
             });
         }
         if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
@@ -116,10 +91,13 @@ internal static class PluginPreviewScenes {
             Widget = window, StateId = state == "main" ? "default" : state,
             Width = state == "xml-error" ? window.MinWidth : 0f,
             Height = state == "xml-error" ? window.MinHeight : 0f,
-            RequiredKeys = state == "garments"
-                ? new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-garments", "wardrobe-shoe-mode", "wardrobe-restore-clothing", "wardrobe-preset" }
-                : new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories", "wardrobe-preset",
-                    "wardrobe-name", "wardrobe-apply", "wardrobe-reload", "wardrobe-accessory-search", "wardrobe-hide-filtered" }
+            RequiredKeys = state == "main" || state == "garments" || state == "free-h"
+                ? new[] { "wardrobe-target-current", "wardrobe-coordinate-current",
+                    "wardrobe-garment-rows", "garment-state-0-current", "wardrobe-shoe-mode",
+                    "wardrobe-restore-clothing", "wardrobe-preset-current" }
+                : new[] { "wardrobe-target-current", "wardrobe-coordinate-current", "wardrobe-accessories",
+                    "wardrobe-preset-current", "wardrobe-name", "wardrobe-apply", "wardrobe-reload",
+                    "wardrobe-accessory-search", "wardrobe-accessory-group-current", "wardrobe-hide-filtered" }
         };
     }
 

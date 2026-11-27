@@ -1,0 +1,59 @@
+name: LoveJuice native Studio liquid build
+
+on:
+  push:
+    branches: [feat/lovejuice-scaffold]
+    paths:
+      - 'src/LoveJuice/**'
+      - 'tests/LoveJuice.Regression/**'
+      - '.github/workflows/lovejuice-scaffold.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  pull_request:
+    paths:
+      - 'src/LoveJuice/**'
+      - 'tests/LoveJuice.Regression/**'
+      - '.github/workflows/lovejuice-scaffold.yml'
+      - 'Directory.Build.props'
+      - 'Directory.Build.targets'
+      - 'Directory.Packages.props'
+      - 'nuget.config'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Restore public compilation references
+        run: |
+          dotnet restore src/LoveJuice/LoveJuice.csproj
+          dotnet restore tests/LoveJuice.Regression/LoveJuice.Regression.csproj
+      - name: Build real Studio asset droplet runtime
+        run: dotnet build src/LoveJuice/LoveJuice.csproj -c Release --no-restore
+      - name: Test native Studio catalogue and ballistic trajectory
+        run: dotnet run --project tests/LoveJuice.Regression/LoveJuice.Regression.csproj -c Release --no-restore
+      - name: Check plugin metadata and both output locations
+        run: |
+          test -s bin/Release/LoveJuice/KK_LoveJuice.dll
+          test -s bin/Release/KK/KK_LoveJuice.dll
+          cmp bin/Release/LoveJuice/KK_LoveJuice.dll bin/Release/KK/KK_LoveJuice.dll
+      - name: Assemble installation files
+        run: |
+          mkdir -p artifacts/LoveJuice/BepInEx/plugins/MaxIllusionPlugins
+          cp bin/Release/LoveJuice/KK_LoveJuice.dll artifacts/LoveJuice/BepInEx/plugins/MaxIllusionPlugins/
+          cp src/LoveJuice/README.md artifacts/LoveJuice/INSTALL.md
+          cp LICENSE artifacts/LoveJuice/LICENSE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KK_LoveJuice-0.2.2-native
+          path: artifacts/LoveJuice/
+          if-no-files-found: error

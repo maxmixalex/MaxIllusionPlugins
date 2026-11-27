@@ -24,7 +24,7 @@ namespace JuiceControl {
     [BepInPlugin(GUID, "JuiceControl", Version)]
     public partial class JuiceControl : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.JuiceControl";
-        public const string Version = "0.2.3";
+        public const string Version = "0.2.6";
 
         private const string DefaultPresetFileName = GUID + ".presets.xml";
         private const int SiruMaxLevel = 3;

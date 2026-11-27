@@ -6,7 +6,7 @@
 
 ## 下载开发构建
 
-[GitHub Actions](https://github.com/maxmixalex/MaxIllusionPlugins/actions/workflows/ci.yml) 会在每次推送和 PR 更新后编译、执行回归、生成界面预览并上传安装包。打开 `fix/plugin-audit-maximumui` 分支最近一次绿色运行，在 **Artifacts** 下载 `plugin-packages-…`；其中提供全部功能插件合集、各插件单独 ZIP 和可选的 Gallery。共享库已按实际依赖包含，解压所选安装 ZIP 内的 `BepInEx` 到游戏根目录。完整步骤见 [CI 与下载说明](docs/CI.md)。
+[GitHub Actions](https://github.com/maxmixalex/MaxIllusionPlugins/actions/workflows/ci.yml) 会在每次推送和 PR 更新后编译、执行回归、生成界面预览并上传安装包。打开 `feat/control-suite-integration` 分支最近一次绿色运行，在 **Artifacts** 下载 `plugin-packages-…`；其中提供全部功能插件合集、各插件单独 ZIP 和可选的 Gallery。共享库已按实际依赖包含，解压所选安装 ZIP 内的 `BepInEx` 到游戏根目录。完整步骤见 [CI 与下载说明](docs/CI.md)。
 
 更新时请先移除其他目录里的同名旧 DLL，避免重复加载。ClothingCompression 的 XML 现使用 `MaxMixAlex.ClothingCompression.xml`；旧文件请自行重命名，程序不回退读取旧名字。
 
@@ -18,8 +18,10 @@
 | [AccessoryBatchManager](src/AccessoryBatchManager/README.md) | 角色编辑器中的饰品多选、批量整理、跨搭配复制/移动与高亮 | `Shift+=` 或小键盘 `+` |
 | [ClothingCompression](src/ClothingCompression/README.md) | 身体勒肉/局部网格形变，支持服装饰品绑定、左右侧控制和配置保存 | 编辑器“勒肉形变”页，`F8` 高级面板 |
 | [ExpressionControl](src/ExpressionControl/README.md) | 角色表情编辑、表情程序、H/Studio 场景中的表情控制和 XML 预设 | 默认 `L`，可在 XML 中修改 |
+| [LoveJuice](src/LoveJuice/README.md) | Studio 原生液体预制体、按状态滴落及物理碰撞，兼容 JuiceControl / FemboyMode | BepInEx 启用、`F9` 预览 |
+| [FemboyMode](src/FemboyMode/README.md) | Maker 角色标记、原生全页滚动与可拖动坐标轴及游戏内选项 | Maker Body > All |
 | [HSControl](src/HSControl/README.md) | 原版 KK_HCtrl 独立重实现：H 场景原生速度、自动变速、强度与状态控制 | 默认 `Ctrl+F8` |
-| [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的常规配装切换、饰品显示、多角色选择与 XML 预设 | 默认 `F7` |
+| [ClothingControl](src/ClothingControl/README.md) | Maker / Studio 的九类服装原生状态、Free H/Maker/Studio 多角色与 XML 预设 | 默认 `F7` |
 | [JuiceControl](src/JuiceControl/README.md) | 手动调整角色皮肤效果、锁定效果等级、角色及分组预设，兼容 SkinEffects | 默认主键盘 `0` |
 | [MaximumUI](src/MaximumUI/README.md) | 声明式 IMGUI 控件、布局、输入、绘制列表、主题和运行时挂载框架 | 供其他插件调用的库 |
 | [MaximumUIGallery](src/MaximumUIGallery/README.md) | MaximumUI 控件、布局、对话框和调试工具的独立游戏内示例 | 默认 `F10`，启动时隐藏 |
@@ -60,7 +62,7 @@ pwsh -NoProfile -File scripts/Test-All.ps1
 
 运行插件需要已安装对应游戏、BepInEx 5 和各项目说明中的运行依赖。按需要从 `bin/Release/<项目名>/` 选择插件 DLL，放入游戏的 `BepInEx/plugins/`；有项目引用时也需带上对应库。MaximumUI Gallery 需同时提供 `MaximumUI.dll`。
 
-接入 MaximumUI 的插件需要随附同次构建的 `MaximumUI.dll`；引用 Common 的项目还需要 `MaxIllusionPlugins.Common.dll`。CI 安装包已包含这些本仓共享库，无需另装 Gallery。合集只安装功能插件与共享库。
+接入 MaximumUI 的插件需要随附同次构建的 `MaximumUI.dll`；引用 Common 的项目还需要 `MaxIllusionPlugins.Common.dll`。CI 安装包已包含这些本仓共享库，无需另装 Gallery。合集提供全部九个功能插件与共享库（含 FemboyMode、LoveJuice、HSControl）；Studio 预制体随游戏安装而非随包分发。HSControl 与原版 KK_HCtrl.dll 互斥。
 
 `bin/Release/KK/` 是构建汇总目录，不等于经过筛选的发布包。测试工程已禁止向此目录复制主产物，但旧构建留下的文件不会自动删除；不要把测试程序集当作插件安装。角色卡、存档、游戏和第三方运行依赖不随本源码仓库分发。
 

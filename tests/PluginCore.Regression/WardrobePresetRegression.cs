@@ -77,29 +77,38 @@ internal static class WardrobePresetRegression {
             WardrobePresetStore store = new WardrobePresetStore(path);
             Require(store.Reload(), "Missing preset file loads empty.");
             WardrobePreset state = new WardrobePreset { Coordinate = 2, ShoeMode = 1 };
-            state.Garments.Add(new GarmentVisibility { Kind = "gloves", Item = 42, Visible = false });
+            state.Garments.Add(new GarmentVisibility { Kind = "gloves", Item = 42, Visible = false, State = 3 });
             state.Accessories.Add(new AccessoryVisibility { Slot = 21, Type = 121, Item = 42, Visible = false });
             string error;
             Require(store.Save(state, "Travel", false, out error), "Save new: " + error);
             state.Accessories[0].Visible = true;
             state.Garments[0].Visible = true;
-            Require(!store.Find("Travel").Accessories[0].Visible && !store.Find("Travel").Garments[0].Visible,
+            state.Garments[0].State = 1;
+            Require(!store.Find("Travel").Accessories[0].Visible &&
+                !store.Find("Travel").Garments[0].Visible && store.Find("Travel").Garments[0].State == 3,
                 "Saved snapshot is independent of the editor.");
             Require(!store.Save(state, "travel", false, out error), "Duplicate case-insensitive names rejected.");
             WardrobePreset loaded = store.Find("Travel");
             Require(loaded.Coordinate == 2 && loaded.Accessories[0].Matches(21, 121, 42) &&
-                loaded.ShoeMode == 1 && loaded.Garments[0].Matches("gloves", 42), "Snapshot retains coordinate, garment and accessory identity.");
+                loaded.ShoeMode == 1 && loaded.Garments[0].Matches("gloves", 42) &&
+                loaded.Garments[0].State == 3, "Snapshot retains coordinate, garment and accessory identity.");
             Require(!loaded.Garments[0].Matches("socks", 42) && !loaded.Garments[0].Matches("gloves", 43),
                 "Garment presets match kind and item identity.");
             WardrobePreset invalid = loaded.Copy();
             invalid.Garments.Add(new GarmentVisibility { Kind = "unknown", Item = 1, Visible = true });
             Require(!store.Save(invalid, "Invalid", false, out error), "Unknown garment kinds cannot be written.");
+            invalid = loaded.Copy();
+            invalid.Garments[0].State = 4;
+            Require(!store.Save(invalid, "BadState", false, out error), "Invalid clothes state must be rejected.");
+            Require(GarmentVisibility.IsSupported("top") && GarmentVisibility.IsSupported("panst") &&
+                GarmentVisibility.IsSupported("shorts"), "All native clothing kinds supported.");
             Require(!loaded.Accessories[0].Matches(21, 121, 43), "Replaced accessory cannot receive a stale slot state.");
             Require(!loaded.Accessories[0].Matches(22, 121, 42), "Different slot cannot receive a stale state.");
             Require(store.Save(state, "Travel", true, out error), "Explicit overwrite: " + error);
             WardrobePresetStore reloaded = new WardrobePresetStore(path);
             Require(reloaded.Reload() && reloaded.Find("Travel").Accessories[0].Visible &&
-                reloaded.Find("Travel").Garments[0].Visible && reloaded.Find("Travel").ShoeMode == 1, "XML round trip and overwrite.");
+                reloaded.Find("Travel").Garments[0].Visible &&
+                reloaded.Find("Travel").Garments[0].State == 1 && reloaded.Find("Travel").ShoeMode == 1, "XML round trip and overwrite.");
             Require(File.Exists(path + ".bak"), "Existing preset is backed up.");
             File.WriteAllText(path, "<invalid");
             Require(!reloaded.Reload() && !reloaded.CanWrite && reloaded.Find("Travel") != null,
@@ -114,6 +123,11 @@ internal static class WardrobePresetRegression {
             Require(legacy.ShoeMode == -1 && legacy.Garments.Count == 0, "Legacy preset does not manufacture garment settings.");
             Require(reloaded.SceneNames().Length == 0, "Old XML loads without scene presets.");
             SceneRoundTrip(path, reloaded);
+            File.WriteAllText(path,
+                "<ClothingPresets><Preset Name=\"OldVisible\" Coordinate=\"0\"><Garment Kind=\"gloves\" Item=\"42\" Visible=\"false\" /></Preset></ClothingPresets>");
+            Require(reloaded.Reload() && reloaded.Find("OldVisible").Garments[0].State == -1 &&
+                !reloaded.Find("OldVisible").Garments[0].Visible,
+                "Legacy boolean-only garment XML does not invent an explicit state.");
         } finally { Directory.Delete(directory, true); }
     }
 }

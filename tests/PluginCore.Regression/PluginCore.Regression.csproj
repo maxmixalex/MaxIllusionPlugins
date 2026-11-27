@@ -29,6 +29,7 @@
     <Compile Include="../../src/JuiceControl/PresetStore.cs" Link="Production/PresetStore.cs" />
     <Compile Include="../../src/JuiceControl/SkinEffectsBridge.cs" Link="Production/SkinEffectsBridge.cs" />
     <Compile Include="../../src/JuiceControl/ReadbackState.cs" Link="Production/ReadbackState.cs" />
+    <Compile Include="../../src/JuiceControl/LoveJuiceIntegration.cs" Link="Production/LoveJuiceIntegration.cs" />
     <Compile Include="../../src/ClothingControl/WardrobePresets.cs" Link="Production/WardrobePresets.cs" />
     <Compile Include="../../src/ClothingControl/WardrobeLoadGate.cs" Link="Production/WardrobeLoadGate.cs" />
   </ItemGroup>

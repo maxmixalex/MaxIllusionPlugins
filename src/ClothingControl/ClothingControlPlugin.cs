@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using System.IO;
 using BepInEx;
 using BepInEx.Configuration;
@@ -24,16 +26,31 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.3.0";
+        public const string Version = "0.5.5";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
         };
-        private static readonly string[] GarmentKinds = { "gloves", "socks", "shoes_inner", "shoes_outer" };
-        private static readonly string[] GarmentLabels = { "手套", "袜子", "室内鞋", "室外鞋" };
+        private static readonly string[] GarmentKinds = {
+            "top", "bot", "bra", "shorts", "gloves", "panst", "socks", "shoes_inner", "shoes_outer"
+        };
+        private static readonly string[] GarmentLabels = {
+            "上衣", "下装", "胸衣", "内裤", "手套", "连裤袜", "袜子", "室内鞋", "室外鞋"
+        };
+        // The second male performer is optional (MMF/Dark H and some mods).
+        // Use the same public-or-private field lookup as JuiceControl.
+        private static readonly FieldInfo HSceneMale1 = typeof(HSceneProc).GetField(
+            "male1", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private int page, accessoryGroup;
         private string accessoryQuery = string.Empty;
         private ConfigEntry<KeyboardShortcut> shortcut;
+        private int lastHotkeyFrame = -1;
+        private float lastHotkeyTime = -1f;
+        private bool makerStateLogged;
+        private bool shiftTabWasHeld;
+        private Coroutine makerRestoreCoroutine;
+        private bool runtimeLoopLogged;
+        private bool lifecycleHooksRegistered;
         private ConfigEntry<bool> showInMaker;
         private SidebarToggle makerToggle;
         private IDisposable makerSubscription;
@@ -75,30 +92,78 @@ namespace ClothingControl {
         }
 
         private void Awake() {
-            shortcut = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F7), "Open the wardrobe editor in Maker or Studio.");
+            // Same default key as the original Clothing State Menu (Shift+Tab).
+            // Only migrate our previous *shipped* F7 default; leave all other
+            // user-chosen bindings untouched. ConfigEntry.Value persists the
+            // change, so existing v0.5.0 installations work without editing cfg.
+            KeyboardShortcut nativeDefault = new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift);
+            shortcut = Config.Bind("General", "Show menu", nativeDefault,
+                "Open the MaximumUI wardrobe editor in Maker, Studio or Free H (same shortcut as Clothing State Menu).");
+            if (shortcut.Value.Equals(new KeyboardShortcut(KeyCode.F7)) ||
+                shortcut.Value.Equals(new KeyboardShortcut(KeyCode.LeftShift))) {
+                // 0.5.3 never started because preset validation referenced
+                // InvalidDataException, absent from the game's Mono profile.
+                // The user accidentally saved LeftShift while attempting to
+                // rebind Tab in ConfigurationManager, where Tab is consumed.
+                shortcut.Value = nativeDefault;
+                Logger.LogInfo("Restored ClothingControl shortcut to the original LeftShift+Tab.");
+            }
+            Logger.LogInfo("ClothingControl v" + Version + " initialized; Show menu=" + shortcut.Value + ".");
             showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
+            // The stable AccessoryBatchManager and ClothingCompression plugins
+            // subscribe to KKAPI in Awake. ClothingControl previously used
+            // OnEnable/OnDisable, and RX18 logged OnDisable immediately after
+            // Awake during the loader transition. This could silently drop
+            // Maker registration before the window was ever created.
+            BindLifecycleHooks();
         }
 
-        private void OnEnable() {
+        private void BindLifecycleHooks() {
+            if (lifecycleHooksRegistered) return;
             CharacterApi.CharacterReloaded += OnCharacterReloaded;
             CharacterApi.CoordinateLoaded += OnCoordinateLoaded;
             MakerAPI.RegisterCustomSubCategories += OnRegisterMaker;
             MakerAPI.MakerFinishedLoading += OnMakerLoaded;
             MakerAPI.MakerExiting += OnMakerExiting;
             if (showInMaker != null) showInMaker.SettingChanged += OnMakerPreferenceChanged;
+            lifecycleHooksRegistered = true;
             pendingMakerPreference = MakerAPI.InsideAndLoaded;
+            Logger.LogInfo("ClothingControl KKAPI lifecycle hooks registered in Awake.");
+        }
+
+        private void UnbindLifecycleHooks() {
+            if (!lifecycleHooksRegistered) return;
+            lifecycleHooksRegistered = false;
+            CharacterApi.CharacterReloaded -= OnCharacterReloaded;
+            CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
+            MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
+            MakerAPI.MakerFinishedLoading -= OnMakerLoaded;
+            MakerAPI.MakerExiting -= OnMakerExiting;
+            if (showInMaker != null) showInMaker.SettingChanged -= OnMakerPreferenceChanged;
+        }
+
+        private void OnEnable() {
+            Logger.LogInfo("ClothingControl Unity OnEnable; enabled=" + enabled +
+                ", activeInHierarchy=" + gameObject.activeInHierarchy + ".");
+            BindLifecycleHooks();
+            // If BepInEx reactivated the component after Maker's registration
+            // phase, use the same direct restoration path as MakerLoaded.
+            if (MakerAPI.InsideAndLoaded && showInMaker != null && showInMaker.Value && !visible)
+                Open();
         }
 
         private void OnRegisterMaker(object sender, RegisterSubCategoriesEvent e) {
             ReleaseMakerToggle();
+            Logger.LogInfo("ClothingControl Maker sidebar toggle registered.");
             makerToggle = e.AddSidebarControl(new SidebarToggle("ClothingControl", showInMaker.Value, this));
             makerSubscription = makerToggle.ValueChanged.Subscribe(OnMakerToggleChanged);
         }
 
         private void OnMakerToggleChanged(bool value) {
             if (syncingMakerPreference || !MakerAPI.InsideAndLoaded) return;
+            Logger.LogInfo("ClothingControl Maker sidebar toggle clicked; requested=" + value + ".");
             SetMakerPreference(value);
             if (value && !visible) Open();
             else if (!value && visible) Close();
@@ -107,10 +172,56 @@ namespace ClothingControl {
         private void OnMakerLoaded(object sender, EventArgs e) {
             // KKAPI raises this before InsideAndLoaded becomes true.
             pendingMakerPreference = true;
+            Logger.LogInfo("ClothingControl MakerFinishedLoading callback; InsideMaker=" +
+                MakerAPI.InsideMaker + ", InsideAndLoaded=" + MakerAPI.InsideAndLoaded +
+                ", savedVisibility=" + (showInMaker != null && showInMaker.Value) + ".");
+            if (makerRestoreCoroutine != null) StopCoroutine(makerRestoreCoroutine);
+            makerRestoreCoroutine = StartCoroutine(RestoreMakerWindowAfterLoaded());
+        }
+
+        private IEnumerator RestoreMakerWindowAfterLoaded() {
+            // React directly to the KKAPI lifecycle. Do not require our
+            // MonoBehaviour.Update() to notice a one-time Maker event.
+            for (int frame = 0; frame < 300 && !MakerAPI.InsideAndLoaded; frame++)
+                yield return null;
+            // Do not mount a permanently hidden MaximumUI window during the
+            // few frames between KKAPI declaring Maker loaded and the native
+            // canvas becoming visible. Previously opening in that interval
+            // set makerPresentationSuppressed=true until Update() corrected it.
+            for (int frame = 0; frame < 120 && MakerAPI.InsideAndLoaded &&
+                NativeMakerHidden(); frame++)
+                yield return null;
+            makerRestoreCoroutine = null;
+            if (!MakerAPI.InsideAndLoaded || showInMaker == null) {
+                Logger.LogWarning("ClothingControl Maker restore aborted: KKAPI never became InsideAndLoaded.");
+                yield break;
+            }
+            bool requested = showInMaker.Value;
+            pendingMakerPreference = false;
+            makerStateLogged = true;
+            Logger.LogInfo("ClothingControl Maker restore event: requested=" + requested +
+                ", nativeVisible=" + !NativeMakerHidden() +
+                ", componentEnabled=" + isActiveAndEnabled + ".");
+            if (requested && !visible) Open();
+            else if (!requested && visible) Close(false);
+            else if (visible) UpdateMakerPresentation();
         }
 
         private void OnMakerPreferenceChanged(object sender, EventArgs e) {
-            if (!syncingMakerPreference && MakerAPI.InsideMaker) pendingMakerPreference = true;
+            if (syncingMakerPreference || !MakerAPI.InsideMaker || showInMaker == null) return;
+            Logger.LogInfo("ClothingControl Maker visibility preference changed to " +
+                showInMaker.Value + "; InsideAndLoaded=" + MakerAPI.InsideAndLoaded + ".");
+            if (!MakerAPI.InsideAndLoaded) {
+                pendingMakerPreference = true;
+                return;
+            }
+            // The F1 Configuration Manager setting must operate the panel
+            // IMMEDIATELY; waiting for Update() made it a no-op in the user's
+            // 0.5.2 runtime. This also provides an independent way to verify
+            // MaximumUI mounting when Shift+Tab is intercepted externally.
+            pendingMakerPreference = false;
+            if (showInMaker.Value && !visible) Open();
+            else if (!showInMaker.Value && visible) Close(false);
         }
 
         private void SetMakerPreference(bool value) {
@@ -129,7 +240,12 @@ namespace ClothingControl {
         }
 
         private void OnMakerExiting(object sender, EventArgs e) {
+            if (makerRestoreCoroutine != null) {
+                StopCoroutine(makerRestoreCoroutine);
+                makerRestoreCoroutine = null;
+            }
             pendingMakerPreference = false;
+            makerStateLogged = false;
             Close(false);
             ReleaseMakerToggle();
             target = null;
@@ -144,6 +260,10 @@ namespace ClothingControl {
             if (pendingMakerPreference && MakerAPI.InsideAndLoaded) {
                 pendingMakerPreference = false;
                 bool requested = showInMaker.Value;
+                Logger.LogInfo("ClothingControl Maker ready: Show in Maker=" + requested +
+                    ", native UI visible=" + !NativeMakerHidden() +
+                    ", mounted=" + MaximumUIRuntime.IsMounted(MountId) + ".");
+                makerStateLogged = true;
                 SetMakerPreference(requested);
                 if (requested && !visible) Open();
                 else if (!requested && visible) Close(false);
@@ -180,12 +300,17 @@ namespace ClothingControl {
         }
 
         private void OnDisable() {
-            CharacterApi.CharacterReloaded -= OnCharacterReloaded;
-            CharacterApi.CoordinateLoaded -= OnCoordinateLoaded;
-            MakerAPI.RegisterCustomSubCategories -= OnRegisterMaker;
-            MakerAPI.MakerFinishedLoading -= OnMakerLoaded;
-            MakerAPI.MakerExiting -= OnMakerExiting;
-            if (showInMaker != null) showInMaker.SettingChanged -= OnMakerPreferenceChanged;
+            Logger.LogInfo("ClothingControl Unity OnDisable; frame=" + Time.frameCount +
+                ", enabled=" + enabled + ", activeInHierarchy=" +
+                (gameObject != null && gameObject.activeInHierarchy) + ".");
+            if (makerRestoreCoroutine != null) {
+                StopCoroutine(makerRestoreCoroutine);
+                makerRestoreCoroutine = null;
+            }
+            // OnDisable can occur during the BepInEx loader's initial
+            // activation transition. Do not unsubscribe from KKAPI here:
+            // subscriptions are tied to the plugin's lifetime, not the
+            // temporary Unity Behaviour enabled state.
             pendingMakerPreference = false;
             Close(false);
             ReleaseMakerToggle();
@@ -195,10 +320,22 @@ namespace ClothingControl {
             previousCharacters.Clear();
         }
 
-        private void OnDestroy() { OnDisable(); }
+        private void OnDestroy() {
+            UnbindLifecycleHooks();
+            OnDisable();
+        }
 
         private static bool IsStudio() { return UnityEngine.Object.FindObjectOfType<StudioScene>() != null; }
-        private static bool SupportedScene() { return MakerAPI.InsideAndLoaded || IsStudio(); }
+
+        private static HSceneProc ActiveHScene() {
+            HSceneProc current = UnityEngine.Object.FindObjectOfType<HSceneProc>();
+            return current != null && current.flags != null && !current.isEnd ? current : null;
+        }
+
+        private static bool IsHScene() { return ActiveHScene() != null; }
+        private static bool SupportedScene() {
+            return MakerAPI.InsideAndLoaded || IsStudio() || IsHScene();
+        }
 
         private static List<ChaControl> Characters() {
             List<ChaControl> result = new List<ChaControl>();
@@ -207,7 +344,23 @@ namespace ClothingControl {
                 if (character != null) result.Add(character);
                 return result;
             }
-            if (!IsStudio()) return result;
+            if (!IsStudio()) {
+                HSceneProc active = ActiveHScene();
+                if (active == null) return result;
+                // Use the HSceneProc's actual actor roster. Never scan every
+                // ChaControl (which could include inactive scene NPCs).
+                // These fields are public in the installed game's
+                // Assembly-CSharp.dll, as already used by JuiceControl.
+                // Private-only reflection would silently return zero actors.
+                if (active.lstFemale != null)
+                    foreach (ChaControl candidate in active.lstFemale)
+                        if (candidate != null && !result.Contains(candidate)) result.Add(candidate);
+                ChaControl male = active.male;
+                if (male != null && !result.Contains(male)) result.Add(male);
+                ChaControl male1 = HSceneMale1 == null ? null : HSceneMale1.GetValue(active) as ChaControl;
+                if (male1 != null && !result.Contains(male1)) result.Add(male1);
+                return result;
+            }
             Studio.Studio studio = Singleton<Studio.Studio>.Instance;
             if (studio == null || studio.dicObjectCtrl == null) return result;
             List<int> keys = new List<int>(studio.dicObjectCtrl.Keys);
@@ -271,12 +424,95 @@ namespace ClothingControl {
             return (slot + 1) + ". " + (string.IsNullOrEmpty(name) ? part.type + ":" + part.id : name);
         }
 
-        private void Update() {
-            UpdateMakerPresentation();
-            if (!NativeMakerHidden() && shortcut.Value.IsDown() && !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
-                if (visible) Close();
-                else if (SupportedScene()) Open();
+        // The original Clothing State Menu uses Shift+Tab. In some modded
+        // Makers the Unity IMGUI navigation consumes Tab before BepInEx's
+        // KeyboardShortcut.IsDown observes it. Keep the ordinary configurable
+        // shortcut route and add two guarded fallbacks for its original key.
+        // The fallbacks do not intercept a user's custom binding.
+        private bool UsesDefaultShortcut() {
+            return shortcut != null &&
+                shortcut.Value.Equals(new KeyboardShortcut(KeyCode.Tab, KeyCode.LeftShift));
+        }
+
+        private bool RawDefaultShortcutDown() {
+            if (!UsesDefaultShortcut()) {
+                shiftTabWasHeld = false;
+                return false;
             }
+            bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            bool pressed = shift && Input.GetKey(KeyCode.Tab);
+            // Some runtime input blockers suppress GetKeyDown but leave the
+            // held-key state intact. Only use the rising edge, never toggle
+            // each frame while the combination remains held.
+            bool edge = pressed && !shiftTabWasHeld;
+            shiftTabWasHeld = pressed;
+            return edge || (shift && Input.GetKeyDown(KeyCode.Tab));
+        }
+
+        private bool HandleHotkey(string origin) {
+            // OnGUI and Update may observe the same press. Never toggle
+            // twice; a rapid click must not close the panel immediately.
+            if (lastHotkeyFrame == Time.frameCount ||
+                (lastHotkeyTime >= 0f && Time.unscaledTime - lastHotkeyTime < .12f))
+                return false;
+            lastHotkeyFrame = Time.frameCount;
+            lastHotkeyTime = Time.unscaledTime;
+            Logger.LogInfo("ClothingControl hotkey received via " + origin +
+                "; Maker=" + MakerAPI.InsideAndLoaded +
+                ", nativeVisible=" + !NativeMakerHidden() +
+                ", panelVisible=" + visible +
+                ", mounted=" + MaximumUIRuntime.IsMounted(MountId) + ".");
+            if (NativeMakerHidden()) {
+                Logger.LogInfo("ClothingControl hotkey ignored: native Maker interface is hidden.");
+                return false;
+            }
+            if (MaximumUIRuntime.IsAnyTextFieldFocused || MaximumUIRuntime.IsModalOpen) {
+                Logger.LogInfo("ClothingControl hotkey ignored: a MaximumUI text field or dialog has focus.");
+                return false;
+            }
+            if (visible) { Close(); return true; }
+            if (SupportedScene()) { Open(); return true; }
+            Logger.LogInfo("ClothingControl hotkey ignored: only Maker, Studio and Free H are supported.");
+            return false;
+        }
+
+        private void OnGUI() {
+            Event current = Event.current;
+            if (current == null || current.type != EventType.KeyDown ||
+                current.keyCode != KeyCode.Tab || !UsesDefaultShortcut() ||
+                (current.modifiers & EventModifiers.Shift) == 0) return;
+            if (HandleHotkey("Unity OnGUI KeyDown")) current.Use();
+        }
+
+        private void Update() {
+            if (!runtimeLoopLogged) {
+                runtimeLoopLogged = true;
+                Logger.LogInfo("ClothingControl Unity Update loop active; frame=" +
+                    Time.frameCount + ", active=" + isActiveAndEnabled + ".");
+            }
+            if (!MakerAPI.InsideMaker) makerStateLogged = false;
+            else if (MakerAPI.InsideAndLoaded && !makerStateLogged) {
+                makerStateLogged = true;
+                Logger.LogInfo("ClothingControl Maker active: nativeVisible=" +
+                    !NativeMakerHidden() + ", preference=" + showInMaker.Value +
+                    ", visible=" + visible + ", mounted=" +
+                    MaximumUIRuntime.IsMounted(MountId) + ".");
+                // MakerFinishedLoading may occur before KKAPI marks Maker
+                // InsideAndLoaded, or a competing plugin may reorder startup.
+                // Respect the saved preference even if the one-time callback
+                // was missed; only auto-open once on this Maker session.
+                if (showInMaker != null && showInMaker.Value && !visible)
+                {
+                    Logger.LogInfo("ClothingControl restoring saved Maker window visibility.");
+                    Open();
+                }
+            }
+            UpdateMakerPresentation();
+            bool configuredKey = shortcut != null && shortcut.Value.IsDown();
+            bool rawKey = RawDefaultShortcutDown();
+            if (configuredKey || rawKey)
+                HandleHotkey(configuredKey ? "BepInEx KeyboardShortcut" :
+                    "Unity Input.GetKeyDown");
             if (!visible) return;
             if (batch != null && (!IsStudio() || SceneManager.GetActiveScene().handle != batch.SceneHandle))
                 CancelOperations("场景已变更，停止预设应用。");
@@ -289,6 +525,8 @@ namespace ClothingControl {
         }
 
         private void Open() {
+            Logger.LogInfo("ClothingControl opening; Maker=" + MakerAPI.InsideAndLoaded +
+                ", Studio=" + IsStudio() + ", HScene=" + IsHScene() + ".");
             if (view == null) {
                 MaximumUIRuntime.EnsureHost();
                 view = new WardrobeView();
@@ -302,11 +540,16 @@ namespace ClothingControl {
             generation++;
             nextPoll = 0f;
             Refresh();
-            MaximumUIRuntime.SetVisible(MountId, !makerPresentationSuppressed);
+            bool applied = MaximumUIRuntime.SetVisible(MountId, !makerPresentationSuppressed);
             if (!makerPresentationSuppressed) MaximumUIRuntime.Focus(MountId);
+            Logger.LogInfo("ClothingControl opening result: mount=" +
+                MaximumUIRuntime.IsMounted(MountId) + ", SetVisible=" + applied +
+                ", IsVisible=" + MaximumUIRuntime.IsVisible(MountId) +
+                ", suppressed=" + makerPresentationSuppressed + ".");
         }
 
         private void Close(bool remember = true) {
+            Logger.LogInfo("ClothingControl closing; rememberMakerVisibility=" + remember + ".");
             visible = false;
             makerPresentationSuppressed = false;
             generation++;
@@ -363,6 +606,7 @@ namespace ClothingControl {
                 CoordinateIndex = Coordinate(character), Presets = presets, PresetIndex = presetIndex,
                 Name = draft, Status = status, Error = store.Error, CanWrite = store.CanWrite,
                 Busy = Busy, HasTarget = character != null && coordinateCount > 0,
+                CanChangeCoordinate = !IsHScene() && (MakerAPI.InsideAndLoaded || IsStudio()),
                 Scope = presetScope, CanScenePresets = sceneSupported, HasSceneTargets = characters.Count > 0,
                 Page = page, AccessoryGroup = accessoryGroup, AccessoryQuery = accessoryQuery,
                 Close = delegate { if (visible && token == generation) Close(); },
@@ -377,7 +621,9 @@ namespace ClothingControl {
                 Refresh();
             };
             model.SelectCoordinate = index => {
-                if (!TargetCurrent(token, character)) return;
+                // Never reload an entire coordinate during a running Free H
+                // animation; this would invalidate the current native rig.
+                if (!TargetCurrent(token, character) || IsHScene()) return;
                 if (Coordinate(character) != index) BeginCoordinateChange(character, index, null);
             };
             int capturedScope = presetScope;
@@ -456,12 +702,15 @@ namespace ClothingControl {
                     string kind = GarmentKinds[i];
                     GarmentVisibility entry;
                     if (!TryReadGarment(character, kind, out entry)) continue;
+                    int[] states = ReadGarmentOptions(character, kind);
                     model.Garments.Add(new WardrobeRow {
-                        Slot = i, Item = entry.Item, Label = GarmentLabels[i], Visible = entry.Visible,
-                        Change = value => {
-                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
+                        Slot = i, Item = entry.Item, Label = GarmentLabels[i],
+                        Visible = entry.Visible, State = entry.State, AllowedStates = states,
+                        ChangeState = value => {
+                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate ||
+                                Array.IndexOf(states, value) < 0) return;
                             TryEdit(() => SetMatchingGarment(character, new GarmentVisibility {
-                                Kind = entry.Kind, Item = entry.Item, Visible = value
+                                Kind = entry.Kind, Item = entry.Item, Visible = value == 0, State = value
                             }), "已更新服装状态。");
                         }
                     });
@@ -524,21 +773,33 @@ namespace ClothingControl {
             var states = character.fileStatus.clothesState;
             if (slot < 0 || slot >= parts.Length || slot >= states.Length || parts[slot] == null ||
                 parts[slot].id <= 0 || !character.IsClothesStateKind(slot)) return false;
-            if (states[slot] != 0 && states[slot] != 3) return false;
-            if (!character.IsClothesStateType(slot, 0) || !character.IsClothesStateType(slot, 3)) return false;
-            entry = new GarmentVisibility { Kind = kind, Item = parts[slot].id, Visible = states[slot] == 0 };
+            int current = states[slot];
+            if (current < 0 || current > 3 || !character.IsClothesStateType(slot, (byte)current)) return false;
+            entry = new GarmentVisibility {
+                Kind = kind, Item = parts[slot].id, Visible = current == 0, State = current
+            };
             return true;
+        }
+
+        private static int[] ReadGarmentOptions(ChaControl character, string kind) {
+            List<int> states = new List<int>();
+            if (character == null || !GarmentVisibility.IsSupported(kind)) return states.ToArray();
+            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), kind);
+            for (int state = 0; state < 4; state++)
+                if (character.IsClothesStateType(slot, (byte)state)) states.Add(state);
+            return states.ToArray();
         }
 
         private static bool SetMatchingGarment(ChaControl character, GarmentVisibility entry) {
             GarmentVisibility current;
             if (entry == null || !TryReadGarment(character, entry.Kind, out current) ||
                 !entry.Matches(current.Kind, current.Item)) return false;
-            if (entry.Visible == current.Visible) return true;
             int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), entry.Kind);
-            byte requested = entry.Visible ? (byte)0 : (byte)3;
-            // Both states were explicitly confirmed supported by the actual
-            // garment. No fallback cycling through other clothing states.
+            int state = entry.State >= 0 ? entry.State : (entry.Visible ? 0 : 3);
+            if (state < 0 || state > 3 || !character.IsClothesStateType(slot, (byte)state)) return false;
+            if (current.State == state) return true;
+            byte requested = (byte)state;
+            // Never invoke the native fallback cycling for unsupported states.
             character.SetClothesState(slot, requested, true);
             return character.fileStatus.clothesState[slot] == requested;
         }
@@ -577,7 +838,7 @@ namespace ClothingControl {
                 maker.customCtrl.ddCoordinate.value = index;
                 return true;
             }
-            if (!IsStudio()) return false;
+            if (!IsStudio() || IsHScene()) return false;
             character.ChangeCoordinateTypeAndReload((ChaFileDefine.CoordinateType)index);
             return true;
         }
@@ -622,6 +883,11 @@ namespace ClothingControl {
             }
             if (Coordinate(character) == preset.Coordinate) {
                 ApplyAccessories(character, preset);
+                return;
+            }
+            if (IsHScene()) {
+                status = "Free H 中只可应用当前配装的状态；无法重载整套配装。";
+                Refresh();
                 return;
             }
             BeginCoordinateChange(character, preset.Coordinate, preset);

@@ -120,6 +120,7 @@ namespace MaximumUI {
         public Rect Rect;
         public bool Initialized;
         public bool Folded;
+        public bool Translucent;
         public DragState Drag = new DragState();
         internal bool Resizing;
         internal Rect ResizeStart;

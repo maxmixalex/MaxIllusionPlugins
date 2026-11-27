@@ -1,0 +1,88 @@
+# MaxIllusionPlugins Windows RX18 — Actual game acceptance guide (2026-11-26)
+
+This checklist describes **in-game** verification. Successful CI compilation, screenshot rendering and managed assertions do not replace a Windows Koikatsu run. Do not merge the integrated draft PR until the relevant game behavior has been checked.
+
+## Keyboard controls (current defaults)
+
+| Feature | Key / entry | Context |
+| --- | --- | --- |
+| BepInEx Configuration Manager | **F1** | Most game screens; see and edit plugin settings |
+| JuiceControl | **top-row 0** (`Alpha0`, not numpad 0) | Effect editor |
+| ClothingControl | **LeftShift+Tab** | Maker, Studio, Free H; matches original Clothing State Menu |
+| HSControl | **Ctrl+F8**, or native **HS** button beside Config | Free H |
+| LoveJuice panel | **Ctrl+F9** | Enables/disables the configuration window, *not* the effect itself |
+| LoveJuice sample | **F9** | Emit native Studio drops at selected character, when LoveJuice is enabled |
+| FemboyMode bone/animation diagnosis | **Ctrl+Shift+F10** | Logs current Maker/Free H rig and animation info |
+| FemboyMode XYZ gizmo | Body > All > "显示轴（可拖动）" | Maker; no standalone toggle hotkey |
+| FemboyMode gizmo drag | **Shift** = fine, **Ctrl** = coarse | Maker, while dragging |
+
+The shortcut entries can be changed with F1 or in their corresponding `BepInEx/config/*.cfg` file. Close any competing plugin that binds the same shortcut.
+
+## Configurations and baseline (checked against the user's installed RX18 configuration)
+
+- `BepInEx/config/MaxMixAlex.FemboyMode.cfg`: Maker > `Enable Body All native scrolling = true` is **new in 0.5.8**, and is a live rollback switch. Set it to `false` in F1 to restore the original Maker Body > All UI without disabling other Femboy features. The existing `Maker / Enable male genital bone transforms` and `Enable male geometry bone scaling` remain independent.
+- FemboyMode > `Diagnostics / Dump rig and animation names` = `F10 + LeftShift + LeftControl`; `Debug / Verbose logs` is enabled on this RX18 installation. `Male fluid / Amount multiplier` is set to **2** (different from the default of 1). Current active physics fields are `Model-relative launch speed = 0.85`, `Local pitch relative to shaft degrees = 0`, and `Launch spread degrees = 6`. The old cfg lines `Launch speed = 2.5` and `Launch elevation degrees = 18` are **stale legacy keys**; do not mistake them for the current physics controls.
+- `BepInEx/config/MaxMixAlex.LoveJuice.cfg`: `General / Enabled = false` on this installation. **Turn it on first** using F1, the Ctrl+F9 window, or JuiceControl's integration switch; otherwise the F9 sample and automatic drips cannot work. `Sources`: Face, Body, Intimate = true; Male pre-fluid, Milk, Shower, Marked geometry = false. This explains why those opt-in sources will not appear until enabled. `Male pre-fluid gauge threshold = 45`; `Milk gauge threshold = 65`.
+- LoveJuice > `Performance / Max active drops = 48`, `Emission interval = 0.26`; `Physics / World collision = true`, `Gravity = 8`, `Air damping = 1`, `Drop lifetime = 1.6`, `Launch speed = 0.35`; `Visual / Prefab scale multiplier = 0.045`. For F9 tests set `General / Preview channel`: 0 Water, 1 Saliva, 2 Body, 3 Shower, 4 Milk, 5 Marked geometry, 6 Intimate, 7 Male pre-fluid.
+- `BepInEx/config/MaxMixAlex.JuiceControl.cfg`: `General / Enabled = true`, `Show menu = Alpha0`; installed SkinEffects is reported as `已安装 (旧API)`. The preset file is `BepInEx/config/MaxMixAlex.JuiceControl.presets.xml`. **Open the UI with nonzero Ex values, close, and verify no reset.**
+- `BepInEx/config/MaxMixAlex.HSControl.cfg`: `General / Enabled = true`; `Motion / Auto speed mode = 0` means automatic speed is **off** (1 = bands, 2 = randomized range, 3 = gauge linked). `Manual override = false`, `Auto strength = false`, `Strength timer minimum = 10`, `maximum = 30`. `Scene / Auto male finish = false`, `Auto female finish = true`, `Auto replay = false`. Turn a feature on before testing its automatic behavior.
+- `BepInEx/config/MaxMixAlex.ClothingControl.cfg`: `General / Show menu = F7`, `Show in Maker = false` (remember visibility preference, not an unload or disable setting).
+
+### Scope history
+
+0.5.9 was a temporary reversion to a Femboy-only scroll and **did not** meet the original whole-page requirement. **0.6.0** now scrolls all native and extension rows in the original AllTop using the existing VerticalLayoutGroup; no original row is moved. The body page is clipped in place with RectMask2D and driven by a single copied native Scrollbar. Check the complete viewport in Windows Maker, not just the generated managed screenshots.
+
+### Scope correction (0.5.9)
+
+Version 0.5.8 sometimes left the original Maker Body > All panel blank. 0.5.9 therefore **keeps every native and third-party control in place** and only wraps the 24 FemboyMode geometry controls in an independent scrollable section under the same tab. Full-page native scrolling is deliberately not claimed. Verify that the Femboy marker and all vanilla rows are still present.
+
+## Blocked acceptance checkpoint: FemboyMode 0.6.4 — scrollbar drag hit-region
+
+The prior two tests were accepted: the scrollbar is outside the content and native text clips correctly. **Do not retest the other plugins or start the XYZ axis gate.**
+
+1. Install 0.6.4, open Maker > Body > All, and **click/drag on the visible scrollbar thumb** at its center and ends. The mouse hit region must exactly follow the drawn thumb and track, without requiring a click to its left or right.
+2. Verify the bar remains visually outside the content, that overflowing native text still disappears at the top/bottom, and that it hides when leaving Body > All.
+3. Check `BepInEx/LogOutput.log` for `Maker scrollbar visual/interactive handle hitboxes aligned` or `Maker scrollbar hit-test mismatch`. These messages are emitted only after the live Unity EventSystem raycast at the rendered thumb center.
+
+This acceptance point is **blocked** until real-game dragging matches the visible position. Source assertions and GitHub Actions cannot substitute for this check.
+
+## Blocked acceptance checkpoint: FemboyMode 0.6.3 (first gate)
+
+The user has **already confirmed that the single scroll area exists and its basic controls work** in 0.6.2. The next required two checks, before any other acceptance work, are:
+
+1. **External scrollbar:** check the stock-style scrollbar sits just outside the Body > All content rectangle on the right. It must not cover number fields or alter native row widths; it must disappear with the All tab.
+2. **Clipped native text:** scroll past the native "头的尺寸" row and confirm the values/text (such as the highlighted `30` that appeared *above* the viewport in the 2026-11-26 screenshot) disappear at the **viewport's top edge**. Repeat at the bottom; there must be no characters visible beyond either edge. Also verify FemboyMode rows stay scrollable with one scrollbar.
+
+The existing true Maker gizmo/axis check remains **blocked until both UI items pass**. Do not proceed to other plugins. The new mask is a production UI change not covered by headless raster previews; only the actual Windows RX18 screenshot can close this gate.
+
+## Blocked acceptance checkpoint: FemboyMode 0.6.2 only
+
+Everything after the Maker test remains blocked until these three findings pass together:
+
+1. Original Body > All single scrollbar matches stock SocksTop thickness/artwork, and still reaches the last Balls row.
+2. Wheel input follows each actual detent promptly even while the pointer is over a native slider. The wheel step now comes directly from the native SocksTop `ScrollRect.scrollSensitivity`; there is no independent manual sensitivity setting.
+3. "显示轴" uses the game's original `CustomUtility.CustomGuideObject` arrows/rotation rings rather than an overlay. Verify actual pointer drag updates the native character model and Maker card values; verify changing accessory slots does not change or reset an accessory.
+
+Do not proceed to LoveJuice, HSControl, clothing, or other QA until the user accepts this checkpoint. No runtime Windows acceptance is claimed from compiler/CI alone.
+
+## Priority test cases
+
+1. **Maker layout / FemboyMode 0.6.0**: Female Maker > Body > All. Original rows, extra Femboy controls and draggable axis settings must all be present in the same scroll viewport. The scrollbar must have meaningful track height; scroll wheel, dragging, and other Maker tabs must work. Repeat after changing tabs, resolution, card, and returning to Maker. The 2026-11-26 screenshot with a tiny scrollbar and misplaced text is a **failure**.
+2. **Maker emergency rollback**: F1 > Femboy Mode > Maker > `Enable Body All native scrolling = false` *while the Maker is open*. The original Body > All layout and input should recover without reopening the game; turn it back on for a new check. If this fails, preserve `BepInEx/LogOutput.log` and a screenshot.
+3. **Femboy XYZ handles**: Enable an active marked card, show one of the Penis/Balls axes, and drag X/Y/Z under scale, translation and rotation. Check sliders and character transform remain in sync and the gizmo disappears when hidden.
+4. **JuiceControl integrity**: Set nonzero Ex/SkinEffects values, open/close JuiceControl, change character, and save/reload presets. Values must not silently clear or be overwritten by an unreadable optional field.
+5. **LoveJuice**: Enable `General / Enabled` first. In Free H, Ctrl+F9 + F9 previews; confirm each channel, material, bone attachment, particles, particle cap, and pose-relative direction. Test optional sources one at a time. With SkinEffects uninstalled or unreadable, only the corresponding optional event should be skipped.
+6. **HSControl**: Ctrl+F8 or native HS button. Test manual speed, then separately change mode to 1, 2 and 3; enable Auto strength / Auto replay when evaluating those, and test replay only in valid supported native states. Repeat in 3P/MMF.
+7. **ClothingControl**: F7 in Maker, Studio and Free H; verify nine garment categories, accessories, multi-character selection, preset save/apply and mismatched-character safeguards.
+8. **Lifetime and cross-plugin**: Switch between Maker, Free H and menu, reload cards, and alternate panels. No stale target, UI capture, particle pool leak or repeated exception.
+
+## Evidence to provide for a failure
+
+- For a visually wrong Maker pane: full-resolution screenshot, the active Maker tab, game resolution, and the fresh `BepInEx/LogOutput.log` **after the issue**.
+- For the 0.5.8 fallback: whether changing `Enable Body All native scrolling` from true to false restored the page; attach the resulting log.
+- For physics, animation or gizmo behaviors: a short clip showing the action and resulting state. Avoid sending full game assets unless necessary.
+- For lost preset values: the affected keys and before/after numbers; do not replace or delete the original presets during diagnosis.
+
+### Important evidence limits
+
+The source log from 2026-11-26 contains `Femboy Mode 0.5.7: Harmony groups registered 10/10` and `Maker Body > All: native whole-page scroll installed.` but no Maker-scroll exception. The screen layout regression was visible despite successful installation. Version 0.5.8 fixes a code path that measured its own content height and supplies a rollback control, but the new UI behavior must still be checked on the real Windows game.
