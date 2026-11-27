@@ -16,7 +16,7 @@ namespace LoveJuice {
                 case LoveJuiceChannel.Body: return "p_koi_syu_LiquidSiru_00_00";
                 case LoveJuiceChannel.Intimate: return "p_koi_syu_LiquidSiru_00_00";
                 case LoveJuiceChannel.MalePre: return "p_koi_syu_LiquidWater_00_00";
-                case LoveJuiceChannel.Shower: return "p_koi_syu_LiquidShower_01_00";
+                case LoveJuiceChannel.Shower: return "p_koi_syu_LiquidWater_00_00";
                 case LoveJuiceChannel.Milk: return "p_koi_syu_LiquidWater_00_00";
                 case LoveJuiceChannel.Special: return "p_koi_syu_LiquidKancho_00_00";
                 default: return null;
