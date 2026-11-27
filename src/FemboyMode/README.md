@@ -1,10 +1,17 @@
-# Femboy Mode for Koikatsu — v0.6.5
+# Femboy Mode for Koikatsu — v0.6.6
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
 
+## 0.6.6 — actual genital visibility and expanded garment fitting
+
+- Physical fluid trajectories now use **`ChaFileStatus.visibleSon`**, the live game-level genital-visibility boolean, rather than guessing visibility from underwear slot 3 or `notShorts`. This covers cases where a swimsuit, bodysuit, top/bottom or modded costume conceals the anatomy even if the separate underwear slot is missing.
+- Mesh fitting now scans `ChaControl.objClothes` slots **0 (tops, including one-piece outfits), 1 (bottoms) and 3 (underwear)** if worn. It evaluates the character's current skinned garment with `SkinnedMeshRenderer.BakeMesh`, finds inadequate front clearance near the shaft, and maps a softly bounded displacement back through the dominant skinning bone. This replaces the previous invalid assumption that raw bind-pose vertices were already in the current animated position.
+- Uses a scoped mesh-read mechanism compatible with optimized game meshes, borrowed from the approach in ClothingCompression, with cleanup in `finally`. Changes live on an owned clone only, automatically restoring the original source mesh on clothing change, reload or disabling. Debug logging reports which garment renderers were actually changed.
+- Still experimental for heavily custom-weighted garment meshes. No claim of universal fit or actual visual correctness until representative bodysuit, swimsuit, stock underwear and modded underwear models have been inspected in the game.
+
 ## 0.6.5 — underwear-sensitive projectiles and reversible mesh clearance
 
-- Physical male-fluid emission reads the live Koikatsu underwear state `ChaControl.fileStatus.clothesState[3]` (On 0 / Shift 1 / Hang 2 / Off 3) and `notShorts` for the model absence check. A covered source uses reduced native MetaballShoot launch velocity with a locally lowered trajectory; Shift/Hang use a partially exposed profile; Off returns to the original shaft-relative parabola. Changes during emission affect subsequent droplets without changing game-owned presets.
+- Historical 0.6.5 physical-fluid routing used the live Koikatsu underwear state `ChaControl.fileStatus.clothesState[3]` (On 0 / Shift 1 / Hang 2 / Off 3) and `notShorts` for the model absence check. A covered source uses reduced native MetaballShoot launch velocity with a locally lowered trajectory; Shift/Hang use a partially exposed profile; Off returns to the original shaft-relative parabola. Changes during emission affect subsequent droplets without changing game-owned presets.
 - **Maker / Automatically fit unadapted underwear meshes** (on by default) optionally probes only the current underwear slot, estimates its front silhouette clearance relative to the male geometry bone and shaft tip, and creates a private, limited-distortion `SkinnedMeshRenderer.sharedMesh` copy if clearance is insufficient. Models already leaving room are skipped. The original mesh is restored on outfit change, feature disable, character reload and destruction. Shared AssetBundle meshes and cards are never edited.
 - The automatic fit is conservative, heuristic and **not yet visually validated across different imported underwear meshes**. Disable the new Maker option if a particular model looks distorted; include garment/mod name and screenshots in a QA report.
 
