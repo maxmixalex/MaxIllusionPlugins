@@ -239,73 +239,53 @@ namespace HSControl
         }
 
         private bool CanNativeCommands(HFlag flags, bool needsLoop) {
-            if (flags == null || flags.nowAnimationInfo == null ||
-                flags.click != HFlag.ClickKind.none ||
-                !HSControlActionRules.CanStartLoop((int)flags.mode, flags.rely, true)) return false;
-            return !needsLoop || HSControlActionRules.IsLoop(flags.nowAnimStateName);
-        }
-
-        private static bool CanStageGauge(HFlag flags) {
-            return flags != null && HSControlActionRules.CanStageGauge(
-                (int)flags.mode, flags.nowAnimationInfo != null,
-                flags.click != HFlag.ClickKind.none);
+            // HCtrl.CanProc does not impose an invented "currently
+            // unavailable" gate based on loop, click, or animation metadata.
+            // Only the actual native action and original mode matter.
+            return flags != null && scene != null &&
+                HSControlNativeActions.HasAction(scene) &&
+                HSControlActionRules.OriginalCanForce(
+                    (int)flags.mode, needsLoop ? 8 : 0);
         }
 
         private void PerformSceneCommand(int version, HSceneProc owner, int kind) {
-            if (!SessionCurrent(version, owner) || !master.Value || owner.flags == null) return;
+            if (!SessionCurrent(version, owner) || !master.Value ||
+                owner.flags == null) return;
             HFlag flags = owner.flags;
-            if ((kind <= 1 || kind == 8) && !CanNativeCommands(flags, false)) {
-                status = "当前场景无法切换原生动作。";
-                RefreshView();
+            // Original HCtrl buttons use CanProc(mode) and dispatch directly.
+            // Do not produce fabricated "current action disallowed" banners.
+            if (!HSControlActionRules.OriginalCanForce((int)flags.mode, kind))
                 return;
-            }
-            if (kind >= 2 && kind <= 7 &&
-                (!CanStageGauge(flags) ||
-                 !HSControlActionRules.OriginalCanForce((int)flags.mode, kind))) {
-                status = "当前场景正在执行其他动作，暂不可修改状态。";
-                RefreshView();
-                return;
-            }
             try {
-                bool okay;
-                if (kind <= 1 || kind == 8) {
-                    if (kind == 0) strongMotionSelected = false;
-                    if (kind == 1) strongMotionSelected = true;
-                    okay = HSControlNativeActions.TryStartLoop(owner, strongMotionSelected);
-                    if (okay) motion.Reset(flags.speedCalc);
-                } else if (kind == 6 && (int)flags.mode == 0) {
-                    // Original HCtrl's female-finish button does not just
-                    // force gaugeFemale to 100: it starts Orgasm_Start and
-                    // records the native Aibu orgasm event.
-                    aibu.Clear(owner);
-                    okay = HSControlNativeActions.TryStartAibuFemaleFinish(owner);
+                bool performed;
+                if (kind == 0 || kind == 1) {
+                    strongMotionSelected = kind == 1;
+                    performed = HSControlNativeActions.TryChangeStrength(
+                        owner, strongMotionSelected);
+                } else if (kind == 8) {
+                    performed = HSControlNativeActions.TryStartLoop(
+                        owner, strongMotionSelected);
+                    if (performed) motion.Reset(flags.speedCalc);
                 } else {
-                    // Staging a native gauge is a data update only. Never
-                    // clear a touch/drag click to make this button usable.
-                    if (kind == 2 || kind == 4) flags.gaugeMale = Math.Max(flags.gaugeMale, 70f);
-                    if (kind == 3 || kind == 4) flags.gaugeFemale = Math.Max(flags.gaugeFemale, 70f);
-                    if (kind >= 5) {
-                        if (kind == 6 || kind == 7) {
-                            // Manual female climax is not coupled to the auto setting.
-                            // The native game processes the full gauge itself.
-                            flags.gaugeFemale = 100f;
-                        }
-                        if (kind == 5 || kind == 7) {
-                            flags.gaugeMale = 100f;
-                            didMaleFinish = false;
-                            HSControlSettings forced = Settings();
-                            forced.AutoMaleFinish = true;
-                            HandleFinish(flags, forced);
-                        }
-                    }
-                    okay = true;
+                    if (kind == 6 && (int)flags.mode == 0)
+                        aibu.Clear(owner);
+                    performed = HSControlNativeActions.TryForceAction(owner, kind);
                 }
-                status = okay ? "已向原生场景发送操作：" + kind : "当前动作暂不可执行。";
+                if (performed) {
+                    status = "原生操作已发送";
+                    RefreshView();
+                }
             } catch (Exception ex) {
-                status = "原生操作失败：" + ex.GetBaseException().Message;
-                Logger.LogWarning(ex);
+                Logger.LogWarning("HCtrl native action adapter: " + ex);
             }
-            RefreshView();
+        }
+
+        private bool NativeButtonAvailable(HSceneProc owner, int kind) {
+            return master != null && master.Value &&
+                owner != null && owner.flags != null &&
+                HSControlNativeActions.HasAction(owner) &&
+                HSControlActionRules.OriginalCanForce(
+                    (int)owner.flags.mode, kind);
         }
 
         private void RefreshView() {
@@ -319,19 +299,15 @@ namespace HSControl
                 Available = flags != null, Enabled = master.Value,
                 AnimationState = flags == null ? string.Empty : flags.nowAnimStateName,
                 SceneMode = flags == null ? -1 : (int)flags.mode,
-                CanForceLoop = master.Value && CanNativeCommands(flags, false),
-                CanStageMale = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 2),
-                CanStageFemale = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 3),
-                CanStageBoth = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 4),
-                CanFinishMale = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 5),
-                CanFemaleFinish = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 6),
-                CanFinishBoth = master.Value && CanStageGauge(flags) &&
-                    HSControlActionRules.OriginalCanForce((int)flags.mode, 7),
+                CanForceLoop = master.Value && flags != null && owner != null &&
+                    HSControlNativeActions.HasAction(owner) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 8),
+                CanStageMale = NativeButtonAvailable(owner, 2),
+                CanStageFemale = NativeButtonAvailable(owner, 3),
+                CanStageBoth = NativeButtonAvailable(owner, 4),
+                CanFinishMale = NativeButtonAvailable(owner, 5),
+                CanFemaleFinish = NativeButtonAvailable(owner, 6),
+                CanFinishBoth = NativeButtonAvailable(owner, 7),
                 FemaleLocked = flags != null && flags.lockGugeFemale,
                 MaleLocked = flags != null && flags.lockGugeMale,
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
