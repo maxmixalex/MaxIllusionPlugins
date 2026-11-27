@@ -38,6 +38,7 @@ namespace LoveJuice
         private float phase;
         private float nextNativeProbe;
         private bool nativeAvailable;
+        private LineRenderer nativeFilament;
         private int tearSequence;
         private const int MaxDroplets = 8;
 
@@ -52,15 +53,19 @@ namespace LoveJuice
             if (Time.unscaledTime < nextNativeProbe) return;
             nextNativeProbe = Time.unscaledTime + .5f;
             nativeAvailable = false;
+            nativeFilament = null;
             LineRenderer[] lines =
                 UnityEngine.Object.FindObjectsOfType<LineRenderer>();
             foreach (LineRenderer candidate in lines)
             {
                 if (candidate != null && candidate != line &&
+                    candidate.enabled && candidate.gameObject.activeInHierarchy &&
+                    candidate.positionCount >= 2 &&
                     string.Equals(candidate.gameObject.name, "BeroIto",
                         StringComparison.OrdinalIgnoreCase))
                 {
                     nativeAvailable = true;
+                    nativeFilament = candidate;
                     break;
                 }
             }
@@ -212,7 +217,33 @@ namespace LoveJuice
             strength = Mathf.MoveTowards(strength, draw ? 1f : 0f,
                 dt * (draw ? 4f : 6f));
 
-            if (suppressNative || strength < .025f ||
+            if (suppressNative)
+            {
+                // The installed BeroIto thread owns its own shape. Never
+                // draw a second copy, but still permit small detached tears
+                // from the native thread's live endpoint.
+                if (line != null) line.enabled = false;
+                if (ownedMaterial == null)
+                    ownedMaterial = CloneNativeSalivaMaterial();
+                float cycle = LiquidSourceTriggers.SalivaTearPeriod(distance);
+                phase += dt;
+                if (phase >= cycle && nativeFilament != null &&
+                    ownedMaterial != null) {
+                    phase %= cycle;
+                    int last = nativeFilament.positionCount - 1;
+                    Vector3 tip = nativeFilament.GetPosition(last);
+                    Vector3 previous = nativeFilament.GetPosition(last - 1);
+                    if (!nativeFilament.useWorldSpace) {
+                        tip = nativeFilament.transform.TransformPoint(tip);
+                        previous = nativeFilament.transform.TransformPoint(previous);
+                    }
+                    Vector3 tangent = tip - previous;
+                    ReleaseDroplet(tip, tangent.sqrMagnitude > .00001f
+                        ? tangent.normalized : Vector3.down);
+                }
+                return;
+            }
+            if (strength < .025f ||
                 distance >= .15f || !enabled)
             {
                 if (line != null) line.enabled = false;
@@ -274,6 +305,7 @@ namespace LoveJuice
         {
             strength = elapsed = phase = 0f;
             nativeAvailable = false;
+            nativeFilament = null;
             nextNativeProbe = 0f;
             tearSequence = 0;
             foreach (DetachedDroplet drop in droplets)
