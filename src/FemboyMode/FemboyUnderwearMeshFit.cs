@@ -62,7 +62,7 @@ namespace FemboyMode
         {
             // Full-body / one-piece clothing frequently lives in top or
             // bottom instead of underwear. Never touch body/accessories.
-            return slot == 0 || slot == 1 || slot == 3;
+            return FemboyRules.IsPotentialCrotchGarmentSlot(slot);
         }
 
         private GameObject GarmentAt(int slot)
