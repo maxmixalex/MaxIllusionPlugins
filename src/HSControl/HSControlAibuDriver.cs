@@ -25,6 +25,19 @@ namespace HSControl
         private HFlag ownedFlags;
         private float remaining;
         private float retryIn;
+        private bool completed;
+
+        internal bool TakeCompleted() {
+            bool wasCompleted = completed;
+            completed = false;
+            return wasCompleted;
+        }
+
+        internal void Clear(HSceneProc scene) {
+            Stop(scene);
+            completed = false;
+            retryIn = 0f;
+        }
 
         internal bool Running {
             get { return ownedHand != null && ownedFlags != null; }
@@ -154,7 +167,12 @@ namespace HSControl
                 flags.FemaleGaugeUp(flags.speed * 5f * flags.rateDragGauge,
                     false, hand.nowMES.stateMotion == 0);
             remaining -= dt;
-            if (remaining <= 0f || flags.gaugeFemale >= 100f) {
+            if (flags.gaugeFemale >= 100f) {
+                // Only an actual owned caress can request the native finish.
+                Stop(scene);
+                completed = true;
+                retryIn = UnityEngine.Random.Range(.7f, 3f);
+            } else if (remaining <= 0f) {
                 Stop(scene);
                 retryIn = UnityEngine.Random.Range(.7f, 3f);
             }
