@@ -20,10 +20,11 @@ namespace HSControl
     public sealed class HSControlPlugin : BaseUnityPlugin
     {
         public const string GUID = "MaxMixAlex.HSControl";
-        public const string Version = "0.1.2";
+        public const string Version = "0.1.3";
         private const string MountId = GUID + ".window";
         internal static HSControlPlugin Instance;
         private readonly HSControlMotionEngine motion = new HSControlMotionEngine(Environment.TickCount);
+        private readonly HSControlAibuDriver aibu = new HSControlAibuDriver();
         private ConfigEntry<bool> master, manual, autoStrength, autoMaleFinish, autoFemaleFinish, autoReplay;
         private ConfigEntry<int> mode, band, linkage;
         private ConfigEntry<float> manualSpeed, rangeMin, rangeMax, strengthMin, strengthMax;
@@ -89,10 +90,12 @@ namespace HSControl
             }
 
             if (scene == null || scene.flags == null) {
+                aibu.Stop(scene);
                 if (visible) Close();
                 return;
             }
             if (!master.Value) {
+                aibu.Stop(scene);
                 // An enabled/disabled master switch must be recoverable from
                 // the same window; do not freeze the UI on the disabled branch.
                 if (visible && view != null && Time.unscaledTime >= nextViewPoll) {
@@ -107,10 +110,13 @@ namespace HSControl
             string state = flags.nowAnimStateName ?? string.Empty;
             bool canDrive = motion.Step(Time.deltaTime, hmode, state, flags.rely,
                 flags.gaugeMale, flags.gaugeFemale, config);
-            // Aibu input and both hands belong to the game's own drag controller.
-            // Only a deliberate manual speed override may write to this idle path.
-            if (canDrive && hmode == 0 && config.ManualOverride)
-                flags.speed = motion.Current;
+            // Original KK_HCtrl drives native Aibu using both speed and
+            // HFlag.FemaleGaugeUp. Previously we only updated speed (and only
+            // for manual override), so the visible gauge stayed frozen.
+            // The scene-local driver yields to either active manual hand.
+            if (canDrive && hmode == 0)
+                aibu.Tick(scene, flags, motion.Current, Time.deltaTime);
+            else aibu.Stop(scene);
             if (motion.StrengthToggleRequested && flags.click == HFlag.ClickKind.none &&
                 hmode != 0 && HSControlMotionEngine.CanDrive(hmode, state, flags.rely)) {
                 flags.click = HFlag.ClickKind.motionchange;
@@ -126,6 +132,7 @@ namespace HSControl
         }
 
         private void SwapScene(HSceneProc next) {
+            aibu.Stop(scene);
             scene = next;
             didMaleFinish = false;
             replayGate.Reset();
@@ -348,6 +355,7 @@ namespace HSControl
         private void OnDestroy() { Cleanup(); }
 
         private void Cleanup() {
+            aibu.Stop(scene);
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             visible = false;
