@@ -205,8 +205,10 @@ namespace LoveJuice
                 float radius = LiquidSourceTriggers.SalivaRadius(t, tCycle, opacity);
                 for (int j = 0; j < Sides; j++) {
                     float a = Mathf.PI * 2f * j / Sides;
-                    vertices[y * Sides + j] = centres[y] +
+                    Vector3 world = centres[y] +
                         radius * (side * Mathf.Cos(a) + up * Mathf.Sin(a));
+                    vertices[y * Sides + j] =
+                        strandObject.transform.InverseTransformPoint(world);
                 }
             }
             strandMesh.vertices = vertices;
