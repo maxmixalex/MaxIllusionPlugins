@@ -12,6 +12,7 @@ namespace HSControl
         internal static bool TryStartLoop(HSceneProc owner, bool strong) {
             if (owner == null || owner.flags == null || Procs == null) return false;
             HFlag flags = owner.flags;
+            if (flags.click != HFlag.ClickKind.none) return false;
             int mode = (int)flags.mode;
             if (!HSControlActionRules.CanStartLoop(mode, flags.rely, flags.nowAnimationInfo != null)) return false;
             string animation = HSControlActionRules.LoopName(mode, flags.isAnalPlay, strong);
@@ -20,15 +21,9 @@ namespace HSControl
             HActionBase action = list[mode] as HActionBase;
             if (action == null || !action.SetPlay(animation, true)) return false;
 
-            flags.click = HFlag.ClickKind.none;
-            flags.finish = HFlag.FinishKind.none;
-            flags.voiceWait = false;
-            flags.isInsideFinish = false;
-            if (mode == 1 || mode == 6 || mode == 8) {
-                flags.speedHoushi = 0;
-                if (flags.gaugeMale >= 70f) flags.gaugeMale = 35f;
-                flags.SetHoushiPlay();
-            }
+            // SetPlay already enters the requested native loop. Do not
+            // rewrite native click/finish/voice/gauge or force Houshi state:
+            // those fields belong to the game's own animation transition.
             return true;
         }
     }
