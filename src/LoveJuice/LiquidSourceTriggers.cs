@@ -3,6 +3,23 @@ using System;
 namespace LoveJuice {
     // Pure decision logic shared by the actual scene runtime and managed tests.
     internal static class LiquidSourceTriggers {
+        internal static bool KissAnimationSignal(string name, bool nativeMouthClick) {
+            if (nativeMouthClick) return true;
+            if (string.IsNullOrEmpty(name)) return false;
+            return name.IndexOf("kiss", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("kisu", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("キス", StringComparison.Ordinal) >= 0 ||
+                   name.IndexOf("ベロ", StringComparison.Ordinal) >= 0;
+        }
+
+        internal static bool DrawSalivaFilament(bool enabled,
+            bool nativeKiss, float mouthDistance, bool nativeFilamentPresent) {
+            if (!enabled || !nativeKiss || nativeFilamentPresent ||
+                float.IsNaN(mouthDistance) || float.IsInfinity(mouthDistance))
+                return false;
+            return mouthDistance > .001f && mouthDistance < .15f;
+        }
+
         internal static int MalePreLevel(int sex, bool activeLoop, bool isPrimary,
             float gauge, float threshold) {
             if (sex != 0 || !activeLoop || !isPrimary ||
