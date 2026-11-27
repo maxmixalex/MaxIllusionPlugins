@@ -58,6 +58,20 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        Check(FemboyRules.IsUnderwearAccessoryName("MyPantiesMod") &&
+              FemboyRules.IsUnderwearAccessoryName("KK_ショーツ_A") &&
+              FemboyRules.IsUnderwearAccessoryName("waist_bikini") &&
+              !FemboyRules.IsUnderwearAccessoryName("hairpin_stars"),
+              "accessory underwear recognizer handles imported named garments");
+        Check(FemboyRules.AccessoryCoverageQualified(
+                  35, -.050f, .05f, -.04f, .05f, false) &&
+              FemboyRules.AccessoryCoverageQualified(
+                  14, -.022f, .024f, -.016f, .018f, true) &&
+              !FemboyRules.AccessoryCoverageQualified(
+                  20, -.004f, .017f, -.018f, .028f, true) &&
+              !FemboyRules.AccessoryCoverageQualified(
+                  70, -.12f, -.01f, -.10f, .12f, false),
+              "accessory coverage rejects rings and off-centre items");
         Check(FemboyRules.IsPotentialCrotchGarmentSlot(0) &&
               FemboyRules.IsPotentialCrotchGarmentSlot(1) &&
               FemboyRules.IsPotentialCrotchGarmentSlot(3) &&
