@@ -43,7 +43,7 @@ internal static class PluginPreviewScenes {
         int speedMode = scenario == 0 ? 2 : scenario == 1 ? 0 : 1;
         var model = new HSControlViewModel {
             Version = "0.1.4", Available = true, Enabled = true,
-            SceneMode = 0, AnimationState = "M_Idle",
+            SceneMode = scenario == 2 ? 1 : 0, AnimationState = scenario == 2 ? "WLoop" : "M_Idle",
             Status = "已连接当前 H 场景",
             Mode = speedMode, ManualOverride = scenario == 1,
             AutoCaress = false, AutoStrength = scenario == 2,
