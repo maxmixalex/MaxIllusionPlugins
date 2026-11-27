@@ -53,6 +53,9 @@ namespace LoveJuice {
         private FieldInfo cyuKissing;
         private float nextCyuProbe;
         private bool cachedCyuKiss;
+        private FieldInfo cyuFemaleField, cyuMouthField;
+        private ChaControl cachedCyuFemale;
+        private Transform cachedCyuMouth;
 
         private sealed class Actor {
             internal ChaControl Character;
@@ -295,6 +298,8 @@ namespace LoveJuice {
             panelStatus = next == null ? "尚未进入场景。" : "已连接当前场景。";
             scene = next;
             cachedCyuKiss = false;
+            cachedCyuFemale = null;
+            cachedCyuMouth = null;
             nextCyuProbe = 0f;
             actors.Clear();
             roster.Replace(null);
@@ -408,12 +413,15 @@ namespace LoveJuice {
             if (Time.unscaledTime < nextCyuProbe) return cachedCyuKiss;
             nextCyuProbe = Time.unscaledTime + .12f;
             cachedCyuKiss = false;
+            cachedCyuFemale = null;
+            cachedCyuMouth = null;
             if (cyuType == null)
             {
                 foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     try {
-                        cyuType = assembly.GetType("Bero.CyuVR.Cyu", false);
+                        cyuType = assembly.GetType("Bero.CyuVR.Cyu", false) ??
+                                  assembly.GetType("Bero.CyuNoVR.Cyu", false);
                         if (cyuType != null) break;
                     } catch { }
                 }
@@ -422,6 +430,8 @@ namespace LoveJuice {
                     BindingFlags.NonPublic | BindingFlags.Instance;
                 cyuIsKiss = cyuType.GetProperty("IsKiss", flags);
                 cyuKissing = cyuType.GetField("kissing", flags);
+                cyuFemaleField = cyuType.GetField("female", flags);
+                cyuMouthField = cyuType.GetField("myMouth", flags);
             }
             try {
                 foreach (UnityEngine.Object instance in
@@ -434,7 +444,15 @@ namespace LoveJuice {
                         Convert.ToBoolean(cyuIsKiss.GetValue(instance, null));
                     now |= cyuKissing != null &&
                         Convert.ToBoolean(cyuKissing.GetValue(instance));
-                    if (now) { cachedCyuKiss = true; break; }
+                    if (now) {
+                        cachedCyuKiss = true;
+                        cachedCyuFemale = cyuFemaleField == null ? null :
+                            cyuFemaleField.GetValue(instance) as ChaControl;
+                        GameObject target = cyuMouthField == null ? null :
+                            cyuMouthField.GetValue(instance) as GameObject;
+                        cachedCyuMouth = target == null ? null : target.transform;
+                        break;
+                    }
                 }
             } catch { }
             return cachedCyuKiss;
@@ -446,6 +464,7 @@ namespace LoveJuice {
                 saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
                 return;
             }
+            bool moddedKiss = IsModdedKissActive();
             Actor nearestFemale = null, nearestMale = null;
             float closest = float.MaxValue;
             foreach (Actor femaleActor in actors.Values) {
@@ -463,18 +482,33 @@ namespace LoveJuice {
                     }
                 }
             }
-            if (nearestFemale == null || nearestMale == null) {
+            // CyuNoVR knows which heroine is actually kissing; use its
+            // heroine and VR/non-VR mouth target when exposed. Otherwise
+            // native H scenes use the nearest real mouth pair.
+            if (moddedKiss && cachedCyuFemale != null) {
+                Actor cyuActor;
+                if (actors.TryGetValue(cachedCyuFemale, out cyuActor) &&
+                    cyuActor.Mouth != null)
+                    nearestFemale = cyuActor;
+            }
+            if (nearestFemale == null && moddedKiss)
+                foreach (Actor actor in actors.Values)
+                    if (actor.Character != null && actor.Character.sex == 1 &&
+                        actor.Mouth != null) { nearestFemale = actor; break; }
+            Transform targetMouth = moddedKiss && cachedCyuMouth != null
+                ? cachedCyuMouth
+                : nearestMale == null ? null : nearestMale.Mouth;
+            if (nearestFemale == null || targetMouth == null) {
                 saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
                 return;
             }
 
-            bool kiss = IsModdedKissActive() ||
+            bool kiss = moddedKiss ||
                 LiquidSourceTriggers.KissAnimationSignal(
                     scene.flags.nowAnimStateName,
                     scene.flags.click == HFlag.ClickKind.mouth);
             saliva.Tick(true, kiss,
-                nearestFemale.Mouth.position, nearestMale.Mouth.position,
-                delta);
+                nearestFemale.Mouth.position, targetMouth.position, delta);
         }
 
         private void Update() {
