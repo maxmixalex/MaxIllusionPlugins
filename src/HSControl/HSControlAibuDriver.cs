@@ -120,6 +120,15 @@ namespace HSControl
                 !ReferenceEquals(ownedFlags, flags) || ReadAction(hand) != 1))
                 Stop(scene);
 
+            // The primary hand can still be captured by the player's mouse.
+            // Yield during manual press/drag even if our own action field
+            // currently equals one, so both manual hands remain usable.
+            if (UnityEngine.Input.GetMouseButton(0) ||
+                UnityEngine.Input.GetMouseButton(1))
+            {
+                if (Running) Stop(scene);
+                return false;
+            }
             // Native player input has priority. Neither hand may be
             // overwritten to manufacture a fake automatic caress.
             if (ReadAction(scene.hand1) != 0) {
