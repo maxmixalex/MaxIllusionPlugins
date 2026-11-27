@@ -37,53 +37,63 @@ internal static class PluginPreviewScenes {
     // These business previews use the shipped production View classes,
     // not hand-drawn mock-ups. Cover each HSControl tab independently:
     // the previous exporter did not include any HSControl/ LoveJuice cases.
-    private static PreviewScene HsControl(int page) {
+    private static PreviewScene HsControl(int scenario) {
+        // Production HCtrl-style single-panel layout in 3 *configuration*
+        // variants, not three separate UI pages.
+        int speedMode = scenario == 0 ? 2 : scenario == 1 ? 0 : 1;
         var model = new HSControlViewModel {
-            Version = "0.1.3", Available = true, Enabled = true,
-            AnimationState = "M_Idle", Status = "已连接当前场景",
-            ManualOverride = true, ManualSpeed = .62f,
-            Mode = 2, RangeMin = .25f, RangeMax = .80f,
-            Band = 1, Linkage = 0, CurrentSpeed = .54f,
-            TargetSpeed = .65f, GaugeMale = 45f, GaugeFemale = 72f,
-            AutoStrength = true, StrengthMinSeconds = 10f,
-            StrengthMaxSeconds = 30f, CanForceLoop = true,
-            CanStage = true, CanFemaleFinish = true,
-            AutoMaleFinish = false, AutoReplay = false,
+            Version = "0.1.4", Available = true, Enabled = true,
+            SceneMode = 0, AnimationState = "M_Idle",
+            Status = "已连接当前 H 场景",
+            Mode = speedMode, ManualOverride = scenario == 1,
+            AutoCaress = false, AutoStrength = scenario == 2,
+            Band = 1, ManualSpeed = .35f,
+            RangeMin = .2f, RangeMax = .8f,
+            CurrentSpeed = .45f, TargetSpeed = .65f,
+            GaugeFemale = 38f, GaugeMale = 27f,
+            StrengthMinSeconds = 10f, StrengthMaxSeconds = 30f,
+            CanForceLoop = true, CanStageMale = true,
+            CanStageFemale = true, CanStageBoth = true,
+            CanFinishMale = true, CanFemaleFinish = true,
+            CanFinishBoth = true, AutoFemaleFinish = true,
             ChangeEnabled = delegate { }, ChangeManualOverride = delegate { },
-            ChangeManualSpeed = delegate { }, ChangeMode = delegate { },
-            ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
-            ChangeBand = delegate { }, ChangeLinkage = delegate { },
-            ChangeGaugeMale = delegate { }, ChangeGaugeFemale = delegate { },
-            ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
-            ChangeStrengthMax = delegate { }, ChangeAutoMaleFinish = delegate { },
-            ChangeAutoReplay = delegate { }, Reroll = delegate { },
-            PlayWeak = delegate { }, PlayStrong = delegate { },
-            StageMale = delegate { }, StageFemale = delegate { },
-            StageBoth = delegate { }, FinishMale = delegate { },
-            FinishFemale = delegate { }, FinishBoth = delegate { },
-            Close = delegate { }
+            ChangeManualSpeed = delegate { }, ChangeAutoCaress = delegate { },
+            ChangeMode = delegate { }, ChangeRangeMin = delegate { },
+            ChangeRangeMax = delegate { }, ChangeBand = delegate { },
+            ChangeLinkage = delegate { }, ChangeGaugeMale = delegate { },
+            ChangeGaugeFemale = delegate { }, ChangeAutoStrength = delegate { },
+            ChangeStrengthMin = delegate { }, ChangeStrengthMax = delegate { },
+            ChangeAutoMaleFinish = delegate { }, ChangeAutoFemaleFinish = delegate { },
+            ChangeAutoReplay = delegate { },
+            ToggleFemaleLock = delegate { }, ToggleMaleLock = delegate { },
+            Reroll = delegate { },
+            PlayLoop = delegate { }, PlayWeak = delegate { },
+            PlayStrong = delegate { }, StageMale = delegate { },
+            StageFemale = delegate { }, StageBoth = delegate { },
+            FinishMale = delegate { }, FinishFemale = delegate { },
+            FinishBoth = delegate { }, Close = delegate { }
         };
-        Window window = (Window)new HSControlView { Model = model }
-            .Build(new BuildContext());
-        Tabs tabs = Find(window, "hscontrol-pages") as Tabs;
-        if (tabs == null || tabs.Children.Count != 3)
-            throw new InvalidOperationException("HSControl compact page selector absent");
-        tabs.SelectedIndex = page;
-        string name = page == 0 ? "speed" : page == 1 ? "scene" : "auto";
+        Window window = (Window)new HSControlView { Model = model }.Build(new BuildContext());
+        string name = scenario == 0 ? "range" : scenario == 1 ? "manual" : "band";
         return new PreviewScene {
-            Slug = "hscontrol-" + name + "-preview",
-            Title = "HSControl / " + name,
+            Slug = "hscontrol-original-" + name + "-preview",
+            Title = "HSControl / HCtrl original layout",
             Source = "HSControl.HSControlView.Build",
-            Detail = "Actual compact HSControl tab " + page + "; no vertical scroll",
-            Widget = window, StateId = page == 0 ? "default" : name,
-            RequiredKeys = page == 0
-                ? new[] { "hscontrol-enabled", "hscontrol-pages", "hscontrol-speed-mode",
-                    "hscontrol-manual-speed", "hscontrol-status" }
-                : page == 1
-                    ? new[] { "hscontrol-enabled", "hscontrol-pages",
-                        "hscontrol-gauge-male", "hscontrol-finish-male", "hscontrol-status" }
-                    : new[] { "hscontrol-enabled", "hscontrol-pages",
-                        "hscontrol-strength", "hscontrol-strength-min", "hscontrol-status" }
+            Detail = "Production single-panel GUIFunc parity, mode=" + speedMode,
+            Widget = window,
+            StateId = scenario == 0 ? "default" : name,
+            RequiredKeys = scenario == 0
+                ? new[] { "hscontrol-enabled", "hscontrol-female-lock",
+                    "hscontrol-male-lock", "hscontrol-mode-range",
+                    "hscontrol-min", "hscontrol-max", "hscontrol-aibu",
+                    "hscontrol-play-loop", "hscontrol-finish-female" }
+                : scenario == 1
+                    ? new[] { "hscontrol-enabled", "hscontrol-manual-speed",
+                        "hscontrol-mode-none", "hscontrol-stage-both",
+                        "hscontrol-finish-both" }
+                    : new[] { "hscontrol-enabled", "hscontrol-mode-half",
+                        "hscontrol-band", "hscontrol-strength-min",
+                        "hscontrol-strength-max", "hscontrol-female-finish" }
         };
     }
 
