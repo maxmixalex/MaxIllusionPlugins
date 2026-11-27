@@ -20,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.6";
+        public const string Version = "0.3.7";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -30,7 +30,7 @@ namespace LoveJuice {
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
-        private ConfigEntry<bool> masterEnabled, face, salivaAnytime, body, intimate, malePre, milk, shower, special, collision;
+        private ConfigEntry<bool> masterEnabled, face, salivaAnytime, body, intimate, malePre, milk, shower, special, collision, experimentalSpheres;
         private ConfigEntry<int> maxActive, previewChannel;
         private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold, malePreThreshold;
         private ConfigEntry<KeyboardShortcut> preview, panelShortcut;
@@ -159,6 +159,12 @@ namespace LoveJuice {
                 "Multiply the original Studio liquid ParticleSystem transform scale.");
             launchSpeed = Config.Bind("Physics", "Launch speed", .35f,
                 "Additional initial speed, relative to the source bone orientation.");
+            // The old sphere+trail implementation was unverified and was
+            // rejected in actual visual acceptance. Keep it available only
+            // behind an explicit diagnostic switch, OFF by default.
+            experimentalSpheres = Config.Bind("Experimental",
+                "Enable unverified material spheres", false,
+                "Disabled by default. The previous sphere/trail drops are not proven Studio liquid geometry. Inspect installed Studio native assets before opting into this fallback.");
             visuals = new StudioLiquidPool(message => Logger.LogWarning(message));
             Logger.LogInfo(Name + " " + Version + " loaded; native Studio liquid catalog available on demand.");
         }
@@ -254,6 +260,11 @@ namespace LoveJuice {
         private float RandomSigned() { return (float)(random.NextDouble() * 2.0 - 1.0); }
 
         private bool EmitFrom(Actor actor, LoveJuiceChannel kind, int n) {
+            // No unverified synthesized drops in the default configuration:
+            // the built-in Studio items have particle/renderer semantics that
+            // require inspection before a native-only implementation.
+            if (experimentalSpheres == null || !experimentalSpheres.Value)
+                return false;
             // Saliva is an elastic kiss filament, NOT a native Studio spray.
             // Deliberate and automatic face events must never fire shower-like jets.
             if (kind == LoveJuiceChannel.Saliva) return false;
@@ -631,6 +642,10 @@ namespace LoveJuice {
                 panelStatus = "已触发 3 秒口水拉丝预览；不要求亲吻动作。";
                 return;
             }
+            if (!experimentalSpheres.Value) {
+                panelStatus = "原有球形液滴已默认关闭；请先用『检查 Studio 素材』读取真实预制体。";
+                return;
+            }
             int emitted = 0;
             Actor actor;
             if (actors.TryGetValue(roster.Selected, out actor))
@@ -654,6 +669,7 @@ namespace LoveJuice {
                     ? "SkinEffects：已连接（仅读取状态）。"
                     : "SkinEffects：未连接，使用游戏自身状态。",
                 Face = face.Value, SalivaAnytime = salivaAnytime.Value,
+                ExperimentalSpheres = experimentalSpheres.Value,
                 Body = body.Value, Intimate = intimate.Value, MalePre = malePre.Value, Milk = milk.Value,
                 Shower = shower.Value, Special = special.Value, Collision = collision.Value,
                 MaximumParticles = maxActive.Value, PreviewChannel = previewChannel.Value,
@@ -666,6 +682,15 @@ namespace LoveJuice {
             m.ChangeFace = value => { if (live()) { face.Value = value; RefreshPanel(); } };
             m.ChangeSalivaAnytime = value => { if (live()) {
                 salivaAnytime.Value = value; RefreshPanel();
+            } };
+            m.ChangeExperimentalSpheres = value => { if (live()) {
+                experimentalSpheres.Value = value;
+                if (!value && visuals != null) visuals.Attach(scene == null ? null : scene.transform);
+                RefreshPanel();
+            } };
+            m.InspectStudio = () => { if (live()) {
+                panelStatus = StudioAssetAudit.Inspect(line => Logger.LogInfo(line));
+                RefreshPanel();
             } };
             m.ChangeBody = value => { if (live()) { body.Value = value; RefreshPanel(); } };
             m.ChangeIntimate = value => { if (live()) { intimate.Value = value; RefreshPanel(); } };
