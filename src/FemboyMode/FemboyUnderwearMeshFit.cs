@@ -90,6 +90,13 @@ namespace FemboyMode
         private string FitSignature()
         {
             var parts = new List<string>();
+            // A Maker slider can change the genital geometry without
+            // replacing the clothing mesh. Include the card-local geometry
+            // parameters so the already cloned fit is actually rebuilt.
+            parts.Add("geometry:" + geometryScaleX + "/" + geometryScaleY +
+                "/" + geometryScaleZ + "/" + penisMove[0] + "/" +
+                penisMove[1] + "/" + penisMove[2] + "/" +
+                penisRot[0] + "/" + penisRot[1] + "/" + penisRot[2]);
             for (int i = 0; i < FitSlots.Length; i++)
             {
                 int slot = FitSlots[i];
