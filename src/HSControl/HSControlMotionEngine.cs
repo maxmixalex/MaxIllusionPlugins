@@ -81,7 +81,8 @@ namespace HSControl
 
         internal static bool CanDrive(int mode, string animState, bool rely) {
             if (string.IsNullOrEmpty(animState) || !IsSupportedMode(mode)) return false;
-            if (mode == 0) return animState.IndexOf("_Idle", StringComparison.Ordinal) >= 0;
+            if (mode == 0) return animState.IndexOf("_Idle", StringComparison.Ordinal) >= 0 ||
+                                  string.Equals(animState, "Idle", StringComparison.Ordinal);
             if ((mode == 1 || mode == 6 || mode == 8) && rely) return false;
             return animState.IndexOf("WLoop", StringComparison.Ordinal) >= 0 ||
                    animState.IndexOf("SLoop", StringComparison.Ordinal) >= 0;
