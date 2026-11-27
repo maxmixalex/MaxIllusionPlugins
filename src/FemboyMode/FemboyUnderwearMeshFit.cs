@@ -19,6 +19,7 @@ namespace FemboyMode
             internal SkinnedMeshRenderer Renderer;
             internal Mesh Original;
             internal Mesh Copy;
+            internal int Slot;
         }
 
         private static readonly int[] FitSlots = { 0, 1, 3 };
@@ -82,7 +83,7 @@ namespace FemboyMode
                 ChaControl.fileStatus == null ||
                 ChaControl.fileStatus.clothesState == null ||
                 slot >= ChaControl.fileStatus.clothesState.Length ||
-                ChaControl.fileStatus.clothesState[slot] >= 3)
+                ChaControl.fileStatus.clothesState[slot] != 0)
                 return null;
             return ChaControl.objClothes[slot];
         }
@@ -93,6 +94,8 @@ namespace FemboyMode
             // A Maker slider can change the genital geometry without
             // replacing the clothing mesh. Include the card-local geometry
             // parameters so the already cloned fit is actually rebuilt.
+            parts.Add("strength:" + (FemboyModePlugin.UnderwearFitStrength == null
+                ? 0.4f : FemboyModePlugin.UnderwearFitStrength.Value));
             parts.Add("geometry:" + geometryScaleX + "/" + geometryScaleY +
                 "/" + geometryScaleZ + "/" + penisMove[0] + "/" +
                 penisMove[1] + "/" + penisMove[2] + "/" +
@@ -128,6 +131,20 @@ namespace FemboyMode
 
         private void SyncUnderwearMeshFit()
         {
+            // Dressing/undressing a fitted garment must immediately restore
+            // the original mesh, not leave an exaggerated bulge until the
+            // periodic geometry scan runs.
+            if (clothingFits.Count > 0) {
+                for (int i = 0; i < clothingFits.Count; i++) {
+                    ClothingFitRecord fitted = clothingFits[i];
+                    GameObject garment = GarmentAt(fitted.Slot);
+                    if (garment == null || fitted.Renderer == null ||
+                        !fitted.Renderer.transform.IsChildOf(garment.transform)) {
+                        RestoreUnderwearMeshes();
+                        break;
+                    }
+                }
+            }
             if (Time.frameCount < nextFitProbe) return;
             nextFitProbe = Time.frameCount + 20;
             bool enabled = IsFemboy &&
@@ -181,7 +198,7 @@ namespace FemboyMode
                             !seen.Add(renderer.GetInstanceID())) continue;
                         try
                         {
-                            if (FitRenderer(renderer, origin, direction, length))
+                            if (FitRenderer(renderer, slot, origin, direction, length))
                                 adjusted++;
                         }
                         catch (Exception ex)
@@ -220,7 +237,7 @@ namespace FemboyMode
             return x * x * (3f - 2f * x);
         }
 
-        private bool FitRenderer(SkinnedMeshRenderer renderer,
+        private bool FitRenderer(SkinnedMeshRenderer renderer, int slot,
             Vector3 shaftOrigin, Vector3 shaftForward, float shaftLength)
         {
             Mesh original = renderer.sharedMesh;
@@ -248,8 +265,8 @@ namespace FemboyMode
                 up.Normalize();
                 Vector3 right = Vector3.Cross(up, forward).normalized;
 
-                float requiredDepth = Mathf.Clamp(shaftLength * .9f + .035f,
-                    .09f, .23f);
+                float requiredDepth = Mathf.Clamp(shaftLength * .65f + .012f,
+                    .055f, .12f);
                 float frontMost = -1f;
                 int candidates = 0;
                 for (int i = 0; i < animated.Length; i++)
@@ -285,14 +302,16 @@ namespace FemboyMode
                     float lateral = Mathf.Abs(Vector3.Dot(relative, right));
                     float vertical = Mathf.Abs(Vector3.Dot(relative, up));
                     float depth = Vector3.Dot(relative, forward);
-                    if (lateral > .15f || vertical > .16f ||
-                        depth < -.06f || depth > .30f) continue;
-                    float weight = Smooth(lateral / .15f) *
-                        Smooth(vertical / .16f) *
-                        Smooth(Mathf.Abs(depth - frontMost) / .17f);
+                    if (lateral > .095f || vertical > .105f ||
+                        depth < -.035f || depth > .19f) continue;
+                    float weight = Smooth(lateral / .095f) *
+                        Smooth(vertical / .105f) *
+                        Smooth(Mathf.Abs(depth - frontMost) / .12f);
                     if (weight < .015f) continue;
 
-                    Vector3 delta = forward * (deficit * weight);
+                    float strength = FemboyModePlugin.UnderwearFitStrength == null ? .4f :
+                        Mathf.Clamp01(FemboyModePlugin.UnderwearFitStrength.Value);
+                    Vector3 delta = forward * (deficit * strength * weight);
                     if (skinned)
                     {
                         int bone = DominantBone(weights[i]);
@@ -316,7 +335,8 @@ namespace FemboyMode
                 copy.RecalculateBounds();
                 renderer.sharedMesh = copy;
                 clothingFits.Add(new ClothingFitRecord {
-                    Renderer = renderer, Original = original, Copy = copy
+                    Renderer = renderer, Original = original, Copy = copy,
+                    Slot = slot
                 });
                 return true;
             }
