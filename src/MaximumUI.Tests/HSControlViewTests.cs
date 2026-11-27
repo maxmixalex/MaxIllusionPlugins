@@ -105,6 +105,9 @@ namespace MaximumUI.Tests
             Check(model.SameDisplay(same), "Unchanged state keeps the retained view");
             same.FemaleLocked = true;
             Check(!model.SameDisplay(same), "Native gauge lock state repaints");
+            same = Make(); same.AutoArmed = true;
+            Check(!model.SameDisplay(same),
+                "Scene motion arming state must update its explanatory label");
             same = Make(); same.CurrentSpeed = .62f;
             Check(!model.SameDisplay(same), "Native speed readback repaints");
         }
