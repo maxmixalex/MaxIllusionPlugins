@@ -133,6 +133,12 @@ internal static class Program {
                 !LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, true) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(false, true, .035f, false),
                 "native kiss string suppresses only overlapping original thread");
+            Check(LiquidSourceTriggers.SalivaRadius(.5f, 0f, 1f) >
+                    LiquidSourceTriggers.SalivaRadius(.5f, .99f, 1f) &&
+                LiquidSourceTriggers.SalivaRadius(.90f, .99f, 1f) <
+                    LiquidSourceTriggers.SalivaRadius(.5f, 0f, 1f) &&
+                LiquidSourceTriggers.SalivaRadius(.7f, .5f, 0f) == 0f,
+                "3-D viscoelastic cross section narrows before tear and disappears at zero");
             Check(LiquidSourceTriggers.SalivaTearPeriod(.015f) >= .55f &&
                 LiquidSourceTriggers.SalivaTearPeriod(.150f) <= .95f &&
                 LiquidSourceTriggers.SalivaTearPeriod(.15f) >
