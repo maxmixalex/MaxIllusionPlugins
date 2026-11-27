@@ -19,6 +19,12 @@ namespace HSControl
 
         // Gauge staging is a manual action: it must not depend on the automatic
         // climax policy or on whether the current animation is a loop.
+        internal static bool IsAutoCaressState(int nativeMode, string state, bool rely)
+        {
+            return nativeMode == 0 && !rely &&
+                   (state == "M_Idle" || state == "A_Idle" || state == "S_Idle");
+        }
+
         internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
             // Gauge staging only adjusts the actual native gauge. It doesn't
             // call SetPlay, alter the current click or need a loop's metadata.
