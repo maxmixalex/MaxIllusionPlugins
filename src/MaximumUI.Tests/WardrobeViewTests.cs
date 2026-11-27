@@ -165,6 +165,31 @@ namespace MaximumUI.Tests {
                 "One-piece lower half dispatches native bottom-state change");
             Require(Find(widget, "wardrobe-restore-clothing") != null,
                 "Cross-slot state does not displace regular wardrobe controls");
+
+            // One-piece tops can also own the bra; integrated bra designs
+            // can in turn own shorts. These are live controls (not missing
+            // outfit placeholders) even when standalone IDs are zero.
+            int braRequested = -1, shortsRequested = -1;
+            model.Garments.Add(new WardrobeRow {
+                Slot = 2, Label = "胸罩（随上衣）", State = 0, Item = 120,
+                AllowedStates = new[] {0, 1, 3},
+                ChangeState = state => braRequested = state
+            });
+            model.Garments.Add(new WardrobeRow {
+                Slot = 3, Label = "内裤（随上衣）", State = 1, Item = 120,
+                AllowedStates = new[] {0, 1, 3},
+                ChangeState = state => shortsRequested = state
+            });
+            widget = new WardrobeView { Model = model }.Build(null);
+            Require(Find(widget, "garment-state-2-current") is Button &&
+                Find(widget, "garment-state-3-current") is Button &&
+                Find(widget, "garment-not-equipped-2") == null &&
+                Find(widget, "garment-not-equipped-3") == null,
+                "Integrated bra and shorts retain actual cycling controls");
+            ((ArrowButton)Find(widget, "garment-state-2-next")).OnClick();
+            ((ArrowButton)Find(widget, "garment-state-3-next")).OnClick();
+            Require(braRequested == 1 && shortsRequested == 3,
+                "Integrated underwear dispatches owner-channel native transitions");
         }
 
         private static void NineGarmentRowsFitWindowWithoutInternalScroll() {
