@@ -44,6 +44,7 @@ namespace LoveJuice {
         private readonly Dictionary<ChaControl, Actor> actors = new Dictionary<ChaControl, Actor>();
         private readonly LiveActorRoster<ChaControl> roster = new LiveActorRoster<ChaControl>();
         private StudioLiquidPool visuals;
+        private NativeMetaballPool nativeVisuals;
         private readonly SalivaFilament saliva = new SalivaFilament();
         private HSceneProc scene;
         private float nextProbe, nextResolve;
@@ -70,7 +71,12 @@ namespace LoveJuice {
         }
 
         public bool IsEnabled { get { return isActiveAndEnabled && masterEnabled != null && masterEnabled.Value; } }
-        public static int ActiveDrops { get { return instance != null && instance.visuals != null ? instance.visuals.ActiveCount : 0; } }
+        public static int ActiveDrops { get {
+            if (instance == null) return 0;
+            return (instance.nativeVisuals == null ? 0 :
+                instance.nativeVisuals.ActiveCount) +
+                (instance.visuals == null ? 0 : instance.visuals.ActiveCount);
+        } }
 
         // Optional readback/write interface for independent integrations.
         // The adapter never touches game overlays or another plugin's state.
@@ -166,6 +172,7 @@ namespace LoveJuice {
                 "Enable unverified material spheres", false,
                 "Disabled by default. The previous sphere/trail drops are not proven Studio liquid geometry. Inspect installed Studio native assets before opting into this fallback.");
             visuals = new StudioLiquidPool(message => Logger.LogWarning(message));
+            nativeVisuals = new NativeMetaballPool(message => Logger.LogWarning(message));
             Logger.LogInfo(Name + " " + Version + " loaded; native Studio liquid catalog available on demand.");
         }
 
@@ -247,7 +254,8 @@ namespace LoveJuice {
         }
 
         private bool EmitExplicit(ChaControl character, LoveJuiceChannel kind, int count) {
-            if (!IsEnabled || visuals == null || !StudioLiquidCatalog.Valid(kind) ||
+            if (!IsEnabled || (nativeVisuals == null && visuals == null) ||
+                !StudioLiquidCatalog.Valid(kind) ||
                 !HasActiveSceneCharacter(character)) return false;
             Actor actor;
             if (!actors.TryGetValue(character, out actor)) return false;
@@ -260,11 +268,9 @@ namespace LoveJuice {
         private float RandomSigned() { return (float)(random.NextDouble() * 2.0 - 1.0); }
 
         private bool EmitFrom(Actor actor, LoveJuiceChannel kind, int n) {
-            // No unverified synthesized drops in the default configuration:
-            // the built-in Studio items have particle/renderer semantics that
-            // require inspection before a native-only implementation.
-            if (experimentalSpheres == null || !experimentalSpheres.Value)
-                return false;
+            // Default path is the game's actual physically simulated
+            // MetaballShoot/UpdateMeta, not a textured sphere. Historical
+            // sphere+trail approximation remains explicitly experimental.
             // Saliva is an elastic kiss filament, NOT a native Studio spray.
             // Deliberate and automatic face events must never fire shower-like jets.
             if (kind == LoveJuiceChannel.Saliva) return false;
@@ -275,7 +281,7 @@ namespace LoveJuice {
                 kind == LoveJuiceChannel.MalePre ? actor.Alternate :
                 kind == LoveJuiceChannel.Milk ? (n % 2 == 0 ? actor.ChestLeft : actor.ChestRight) :
                 kind == LoveJuiceChannel.Special && actor.Alternate != null ? actor.Alternate : actor.Torso;
-            if (source == null || visuals == null ||
+            if (source == null || (nativeVisuals == null && visuals == null) ||
                 (kind == LoveJuiceChannel.Special && actor.Alternate == null)) return false;
             bool leftChest = n % 2 == 0;
             Vector3 local = kind == LoveJuiceChannel.Saliva ?
@@ -300,11 +306,16 @@ namespace LoveJuice {
                 velocity += source.forward * (.025f + speed * .25f);
             if (kind == LoveJuiceChannel.Milk)
                 velocity += source.forward * .015f;
-            return visuals.Spawn(kind, origin, velocity,
-                DropletPhysics.Clamp(scale.Value, .001f, .3f),
-                DropletPhysics.Clamp(lifetime.Value, .2f, 8f),
+            if (experimentalSpheres.Value)
+                return visuals != null && visuals.Spawn(kind, origin, velocity,
+                    DropletPhysics.Clamp(scale.Value, .001f, .3f),
+                    DropletPhysics.Clamp(lifetime.Value, .2f, 8f),
+                    Math.Max(1, Math.Min(128, maxActive.Value)),
+                    gravity.Value, drag.Value, collision.Value);
+            return nativeVisuals != null && nativeVisuals.Spawn(
+                actor.Character, kind, origin, velocity,
                 Math.Max(1, Math.Min(128, maxActive.Value)),
-                gravity.Value, drag.Value, collision.Value);
+                launchSpeed.Value);
         }
 
         private void OnSceneChanged(HSceneProc next) {
@@ -321,6 +332,7 @@ namespace LoveJuice {
             integrations.Reset();
             nextResolve = 0f;
             if (visuals != null) visuals.Attach(scene == null ? null : scene.transform);
+            if (nativeVisuals != null) nativeVisuals.Attach(scene);
             saliva.Attach(scene == null ? null : scene.transform);
         }
 
@@ -605,7 +617,9 @@ namespace LoveJuice {
                     actor.SpecialLevel, ref actor.SpecialTime, dt);
             }
             TickSaliva(dt);
-            visuals.Tick(dt, gravity.Value, drag.Value, collision.Value);
+            if (nativeVisuals != null) nativeVisuals.Tick(dt);
+            if (experimentalSpheres.Value && visuals != null)
+                visuals.Tick(dt, gravity.Value, drag.Value, collision.Value);
         }
 
         private void OpenPanel() {
@@ -642,17 +656,14 @@ namespace LoveJuice {
                 panelStatus = "已触发 3 秒口水拉丝预览；不要求亲吻动作。";
                 return;
             }
-            if (!experimentalSpheres.Value) {
-                panelStatus = "原有球形液滴已默认关闭；请先用『检查 Studio 素材』读取真实预制体。";
-                return;
-            }
             int emitted = 0;
             Actor actor;
             if (actors.TryGetValue(roster.Selected, out actor))
                 for (int i = 0; i < 4; i++)
                     if (EmitFrom(actor, channel, i)) emitted++;
             panelStatus = emitted > 0
-                ? "已向 " + ActorDisplayName(roster.Selected) + " 发射 " + emitted + " 颗原生粒子。"
+                ? "已为 " + ActorDisplayName(roster.Selected) +
+                    " 启动 " + emitted + " 次原生物理液体。"
                 : "未发射：素材、粒子预算或骨骼不可用；请检查 BepInEx 日志。";
         }
 
@@ -736,6 +747,7 @@ namespace LoveJuice {
             panel = null;
             OnSceneChanged(null);
             if (visuals != null) visuals.Dispose();
+            if (nativeVisuals != null) nativeVisuals.Dispose();
             if (ReferenceEquals(instance, this)) instance = null;
         }
     }
