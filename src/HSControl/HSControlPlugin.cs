@@ -20,12 +20,12 @@ namespace HSControl
     public sealed class HSControlPlugin : BaseUnityPlugin
     {
         public const string GUID = "MaxMixAlex.HSControl";
-        public const string Version = "0.1.4";
+        public const string Version = "0.1.5";
         private const string MountId = GUID + ".window";
         internal static HSControlPlugin Instance;
         private readonly HSControlMotionEngine motion = new HSControlMotionEngine(Environment.TickCount);
         private readonly HSControlAibuDriver aibu = new HSControlAibuDriver();
-        private ConfigEntry<bool> master, manual, autoStrength, autoMaleFinish, autoFemaleFinish, autoReplay, autoCaress;
+        private ConfigEntry<bool> master, manual, autoStrength, autoMaleFinish, autoFemaleFinish, autoReplay;
         private ConfigEntry<int> mode, band, linkage;
         private ConfigEntry<float> manualSpeed, rangeMin, rangeMax, strengthMin, strengthMax;
         private ConfigEntry<KeyboardShortcut> hotkey;
@@ -51,11 +51,6 @@ namespace HSControl
             rangeMax = Config.Bind("Motion", "Random range max", ini.RangeMax, "Maximum speed for random range mode.");
             manual = Config.Bind("Motion", "Manual override", false, "Use a manual speed until disabled.");
             manualSpeed = Config.Bind("Motion", "Manual speed", .5f, "Manual normalized speed 0 to 1.");
-            // HCtrl's original AibuAuto mutates hand actions and directly
-            // raises the gauge; those are NOT safe side-effects of changing
-            // speed settings. This action must be opt-in.
-            autoCaress = Config.Bind("Motion", "Auto caress (explicit opt-in)", false,
-                "Automate native Aibu interaction only when a compatible contact is found. Disabled by default; speed mode alone never raises a gauge.");
             autoStrength = Config.Bind("Motion", "Auto strength", ini.AutoStrength, "Alternate native motion strength on an interval.");
             strengthMin = Config.Bind("Motion", "Strength timer minimum", ini.StrengthMinSeconds, "Minimum seconds between changes.");
             strengthMax = Config.Bind("Motion", "Strength timer maximum", ini.StrengthMaxSeconds, "Maximum seconds between changes.");
@@ -117,9 +112,11 @@ namespace HSControl
             // HFlag.FemaleGaugeUp. Previously we only updated speed (and only
             // for manual override), so the visible gauge stayed frozen.
             // The scene-local driver yields to either active manual hand.
-            if (canDrive && hmode == 0) {
-                aibu.Tick(scene, flags, motion.Current, Time.deltaTime,
-                    autoCaress.Value);
+            if (canDrive && hmode == 0 && config.Mode != 0) {
+                // Exactly as original HCtrl: turning on an automatic speed
+                // mode also enables Aibu pulses. No independent opt-in.
+                // Pulses last ONE update, never a multi-second input lock.
+                aibu.Tick(scene, flags, motion.Current, Time.deltaTime);
                 if (aibu.TakeCompleted() && autoFemaleFinish.Value) {
                     bool entered = HSControlNativeActions.TryStartAibuFemaleFinish(scene);
                     status = entered ? "已进入原生爱抚高潮动作" :
@@ -335,7 +332,6 @@ namespace HSControl
                     HSControlActionRules.OriginalCanForce((int)flags.mode, 6),
                 CanFinishBoth = master.Value && CanStageGauge(flags) &&
                     HSControlActionRules.OriginalCanForce((int)flags.mode, 7),
-                AutoCaress = autoCaress.Value,
                 FemaleLocked = flags != null && flags.lockGugeFemale,
                 MaleLocked = flags != null && flags.lockGugeMale,
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
@@ -357,11 +353,6 @@ namespace HSControl
             model.ChangeRangeMin = value => { if (live()) { rangeMin.Value = value; RefreshView(); } };
             model.ChangeRangeMax = value => { if (live()) { rangeMax.Value = value; RefreshView(); } };
             model.ChangeManualOverride = value => { if (live()) { manual.Value = value; RefreshView(); } };
-            model.ChangeAutoCaress = value => { if (live()) {
-                autoCaress.Value = value;
-                if (!value) aibu.Clear(owner);
-                RefreshView();
-            } };
             model.ChangeManualSpeed = value => { if (live()) { manualSpeed.Value = value; RefreshView(); } };
             model.ChangeAutoStrength = value => { if (live()) { autoStrength.Value = value; RefreshView(); } };
             model.ChangeStrengthMin = value => { if (live()) { strengthMin.Value = value; RefreshView(); } };
