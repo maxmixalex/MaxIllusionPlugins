@@ -20,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.4";
+        public const string Version = "0.3.5";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -266,10 +266,18 @@ namespace LoveJuice {
                         : new Vector3(0f, -.035f, .035f) :
                 new Vector3(0f, -.08f, .025f);
             Vector3 origin = source.TransformPoint(local);
-            Vector3 direction = source.TransformDirection(new Vector3(
-                RandomSigned() * .22f, -.65f + RandomSigned() * .1f, .4f + RandomSigned() * .12f)).normalized;
-            float speed = DropletPhysics.Clamp(launchSpeed.Value, 0f, 5f);
-            Vector3 velocity = direction * speed + Vector3.up * (.12f * RandomSigned());
+            // The Studio liquid ITEM supplies its native material, but not
+            // its continuous shower emitter. Individual droplets begin near
+            // the body, move gently, then fall under world gravity.
+            float speed = DropletPhysics.Clamp(launchSpeed.Value, 0f, 5f) * .14f;
+            Vector3 velocity = source.TransformDirection(new Vector3(
+                RandomSigned() * .012f, -.22f * speed,
+                RandomSigned() * .015f));
+            velocity += Vector3.down * (.045f + speed * .5f);
+            if (kind == LoveJuiceChannel.MalePre)
+                velocity += source.forward * (.025f + speed * .25f);
+            if (kind == LoveJuiceChannel.Milk)
+                velocity += source.forward * .015f;
             return visuals.Spawn(kind, origin, velocity,
                 DropletPhysics.Clamp(scale.Value, .001f, .3f),
                 DropletPhysics.Clamp(lifetime.Value, .2f, 8f),
