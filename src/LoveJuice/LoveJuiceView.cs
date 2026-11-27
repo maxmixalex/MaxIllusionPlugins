@@ -3,18 +3,18 @@ using MaximumUI;
 
 namespace LoveJuice {
     internal sealed class LoveJuiceViewModel {
-        internal string Version = "0.3.6", Status = "就绪", Integration = "未连接";
-        internal bool Enabled, HasScene, Face, SalivaAnytime, Body, Intimate, MalePre, Milk, Shower, Special, Collision;
+        internal string Version = "0.3.7", Status = "就绪", Integration = "未连接";
+        internal bool Enabled, HasScene, Face, SalivaAnytime, ExperimentalSpheres, Body, Intimate, MalePre, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
         internal string[] ActorNames = new string[0];
         internal int SelectedActorIndex = -1;
         internal float Interval, Gravity, Damping, Lifetime, Scale, LaunchSpeed, MilkThreshold, MalePreThreshold;
-        internal Action<bool> ChangeEnabled, ChangeFace, ChangeSalivaAnytime, ChangeBody, ChangeIntimate, ChangeMalePre, ChangeMilk,
+        internal Action<bool> ChangeEnabled, ChangeFace, ChangeSalivaAnytime, ChangeExperimentalSpheres, ChangeBody, ChangeIntimate, ChangeMalePre, ChangeMilk,
             ChangeShower, ChangeSpecial, ChangeCollision;
         internal Action<int> ChangeMaximum, ChangePreviewChannel, SelectActor;
         internal Action<float> ChangeInterval, ChangeGravity, ChangeDamping,
             ChangeLifetime, ChangeScale, ChangeLaunchSpeed, ChangeMilkThreshold, ChangeMalePreThreshold;
-        internal Action Preview, Close;
+        internal Action Preview, InspectStudio, Close;
 
         internal bool SameDisplayAs(LoveJuiceViewModel other) {
             return other != null && Version == other.Version && Status == other.Status &&
@@ -24,7 +24,8 @@ namespace LoveJuice {
                 PreviewChannel == other.PreviewChannel &&
                 SelectedActorIndex == other.SelectedActorIndex &&
                 SameNames(ActorNames, other.ActorNames) &&
-                Face == other.Face && SalivaAnytime == other.SalivaAnytime && Body == other.Body && Intimate == other.Intimate && MalePre == other.MalePre &&
+                Face == other.Face && SalivaAnytime == other.SalivaAnytime &&
+                ExperimentalSpheres == other.ExperimentalSpheres && Body == other.Body && Intimate == other.Intimate && MalePre == other.MalePre &&
                 Milk == other.Milk && Shower == other.Shower && Special == other.Special &&
                 Collision == other.Collision && Near(Interval, other.Interval) &&
                 Near(Gravity, other.Gravity) && Near(Damping, other.Damping) &&
@@ -74,7 +75,12 @@ namespace LoveJuice {
                 new Checkbox("FemboyMode 附加效果", m.Special, m.ChangeSpecial,
                     "lovejuice-special").Enabled(m.Enabled).Height(32f),
                 new Separator(),
-                new Label("物理与性能", "lovejuice-physics"),
+                new Button("检查实际 Studio 素材", m.InspectStudio, "lovejuice-inspect-studio")
+                    .Height(35f),
+                new Checkbox("实验性球形液滴（默认关闭）",
+                    m.ExperimentalSpheres, m.ChangeExperimentalSpheres,
+                    "lovejuice-experimental-spheres").Enabled(m.Enabled).Height(32f),
+                new Label("物理与性能（仅实验性液滴）", "lovejuice-physics"),
                 new SliderFloat("发射间隔", m.Interval, .06f, 4f, m.ChangeInterval, "lovejuice-interval")
                     .Enabled(m.Enabled).Height(36f),
                 new SliderFloat("重力", m.Gravity, 0f, 30f, m.ChangeGravity, "lovejuice-gravity")
