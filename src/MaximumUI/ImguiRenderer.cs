@@ -29,6 +29,13 @@ namespace MaximumUI {
 
         private RenderContext currentContext;
         private Window currentWindow;
+        // One IMGUI event draws one window at a time. Scoped in RenderWindow,
+        // including its custom colors, icon strokes and retained DrawList.
+        [ThreadStatic] private static float activeWindowAlpha;
+        private static float WindowAlpha { get { return activeWindowAlpha <= 0f ? 1f : activeWindowAlpha; } }
+        private static Color WindowTint(Color c) {
+            return new Color(c.r, c.g, c.b, c.a * WindowAlpha);
+        }
         private string currentWindowStateId;
         private Vector2 currentWindowContentOffset;
         private bool mouseDownOnMaximumUi;
@@ -123,6 +130,7 @@ namespace MaximumUI {
         private void Paint(DrawList drawList) {
             if (unityPainter == null) unityPainter = new UnityPainter();
             unityPainter.Theme = layoutTheme;
+            unityPainter.OpacityMultiplier = WindowAlpha;
             unityPainter.Paint(drawList);
         }
 
@@ -315,9 +323,11 @@ namespace MaximumUI {
             currentWindowStateId = id;
             currentWindowContentOffset = Vector2.zero;
             Color previousWindowColor = GUI.color;
-            if (widget.Translucency && state.Translucent)
-                GUI.color = new Color(previousWindowColor.r, previousWindowColor.g,
-                    previousWindowColor.b, previousWindowColor.a * Mathf.Clamp01(widget.TranslucentOpacity));
+            float previousWindowAlpha = activeWindowAlpha;
+            activeWindowAlpha = widget.Translucency && state.Translucent
+                ? Mathf.Clamp(widget.TranslucentOpacity, .15f, 1f) : 1f;
+            GUI.color = new Color(previousWindowColor.r, previousWindowColor.g,
+                previousWindowColor.b, previousWindowColor.a * WindowAlpha);
             try {
                 try {
                     DrawWindowFrame(context, widget, state);
@@ -340,6 +350,7 @@ namespace MaximumUI {
                 RegisterInputRegion(state.Rect, true);
                 RecordWindowQuery(context, widget, state);
             } finally {
+                activeWindowAlpha = previousWindowAlpha;
                 GUI.color = previousWindowColor;
                 currentContext = oldContext;
                 currentWindow = oldWindow;
@@ -1300,7 +1311,7 @@ namespace MaximumUI {
             Texture texture = widget.Texture as Texture;
             if (texture != null) {
                 Color oldColor = GUI.color;
-                GUI.color = ToUnityColor(widget.Tint);
+                GUI.color = WindowTint(ToUnityColor(widget.Tint));
                 GUI.DrawTexture(rect, texture, ScaleMode.ScaleToFit, true);
                 GUI.color = oldColor;
             }
@@ -1313,7 +1324,7 @@ namespace MaximumUI {
             float imageSize = Mathf.Min(rect.height - 4f, 20f);
             if (texture != null && imageSize > 0f && Event.current != null && Event.current.type == EventType.Repaint) {
                 Color oldColor = GUI.color;
-                GUI.color = ToUnityColor(widget.Tint);
+                GUI.color = WindowTint(ToUnityColor(widget.Tint));
                 GUI.DrawTexture(new Rect(rect.x + 3f, rect.y + Mathf.Max(0f, (rect.height - imageSize) * 0.5f), imageSize, imageSize), texture, ScaleMode.ScaleToFit, true);
                 GUI.color = oldColor;
             }
@@ -3218,7 +3229,7 @@ namespace MaximumUI {
             if (selectionDisc == null) selectionDisc = Textures.Disc();
             Color previous = GUI.color;
             try {
-                GUI.color = ToUnityColor(color);
+                GUI.color = WindowTint(ToUnityColor(color));
                 GUI.DrawTexture(rect, selectionDisc);
             } finally { GUI.color = previous; }
         }
@@ -3248,7 +3259,7 @@ namespace MaximumUI {
             Matrix4x4 previousMatrix = GUI.matrix;
             Color previousColor = GUI.color;
             try {
-                GUI.color = ToUnityColor(color);
+                GUI.color = WindowTint(ToUnityColor(color));
                 GUIUtility.RotateAroundPivot(Mathf.Atan2(dy, dx) * Mathf.Rad2Deg, new Vector2(a.X, a.Y));
                 GUI.DrawTexture(new Rect(a.X, a.Y - thickness * 0.5f, length, thickness), Texture2D.whiteTexture);
             } finally { GUI.matrix = previousMatrix; GUI.color = previousColor; }
@@ -3349,7 +3360,7 @@ namespace MaximumUI {
             Event current = Event.current;
             if (current == null || !GuiEventPolicy.ShouldPaint(current.type)) return;
             Color oldColor = GUI.color;
-            GUI.color = color;
+            GUI.color = WindowTint(color);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
