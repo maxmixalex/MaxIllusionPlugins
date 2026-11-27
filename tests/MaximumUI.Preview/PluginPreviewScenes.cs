@@ -144,7 +144,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.5.7", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.8", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
