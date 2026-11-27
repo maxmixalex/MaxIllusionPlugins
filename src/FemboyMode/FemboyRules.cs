@@ -77,6 +77,28 @@ namespace FemboyMode
             };
         }
 
+        internal static bool ShouldFitUnderwear(bool marked, bool enabled,
+            bool meshAvailable, int liveShortsState)
+        {
+            return marked && enabled && meshAvailable &&
+                liveShortsState >= 0 && liveShortsState < 3;
+        }
+
+        // An already roomy garment (including native penis-adapted models)
+        // gets no correction. Unknown/infinite data must fail closed.
+        internal static float UnderwearClearanceDeficit(float observedFront,
+            float requiredFront)
+        {
+            if (float.IsNaN(observedFront) ||
+                float.IsInfinity(observedFront) ||
+                float.IsNaN(requiredFront) ||
+                float.IsInfinity(requiredFront))
+                return 0f;
+            if (observedFront < -.02f || requiredFront <= observedFront)
+                return 0f;
+            return Math.Max(0f, Math.Min(.05f, requiredFront - observedFront));
+        }
+
         internal static bool NeedsNewFluidPreset(int existingMode,
             int existingPose, int nextMode, int nextPose)
         {
