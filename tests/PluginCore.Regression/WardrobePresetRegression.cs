@@ -74,6 +74,68 @@ internal static class WardrobePresetRegression {
         // ChaControl.notBot means the TOP garment owns the lower
         // clothes state dictionary. A one-piece bathing suit does NOT
         // need a second standalone bottom item ID.
+        // Top-owned bra: no separate bra ID and no native bra channel,
+        // but the top has a real state that should remain clickable.
+        WardrobeGarmentIdentity.Binding linkedBra =
+            WardrobeGarmentIdentity.Resolve(
+                2, 0, 310, 0, false, true, false,
+                false, true, false);
+        Require(linkedBra.Linked && linkedBra.Item == 310 &&
+            linkedBra.StateSlot == 0,
+            "Top-integrated bra cycles native top when no bra channel exists");
+        linkedBra = WardrobeGarmentIdentity.Resolve(
+            2, 0, 310, 0, false, true, false,
+            true, true, false);
+        Require(linkedBra.Linked && linkedBra.Item == 310 &&
+            linkedBra.StateSlot == 2,
+            "Top-integrated bra uses its own native channel when supplied");
+
+        // Bra-owned shorts: bra may provide the underwear fabric without
+        // a separate pantsu clothing ID.
+        WardrobeGarmentIdentity.Binding linkedShorts =
+            WardrobeGarmentIdentity.Resolve(
+                3, 0, 310, 420, false, false, true,
+                false, true, true);
+        Require(linkedShorts.Linked && linkedShorts.Item == 420 &&
+            linkedShorts.StateSlot == 2,
+            "Bra-integrated shorts cycle native bra when no shorts channel exists");
+        linkedShorts = WardrobeGarmentIdentity.Resolve(
+                3, 0, 310, 420, false, false, true,
+                true, true, true);
+        Require(linkedShorts.Linked && linkedShorts.Item == 420 &&
+            linkedShorts.StateSlot == 3,
+            "Bra-integrated shorts use the real native shorts channel if present");
+
+        // Full-body outfits can encompass top -> bra -> shorts.
+        WardrobeGarmentIdentity.Binding allInOne =
+            WardrobeGarmentIdentity.Resolve(
+                3, 0, 310, 0, false, true, true,
+                false, true, false);
+        Require(allInOne.Linked && allInOne.Item == 310 &&
+            allInOne.StateSlot == 0,
+            "Full-body outfit shorts resolve via top when both inner parts are built in");
+
+        WardrobeGarmentIdentity.Binding separateBra =
+            WardrobeGarmentIdentity.Resolve(
+                2, 421, 310, 421, false, false, false,
+                true, true, true);
+        Require(!separateBra.Linked && separateBra.Item == 421 &&
+            separateBra.StateSlot == 2,
+            "Standalone bra is not stolen by a top without notBra");
+        WardrobeGarmentIdentity.Binding separateShorts =
+            WardrobeGarmentIdentity.Resolve(
+                3, 422, 310, 421, false, false, false,
+                true, true, true);
+        Require(!separateShorts.Linked && separateShorts.Item == 422 &&
+            separateShorts.StateSlot == 3,
+            "Standalone shorts remain independent of bra");
+        WardrobeGarmentIdentity.Binding unsupported =
+            WardrobeGarmentIdentity.Resolve(
+                2, 0, 310, 0, false, true, false,
+                false, false, false);
+        Require(unsupported.Linked && unsupported.StateSlot == -1,
+            "Missing native owner state cannot receive fabricated writes");
+
         Require(WardrobeGarmentIdentity.IsLinkedBottom(
             "bot", true, 120, true), "One-piece top provides bot state");
         Require(WardrobeGarmentIdentity.EffectiveItem(
@@ -116,6 +178,22 @@ internal static class WardrobePresetRegression {
                 "Linked lower-half state survives XML save/reload and identity checks");
             Require(store.Delete("OnePieceSwimsuit", out linkedError),
                 "Remove test linked outfit without touching other presets");
+            WardrobePreset allInOneUnderwear = new WardrobePreset { Coordinate = 2 };
+            allInOneUnderwear.Garments.Add(new GarmentVisibility {
+                Kind = "bra", Item = 310, Visible = false, State = 1 });
+            allInOneUnderwear.Garments.Add(new GarmentVisibility {
+                Kind = "shorts", Item = 310, Visible = false, State = 1 });
+            Require(store.Save(allInOneUnderwear, "IntegratedUnderwear",
+                false, out linkedError),
+                "Store integrated bra+shorts identities independently by kind");
+            WardrobePresetStore underwearReload = new WardrobePresetStore(path);
+            Require(underwearReload.Reload() &&
+                underwearReload.Find("IntegratedUnderwear").Garments.Count == 2 &&
+                underwearReload.Find("IntegratedUnderwear").Garments[0].Matches("bra", 310) &&
+                underwearReload.Find("IntegratedUnderwear").Garments[1].Matches("shorts", 310),
+                "Integrated bra/shorts preset survives XML roundtrip");
+            Require(store.Delete("IntegratedUnderwear", out linkedError),
+                "Remove integrated underwear test fixture");
             WardrobePreset state = new WardrobePreset { Coordinate = 2, ShoeMode = 1 };
             state.Garments.Add(new GarmentVisibility { Kind = "gloves", Item = 42, Visible = false, State = 3 });
             state.Accessories.Add(new AccessoryVisibility { Slot = 21, Type = 121, Item = 42, Visible = false });
