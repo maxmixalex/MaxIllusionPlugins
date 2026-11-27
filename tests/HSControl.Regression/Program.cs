@@ -39,10 +39,14 @@ internal static class Program
             HSControlActionRules.CanStageGauge(7, true, false) &&
             HSControlActionRules.CanStageGauge(9, true, false),
             "manual gauge staging is independent of auto climax and loop state");
-        Check(!HSControlActionRules.CanStageGauge(0, true, false) &&
-            !HSControlActionRules.CanStageGauge(2, false, false) &&
-            !HSControlActionRules.CanStageGauge(2, true, true),
-            "manual stages cannot interrupt a native click or non-H scene");
+        Check(HSControlActionRules.CanStageGauge(0, false, true) &&
+            HSControlActionRules.CanStageGauge(2, false, false) &&
+            HSControlActionRules.CanStageGauge(2, true, true),
+            "gauge staging never consumes a native click or requires a loop");
+        Check(!HSControlActionRules.CanStageGauge(-1, true, false) &&
+            !HSControlActionRules.CanStageGauge(4, true, false) &&
+            !HSControlActionRules.CanStageGauge(11, true, false),
+            "unsupported game modes remain excluded");
         Check(HSControlActionRules.IsLoop("A_WLoop") &&
             !HSControlActionRules.IsLoop("Stop_Idle"), "only loop animations accept gated finish actions");
         Check(HSControlMotionEngine.CanDrive(0, "M_Idle", false), "native Aibu idle is supported");
