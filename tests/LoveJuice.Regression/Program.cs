@@ -115,6 +115,17 @@ internal static class Program {
                 "p_koi_syu_LiquidSiru_00_00", "Independent pelvis source reuses Studio viscous-liquid asset");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.MalePre) ==
                 "p_koi_syu_LiquidWater_00_00", "Male pre-fluid reuses native transparent Studio water asset");
+            Check(LiquidSourceTriggers.KissAnimationSignal("A_Kiss_Loop", false) &&
+                LiquidSourceTriggers.KissAnimationSignal("Idle", true) &&
+                LiquidSourceTriggers.KissAnimationSignal("ベロチュー", false) &&
+                !LiquidSourceTriggers.KissAnimationSignal("Orgasm_Loop", false),
+                "saliva strings require native kissing cues, never generic caress");
+            Check(LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, false) &&
+                !LiquidSourceTriggers.DrawSalivaFilament(true, false, .035f, false) &&
+                !LiquidSourceTriggers.DrawSalivaFilament(true, true, .20f, false) &&
+                !LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, true) &&
+                !LiquidSourceTriggers.DrawSalivaFilament(false, true, .035f, false),
+                "reuse an existing CyuNoVR filament; never create overlapping spray");
             Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 65f, 45f) == 2,
                 "Active primary male with sufficient gauge emits at a bounded level");
             Check(LiquidSourceTriggers.MalePreLevel(1, true, true, 100f, 0f) == 0 &&
