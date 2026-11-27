@@ -1,6 +1,13 @@
-# LoveJuice — 0.3.3 (Native Studio liquids)
+# LoveJuice — 0.3.4 (Native Studio liquids and kiss saliva filaments)
 
-Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. All rendering instances are **clones of installed Studio item prefabs**, not externally sourced particles, generated PNGs, or substituted shaders.
+Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects are **clones of installed Studio item prefabs**. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+
+## 0.3.4 — CyuNoVR-compatible kissing filaments and isolation
+
+- The installed `BepInEx/plugins/Sabakan/CyuNoVR.dll` is the existing French-kiss plugin. Saliva now uses a kiss-only, dynamically tapered and gravity-bent thread rather than treating `LiquidSio` as a miniature shower. If the original `BeroIto` `LineRenderer` exists, LoveJuice does not duplicate, delete, or recolor it. When absent, LoveJuice creates one scene-local fallback thread between the active actors' mouth anchors, and destroys its material and GameObject on scene exit.
+- No saliva droplets are automatically emitted from an increased face stain level; the **Face** switch now means **kissing thread**. F9 with the saliva preview channel displays a message explaining it cannot produce a realistic standalone kiss.
+- The external readback API remains optional, but JuiceControl has **no embedded LoveJuice controls, bridge, hard dependency, or UI modifications**. Configure LoveJuice only in its own Ctrl+F9 panel.
+- Runtime acceptance still required: real CyuNoVR H-scene lipstick/tongue contact, male/female mouth point accuracy, close/open mouth transition, multi-actor behaviour, and shader consistency. Static CI is not a game visual check.
 
 ## Native asset ownership fix
 
@@ -12,7 +19,7 @@ An independent male source uses the actual `cm_J_dan100`-family anatomical bone 
 
 ## 0.3.2: independent intimate-fluid source
 
-The optional SkinEffects `PussyJuiceBody` level drives its **own** switchable native Studio liquid emitter with pelvis-relative positioning, separate from sweat/body overlays. This source is restricted to active female characters. A missing optional plugin or unresolved pelvis bone does not produce invented drips or substitute an unrelated torso anchor. It is configurable in either LoveJuice or JuiceControl and offers an explicit F9 preview channel. The emitter uses the same original Studio `LiquidSiru` asset (borrowed, instantiated and pooled) rather than copying game assets.
+The optional SkinEffects `PussyJuiceBody` level drives its **own** switchable native Studio liquid emitter with pelvis-relative positioning, separate from sweat/body overlays. This source is restricted to active female characters. A missing optional plugin or unresolved pelvis bone does not produce invented drips or substitute an unrelated torso anchor. It is configurable in the independent LoveJuice panel and offers an explicit F9 preview channel. The emitter uses the same original Studio `LiquidSiru` asset (borrowed, instantiated and pooled) rather than copying game assets.
 
 ## Native source assets
 
@@ -45,7 +52,7 @@ The installed `KK_SkinEffects.dll` exposes `DroolLevel`, `SalivaLevel`, and `Swe
 
 - `General/Enabled` defaults to **false**. Toggle it to true to enable actual Studio liquid visuals. Default `F9` emits four native particles in the selected preview channel (water by default) from the current scene character; it is an active runtime test, not a mock image.
 - When `HSceneProc` is active, the plugin tracks **the current HSceneProc heroine roster and the separate native male performer**, including multi-character scenes, and resolves per-character bones when the roster changes and rebinds them after asynchronous head/body rig initialization or replacement. Unresolved optional anchors are rechecked on a bounded interval. It never modifies a character card.
-- Face and body emission follows the current built-in `ChaControl.GetSiruFlags` and optional SkinEffects controller values, including changes made live through **JuiceControl**. A rising visual level triggers a bounded immediate burst as well as subsequent periodic dripping; initialization, steady state and level decreases do not generate spurious bursts. This integration reads current values on the fly; neither optional mod is modified or required.
+- Body and intimate emissions follow the read-only native/SkinEffects levels; rising values create bounded bursts and periodic drips. Face levels are still observed, but never used as a cue to spray water from the mouth: saliva threads require a native kiss signal and close mouth anchors. No other plugin's UI, presets, or effect levels are modified.
 - FemboyMode integration calls its public `IsFemboy(ChaControl)` via an optional runtime adapter. The separately switchable marked-geometry source resolves the matching game bone if present.
 - Separate optional milk/shower channels (disabled by default). Milk uses an independent female-gauge threshold during native loop states and reuses the water prefab with a white particle start color and owned material copies for `_Color` / legacy `_TintColor` shaders. A public `LoveJuicePlugin.Emit(character, channel, count)` API supports other mods.
 - Real world-space liquid motion: gravity, damping, source direction, native `ParticleSystem` collision, lifetime, hard emitted-particle limit, and no cross-scene effect leaks. Same-frame reservations enforce the global particle cap even when Unity's native `particleCount` readback has not caught up with just-issued `Emit()` calls. Only one reusable native emitter is instantiated per visual channel; material copies for the optional milk tint are created once and explicitly disposed.
