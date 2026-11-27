@@ -20,7 +20,7 @@ namespace HSControl
     public sealed class HSControlPlugin : BaseUnityPlugin
     {
         public const string GUID = "MaxMixAlex.HSControl";
-        public const string Version = "0.1.1";
+        public const string Version = "0.1.2";
         private const string MountId = GUID + ".window";
         internal static HSControlPlugin Instance;
         private readonly HSControlMotionEngine motion = new HSControlMotionEngine(Environment.TickCount);
@@ -56,7 +56,10 @@ namespace HSControl
             strengthMin = Config.Bind("Motion", "Strength timer minimum", ini.StrengthMinSeconds, "Minimum seconds between changes.");
             strengthMax = Config.Bind("Motion", "Strength timer maximum", ini.StrengthMaxSeconds, "Maximum seconds between changes.");
             autoMaleFinish = Config.Bind("Scene", "Auto male finish", ini.AutoMaleFinish, "Request the native finish action at a full gauge.");
-            autoFemaleFinish = Config.Bind("Scene", "Auto female finish", ini.AutoFemaleFinish, "Allow native female finish at full gauge.");
+            // Retain the legacy setting on disk, but never cap the game's native
+            // female gauge: disabling HSControl automation cannot block gameplay.
+            autoFemaleFinish = Config.Bind("Scene", "Auto female finish", ini.AutoFemaleFinish,
+                "Legacy setting (no longer suppresses native female climax).");
             autoReplay = Config.Bind("Scene", "Auto replay", ini.AutoReplay, "Request native repeat after the final state.");
             try { harmony = Harmony.CreateAndPatchAll(typeof(HSControlHooks), GUID); }
             catch (Exception ex) { Logger.LogError("HSControl native hooks could not be installed: " + ex); }
@@ -113,8 +116,10 @@ namespace HSControl
             string state = flags.nowAnimStateName ?? string.Empty;
             bool canDrive = motion.Step(Time.deltaTime, hmode, state, flags.rely,
                 flags.gaugeMale, flags.gaugeFemale, config);
-            if (canDrive && hmode == 0) flags.speed = motion.Current;
-            if (!config.AutoFemaleFinish && flags.gaugeFemale > 99f) flags.gaugeFemale = 99f;
+            // Aibu input and both hands belong to the game's own drag controller.
+            // Only a deliberate manual speed override may write to this idle path.
+            if (canDrive && hmode == 0 && config.ManualOverride)
+                flags.speed = motion.Current;
             if (motion.StrengthToggleRequested && flags.click == HFlag.ClickKind.none &&
                 hmode != 0 && HSControlMotionEngine.CanDrive(hmode, state, flags.rely)) {
                 flags.click = HFlag.ClickKind.motionchange;
@@ -214,12 +219,6 @@ namespace HSControl
             flags.speedCalc = motion.Current;
         }
 
-        internal void AfterFemaleGaugeUp(HFlag flags) {
-            if (master == null || !master.Value || scene == null || scene.flags == null ||
-                !ReferenceEquals(scene.flags, flags) || autoFemaleFinish.Value) return;
-            if (flags.gaugeFemale >= 100f) flags.gaugeFemale = 99f;
-        }
-
         private void Open() {
             if (scene == null || scene.flags == null) return;
             if (view == null) {
@@ -249,10 +248,25 @@ namespace HSControl
             return !needsLoop || HSControlActionRules.IsLoop(flags.nowAnimStateName);
         }
 
+        private static bool CanStageGauge(HFlag flags) {
+            return flags != null && HSControlActionRules.CanStageGauge(
+                (int)flags.mode, flags.nowAnimationInfo != null,
+                flags.click != HFlag.ClickKind.none);
+        }
+
         private void PerformSceneCommand(int version, HSceneProc owner, int kind) {
             if (!SessionCurrent(version, owner) || !master.Value || owner.flags == null) return;
             HFlag flags = owner.flags;
-            if (!CanNativeCommands(flags, kind >= 2)) return;
+            if (kind <= 1 && !CanNativeCommands(flags, false)) {
+                status = "当前场景无法切换原生动作。";
+                RefreshView();
+                return;
+            }
+            if (kind >= 2 && !CanStageGauge(flags)) {
+                status = "当前场景正在执行其他动作，暂不可修改状态。";
+                RefreshView();
+                return;
+            }
             try {
                 bool okay;
                 if (kind <= 1) {
@@ -264,9 +278,8 @@ namespace HSControl
                     if (kind == 3 || kind == 4) flags.gaugeFemale = Math.Max(flags.gaugeFemale, 70f);
                     if (kind >= 5) {
                         if (kind == 6 || kind == 7) {
-                            if (!autoFemaleFinish.Value ||
-                                ((int)flags.mode != 2 && (int)flags.mode != 7 &&
-                                 (int)flags.mode != 9)) return;
+                            // Manual female climax is not coupled to the auto setting.
+                            // The native game processes the full gauge itself.
                             flags.gaugeFemale = 100f;
                         }
                         if (kind == 5 || kind == 7) {
@@ -299,11 +312,8 @@ namespace HSControl
                 AnimationState = flags == null ? string.Empty : flags.nowAnimStateName,
                 SceneMode = flags == null ? -1 : (int)flags.mode,
                 CanForceLoop = master.Value && CanNativeCommands(flags, false),
-                CanStage = master.Value && CanNativeCommands(flags, true),
-                CanFemaleFinish = master.Value && flags != null &&
-                    ((int)flags.mode == 2 || (int)flags.mode == 7 ||
-                     (int)flags.mode == 9) &&
-                    autoFemaleFinish.Value && CanNativeCommands(flags, true),
+                CanStage = master.Value && CanStageGauge(flags),
+                CanFemaleFinish = master.Value && CanStageGauge(flags),
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,
                 GaugeFemale = flags == null ? 0f : flags.gaugeFemale,
@@ -332,7 +342,7 @@ namespace HSControl
             model.ChangeAutoReplay = value => { if (live()) { autoReplay.Value = value; RefreshView(); } };
             model.ChangeGaugeMale = value => { if (live()) { flags.gaugeMale = Mathf.Clamp(value, 0f, 100f); RefreshView(); } };
             model.ChangeGaugeFemale = value => { if (live()) {
-                flags.gaugeFemale = Mathf.Clamp(value, 0f, autoFemaleFinish.Value ? 100f : 99f); RefreshView();
+                flags.gaugeFemale = Mathf.Clamp(value, 0f, 100f); RefreshView();
             }};
             model.Reroll = () => { if (live()) { motion.Reset(flags.speedCalc); RefreshView(); } };
             model.PlayWeak = () => PerformSceneCommand(token, owner, 0);
@@ -374,10 +384,5 @@ namespace HSControl
             if (plugin != null) plugin.AfterWaitSpeedProc(__instance);
         }
 
-        [HarmonyPostfix, HarmonyPatch(typeof(HFlag), "FemaleGaugeUp")]
-        private static void OnFemaleGauge(HFlag __instance) {
-            HSControlPlugin plugin = HSControlPlugin.Instance;
-            if (plugin != null) plugin.AfterFemaleGaugeUp(__instance);
-        }
     }
 }
