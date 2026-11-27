@@ -314,6 +314,10 @@ namespace MaximumUI {
             currentWindow = widget;
             currentWindowStateId = id;
             currentWindowContentOffset = Vector2.zero;
+            Color previousWindowColor = GUI.color;
+            if (widget.Translucency && state.Translucent)
+                GUI.color = new Color(previousWindowColor.r, previousWindowColor.g,
+                    previousWindowColor.b, previousWindowColor.a * Mathf.Clamp01(widget.TranslucentOpacity));
             try {
                 try {
                     DrawWindowFrame(context, widget, state);
@@ -336,6 +340,7 @@ namespace MaximumUI {
                 RegisterInputRegion(state.Rect, true);
                 RecordWindowQuery(context, widget, state);
             } finally {
+                GUI.color = previousWindowColor;
                 currentContext = oldContext;
                 currentWindow = oldWindow;
                 currentWindowStateId = oldWindowStateId;
@@ -356,25 +361,40 @@ namespace MaximumUI {
             }
 
             float buttonSize = WindowTitleHeight(widget, context);
-            float closeX = state.Rect.xMax - buttonSize;
-            float foldX = widget.Closable ? closeX - buttonSize : closeX;
+            float actionX = state.Rect.xMax;
             bool inputBlocked = IsInputBlockedByDialog();
 
-            if (widget.Foldable && DoIconButton(new Rect(foldX, state.Rect.y, buttonSize, buttonSize), state.Folded ? Mdl2Icon.ChevronDown : Mdl2Icon.Remove, context.Theme.QuietButton, false) && !inputBlocked) {
-                if (!state.Folded) state.ExpandedHeight = state.Rect.height;
-                state.Folded = !state.Folded;
-                if (!state.Folded) state.Rect.height = state.ExpandedHeight > 0f ? state.ExpandedHeight : widget.Height;
+            if (widget.Closable) {
+                actionX -= buttonSize;
+                if (DoIconButton(new Rect(actionX, state.Rect.y, buttonSize, buttonSize),
+                    Mdl2Icon.Close, context.Theme.QuietButton, false) && !inputBlocked) {
+                    EnqueueCallback(delegate {
+                        widget.Visible = false;
+                        if (widget.OnVisibleChange != null) widget.OnVisibleChange(false);
+                    });
+                }
             }
-
-            if (widget.Closable && DoIconButton(new Rect(closeX, state.Rect.y, buttonSize, buttonSize), Mdl2Icon.Close, context.Theme.QuietButton, false) && !inputBlocked) {
-                EnqueueCallback(delegate {
-                    widget.Visible = false;
-                    if (widget.OnVisibleChange != null) widget.OnVisibleChange(false);
-                });
+            if (widget.Foldable) {
+                actionX -= buttonSize;
+                if (DoIconButton(new Rect(actionX, state.Rect.y, buttonSize, buttonSize),
+                    state.Folded ? Mdl2Icon.ChevronDown : Mdl2Icon.Remove,
+                    context.Theme.QuietButton, false) && !inputBlocked) {
+                    if (!state.Folded) state.ExpandedHeight = state.Rect.height;
+                    state.Folded = !state.Folded;
+                    if (!state.Folded) state.Rect.height =
+                        state.ExpandedHeight > 0f ? state.ExpandedHeight : widget.Height;
+                }
             }
-
+            if (widget.Translucency) {
+                actionX -= buttonSize;
+                if (DoIconButton(new Rect(actionX, state.Rect.y, buttonSize, buttonSize),
+                    Mdl2Icon.Opacity, context.Theme.QuietButton, state.Translucent) &&
+                    !inputBlocked)
+                    state.Translucent = !state.Translucent;
+            }
             if (!inputBlocked) {
-                Rect dragRect = new Rect(state.Rect.x, state.Rect.y, Mathf.Max(0f, foldX - state.Rect.x), buttonSize);
+                Rect dragRect = new Rect(state.Rect.x, state.Rect.y,
+                    Mathf.Max(0f, actionX - state.Rect.x), buttonSize);
                 DoDrag(state, StableHash(context.StateId(widget, "window-drag")), dragRect);
             }
         }
@@ -3884,7 +3904,7 @@ namespace MaximumUI {
         }
 
         private static Color WithAlpha(Color color, float alpha) {
-            return new Color(color.r, color.g, color.b, alpha);
+            return new Color(color.r, color.g, color.b, color.a * alpha);
         }
 
         private static bool IsUsableLayoutRect(Rect rect) {
