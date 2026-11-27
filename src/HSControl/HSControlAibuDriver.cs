@@ -6,10 +6,15 @@ using UnityEngine;
 namespace HSControl
 {
     /// <summary>
-    /// Explicitly opt-in automated native Aibu interaction.
-    /// Auto-speed alone never increases gauge or starts a caress.
-    /// A synthetic drag is allowed only after a real usable native area was
-    /// resolved and bound to HandCtrl.actionUseItem, as in KK_HCtrl.AibuAuto.
+    /// HCtrl-compatible single-update synthetic Aibu pulses. The original
+    /// AibuAuto activates HandCtrl.action for ONE update, releases it on the
+    /// next call, then waits 0.7–3 seconds. The earlier multi-second hold
+    /// made body parts unclickable and the standalone "auto caress" toggle
+    /// did not exist in the original HCtrl.
+    ///
+    /// Unlike HCtrl's unconditional gauge injection on every idle frame,
+    /// FemaleGaugeUp is called ONLY on a successfully bound native contact.
+    /// This prevents idle-runaway while respecting native touch ownership.
     /// </summary>
     internal sealed class HSControlAibuDriver
     {
@@ -21,16 +26,96 @@ namespace HSControl
             typeof(HandCtrl).GetField("actionUseItem", Flags);
         private static readonly FieldInfo AreasField =
             typeof(HandCtrl).GetField("useAreaItems", Flags);
+        private static readonly FieldInfo UsedItemsField =
+            typeof(HandCtrl).GetField("useItems", Flags);
         private HandCtrl ownedHand;
         private HFlag ownedFlags;
-        private float remaining;
+        private int previousUseId;
+        private bool restoreUseId;
         private float retryIn;
         private bool completed;
 
+        internal bool Running { get { return ownedHand != null && ownedFlags != null; } }
         internal bool TakeCompleted() {
-            bool wasCompleted = completed;
+            bool result = completed;
             completed = false;
-            return wasCompleted;
+            return result;
+        }
+
+        private static int Action(HandCtrl hand) {
+            if (hand == null) return -1;
+            if (ActionField == null) return -1;
+            try { return Convert.ToInt32(ActionField.GetValue(hand)); }
+            catch { return -1; }
+        }
+
+        private static int ReadInt(FieldInfo field, object target) {
+            if (field == null || target == null) return -1;
+            try { return Convert.ToInt32(field.GetValue(target)); }
+            catch { return -1; }
+        }
+
+        private static bool Assign(FieldInfo field, object target, int value) {
+            if (field == null || target == null) return false;
+            try {
+                object converted = field.FieldType.IsEnum
+                    ? Enum.ToObject(field.FieldType, value)
+                    : Convert.ChangeType(value, field.FieldType);
+                field.SetValue(target, converted);
+                return ReadInt(field, target) == value;
+            } catch { return false; }
+        }
+
+        private static int MemberInt(object owner, string name) {
+            if (owner == null) return -1;
+            try {
+                Type type = owner.GetType();
+                FieldInfo field = type.GetField(name, Flags);
+                if (field != null) return Convert.ToInt32(field.GetValue(owner));
+                PropertyInfo prop = type.GetProperty(name, Flags);
+                if (prop != null) return Convert.ToInt32(prop.GetValue(owner, null));
+            } catch { }
+            return -1;
+        }
+
+        private static int NativeUseArea(HandCtrl hand) {
+            if (hand == null || ActionUseField == null || AreasField == null)
+                return -1;
+            try {
+                IEnumerable areas = AreasField.GetValue(hand) as IEnumerable;
+                if (areas == null) return -1;
+                Array items = UsedItemsField == null ? null :
+                    UsedItemsField.GetValue(hand) as Array;
+                foreach (object area in areas) {
+                    if (area == null) continue;
+                    int kind = MemberInt(area, "kindTouch");
+                    int id = MemberInt(area, "idUse");
+                    if (kind < 2 || kind > 7 || id < 0) continue;
+                    if (items != null && (id >= items.Length || items.GetValue(id) == null))
+                        continue;
+                    return id;
+                }
+            } catch { }
+            return -1;
+        }
+
+        internal void Stop(HSceneProc scene) {
+            if (Running) {
+                // Release only a drag we still own. Never clear the second
+                // hand's active drag or overwrite a fresh manual action.
+                bool stillOwned = Action(ownedHand) == 1;
+                bool secondBusy = scene != null && Action(scene.hand1) != 0;
+                if (stillOwned) {
+                    Assign(ActionField, ownedHand, 0);
+                    if (!secondBusy) ownedFlags.FinishDrag();
+                }
+                if (restoreUseId && stillOwned &&
+                    ReadInt(ActionUseField, ownedHand) >= 0)
+                    Assign(ActionUseField, ownedHand, previousUseId);
+            }
+            ownedHand = null;
+            ownedFlags = null;
+            restoreUseId = false;
         }
 
         internal void Clear(HSceneProc scene) {
@@ -39,142 +124,61 @@ namespace HSControl
             retryIn = 0f;
         }
 
-        internal bool Running {
-            get { return ownedHand != null && ownedFlags != null; }
-        }
-
-        private static int Action(HandCtrl hand)
-        {
-            if (hand == null) return 0;
-            if (ActionField == null) return -1;
-            try { return Convert.ToInt32(ActionField.GetValue(hand)); }
-            catch { return -1; }
-        }
-
-        private static bool Assign(FieldInfo field, object target, int value)
-        {
-            if (field == null || target == null) return false;
-            try {
-                object converted = field.FieldType.IsEnum
-                    ? Enum.ToObject(field.FieldType, value)
-                    : Convert.ChangeType(value, field.FieldType);
-                field.SetValue(target, converted);
-                return Convert.ToInt32(field.GetValue(target)) == value;
-            } catch { return false; }
-        }
-
-        private static int FieldInt(object owner, string name)
-        {
-            if (owner == null) return -1;
-            try {
-                Type type = owner.GetType();
-                FieldInfo field = type.GetField(name, Flags);
-                if (field != null) return Convert.ToInt32(field.GetValue(owner));
-                PropertyInfo property = type.GetProperty(name, Flags);
-                if (property != null)
-                    return Convert.ToInt32(property.GetValue(owner, null));
-            } catch { }
-            return -1;
-        }
-
-        private static int NativeUseArea(HandCtrl hand)
-        {
-            if (hand == null || ActionUseField == null || AreasField == null)
-                return -1;
-            try {
-                IEnumerable areas = AreasField.GetValue(hand) as IEnumerable;
-                if (areas == null) return -1;
-                foreach (object area in areas) {
-                    if (area == null) continue;
-                    int kind = FieldInt(area, "kindTouch");
-                    int idUse = FieldInt(area, "idUse");
-                    if (kind >= 2 && kind <= 7 && idUse >= 0)
-                        return idUse;
-                }
-            } catch { }
-            return -1;
-        }
-
-        internal void Stop(HSceneProc scene)
-        {
-            if (Running && Action(ownedHand) == 1) {
-                bool otherHandBusy = scene != null && Action(scene.hand1) != 0;
-                Assign(ActionField, ownedHand, 0);
-                if (!otherHandBusy) ownedFlags.FinishDrag();
-            }
-            ownedHand = null;
-            ownedFlags = null;
-            remaining = 0f;
-        }
-
         /// <summary>
-        /// Called only in supported Aibu animation states. The 'autoCaress'
-        /// switch is separate from automatic speed settings and defaults OFF.
-        /// Returns true only when this driver actually owns a native drag.
+        /// Called only when the existing HCtrl automatic speed mode is on.
+        /// No independent auto-caress setting: mode 0 disables all synthesis.
         /// </summary>
-        internal bool Tick(HSceneProc scene, HFlag flags, float speed, float delta,
-            bool autoCaress)
-        {
+        internal bool Tick(HSceneProc scene, HFlag flags, float speed, float dt) {
             if (scene == null || flags == null || scene.hand == null ||
                 !HSControlActionRules.IsAutoCaressState((int)flags.mode,
                     flags.nowAnimStateName, flags.rely)) {
-                Stop(scene);
+                Clear(scene);
                 return false;
             }
 
-            float dt = Mathf.Clamp(delta, 0f, .2f);
-            if (!autoCaress) {
+            // HCtrl sends an action only for a single game update. Release
+            // our prior pulse BEFORE checking new mouse input.
+            if (Running) {
                 Stop(scene);
-                // Manual caress is owned by the game. Adjust speed only
-                // when an actual native input is already in progress.
-                if (Action(scene.hand) > 0 || Action(scene.hand1) > 0)
-                    flags.speed = Mathf.Clamp01(speed);
                 return false;
             }
-            retryIn = Mathf.Max(0f, retryIn - dt);
-            HandCtrl hand = scene.hand;
-            if (Running && (!ReferenceEquals(ownedHand, hand) ||
-                !ReferenceEquals(ownedFlags, flags) || Action(hand) != 1))
-                Stop(scene);
-
-            // Native mouse/second-hand activity always wins.
+            retryIn = Mathf.Max(0f, retryIn - Mathf.Clamp(dt, 0f, .2f));
+            if (retryIn > 0f || flags.gaugeFemale >= 99.5f)
+                return false;
             if (Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
-                Action(scene.hand1) != 0) {
-                Stop(scene);
+                Action(scene.hand) != 0 || Action(scene.hand1) != 0)
+                return false;
+
+            int id = NativeUseArea(scene.hand);
+            if (id < 0) return false;
+
+            int previous = ReadInt(ActionUseField, scene.hand);
+            if (!Assign(ActionUseField, scene.hand, id)) return false;
+            if (!flags.DragStart()) {
+                Assign(ActionUseField, scene.hand, previous);
                 return false;
             }
-            if (!Running) {
-                if (Action(hand) != 0 || retryIn > 0f ||
-                    flags.gaugeFemale >= 99.5f) return false;
-                int id = NativeUseArea(hand);
-                if (id < 0 || !Assign(ActionUseField, hand, id))
-                    return false;
-                if (!flags.DragStart()) return false;
-                if (!Assign(ActionField, hand, 1)) {
-                    flags.FinishDrag();
-                    return false;
-                }
-                ownedHand = hand;
-                ownedFlags = flags;
-                remaining = UnityEngine.Random.Range(.7f, 3f);
+            if (!Assign(ActionField, scene.hand, 1)) {
+                flags.FinishDrag();
+                Assign(ActionUseField, scene.hand, previous);
+                return false;
             }
+            ownedHand = scene.hand;
+            ownedFlags = flags;
+            previousUseId = previous;
+            restoreUseId = previous >= 0;
 
-            if (!Running) return false;
             flags.speed = Mathf.Clamp01(speed);
-            // Unlike the previous unconditional call, raise the gauge only
-            // while our own native drag is active, and never during idle.
-            if (hand.nowMES != null && flags.gaugeFemale < 100f)
+            if (scene.hand.nowMES != null && flags.gaugeFemale < 100f)
                 flags.FemaleGaugeUp(flags.speed * 5f * flags.rateDragGauge,
-                    false, hand.nowMES.stateMotion == 0);
-            remaining -= dt;
+                    false, scene.hand.nowMES.stateMotion == 0);
+
+            // 0.7–3 s is the interval to the NEXT one-frame pulse,
+            // not how long to hold the hand.action field.
+            retryIn = UnityEngine.Random.Range(.7f, 3f);
             if (flags.gaugeFemale >= 100f) {
-                // Only an actual owned caress can request the native finish.
                 Stop(scene);
                 completed = true;
-                retryIn = UnityEngine.Random.Range(.7f, 3f);
-            } else if (remaining <= 0f) {
-                Stop(scene);
-                retryIn = UnityEngine.Random.Range(.7f, 3f);
             }
             return true;
         }
