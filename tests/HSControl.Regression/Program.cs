@@ -34,6 +34,12 @@ internal static class Program
             HSControlActionRules.LoopName(1, false, false) == "WLoop" &&
             HSControlActionRules.LoopName(5, false, true) == null,
             "native loop state names match installed original two-person and 3P action families");
+        Check(!HSControlActionRules.CanApplyAutoMotion(false, 2, false) &&
+            !HSControlActionRules.CanApplyAutoMotion(false, 2, true) &&
+            !HSControlActionRules.CanApplyAutoMotion(true, 0, false) &&
+            HSControlActionRules.CanApplyAutoMotion(true, 2, false) &&
+            HSControlActionRules.CanApplyAutoMotion(true, 0, true),
+            "saved auto speed preferences never activate scene input until changed");
         Check(HSControlActionRules.IsAutoCaressState(0, "M_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "A_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "S_Idle", false) &&
