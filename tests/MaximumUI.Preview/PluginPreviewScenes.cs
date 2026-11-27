@@ -42,7 +42,7 @@ internal static class PluginPreviewScenes {
         // variants, not three separate UI pages.
         int speedMode = scenario == 0 ? 2 : scenario == 1 ? 0 : 1;
         var model = new HSControlViewModel {
-            Version = "0.1.4", Available = true, Enabled = true,
+            Version = "0.1.5", Available = true, Enabled = true,
             SceneMode = scenario == 2 ? 1 : 0, AnimationState = scenario == 2 ? "WLoop" : "M_Idle",
             Status = "已连接当前 H 场景",
             Mode = speedMode, ManualOverride = scenario == 1,
@@ -99,7 +99,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene LoveJuicePanel() {
         var model = new LoveJuiceViewModel {
-            Version = "0.3.7", Enabled = true, HasScene = true,
+            Version = "0.3.8", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 8, MaximumParticles = 48,
             ActorNames = new[] { "示例角色 A", "示例角色 B" },
             SelectedActorIndex = 0, Face = true, SalivaAnytime = true,
