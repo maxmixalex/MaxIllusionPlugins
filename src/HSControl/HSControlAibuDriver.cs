@@ -109,8 +109,7 @@ namespace HSControl
                     Assign(ActionField, ownedHand, 0);
                     if (!secondBusy) ownedFlags.FinishDrag();
                 }
-                if (restoreUseId && stillOwned &&
-                    ReadInt(ActionUseField, ownedHand) >= 0)
+                if (restoreUseId && stillOwned)
                     Assign(ActionUseField, ownedHand, previousUseId);
             }
             ownedHand = null;
@@ -166,7 +165,8 @@ namespace HSControl
             ownedHand = scene.hand;
             ownedFlags = flags;
             previousUseId = previous;
-            restoreUseId = previous >= 0;
+            // -1 is the original native "no selected item" value too.
+            restoreUseId = ActionUseField != null;
 
             flags.speed = Mathf.Clamp01(speed);
             if (scene.hand.nowMES != null && flags.gaugeFemale < 100f)
