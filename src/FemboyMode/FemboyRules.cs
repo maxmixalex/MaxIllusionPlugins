@@ -52,29 +52,20 @@ namespace FemboyMode
             internal float LocalPitchOffset;
         }
 
-        // Underwear is live clothing slot 3: 0=On, 1=Shift, 2=Hang,
-        // 3=Off. The original notShorts flag means no physical shorts mesh;
-        // it does NOT encode the live clothing slider. Never mistake a
-        // missing status for covered fabric.
-        internal static FluidClothingProfile FluidProfileForUnderwear(
-            bool noShorts, int liveShortsState)
+        // This is the live game's genital-visibility flag, not an inference
+        // from a single underwear slot. One-piece outfits, bodysuits and
+        // modded clothing can cover the anatomy when shorts are absent.
+        internal static FluidClothingProfile FluidProfileForVisibility(bool visibleSon)
         {
-            if (noShorts || liveShortsState < 0 || liveShortsState >= 3)
-                return new FluidClothingProfile {
+            return visibleSon
+                ? new FluidClothingProfile {
                     SpeedMultiplier = 1f, SpreadMultiplier = 1f,
                     LocalPitchOffset = 0f
+                }
+                : new FluidClothingProfile {
+                    SpeedMultiplier = .32f, SpreadMultiplier = 1.35f,
+                    LocalPitchOffset = -20f
                 };
-            if (liveShortsState == 0)
-                return new FluidClothingProfile {
-                    SpeedMultiplier = .35f, SpreadMultiplier = 1.3f,
-                    LocalPitchOffset = -18f
-                };
-            // Shift/Hang leave a partial opening; they are not identical
-            // to Off, but should not act like a sealed garment either.
-            return new FluidClothingProfile {
-                SpeedMultiplier = .65f, SpreadMultiplier = 1.15f,
-                LocalPitchOffset = -8f
-            };
         }
 
         internal static bool ShouldFitUnderwear(bool marked, bool enabled,
