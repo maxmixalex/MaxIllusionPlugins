@@ -2,6 +2,13 @@
 
 A new, independently implemented controller for a running Koikatsu / Koikatsu Party H scene. The C# source uses the original game's HFlag and HSceneProc public members, not a wrapper around the original KK_HCtrl.dll.
 
+## 0.1.5 — native one-update auto-caress and direct action dispatch
+
+- Removed the separate auto-caress checkbox: original HCtrl automatically drives Aibu while an automatic speed mode is enabled. No new toggle is required.
+- Fixed the multi-second hand lock. Auto Aibu now issues a single update of native `HandCtrl.action`, releases it on the next update, restores `actionUseItem` (including the original -1 no-selection value), and waits 0.7–3 s before the next eligible contact. Player mouse and second-hand input always take priority.
+- The native speed setting does not add gauge every idle frame. `FemaleGaugeUp` only runs on a valid, owned short Aibu pulse; empty contact lists leave the gauge untouched.
+- Removed invented "current action unavailable" banners. Weak/strong follow original `ChangeSW` (native `motionchange`) rather than forcing `SetPlay`; the native loop, pre-climax and climax operations now dispatch based on HCtrl's per-scene `CanProc` matrix. More detailed in-game checks remain necessary across non-Aibu modes.
+
 ## 0.1.4 — reconstructed from the installed HCtrl GUIFunc
 
 - Restored the actual HCtrl single-window order: female/male gauges with native lock-button callbacks; four auto speed choices; optional range/band/link options; male/female auto climax and replay; and original three rows of loop, pre-climax and climax actions. No tabs and no vertically hidden actions.
