@@ -2,6 +2,12 @@
 
 A new, independently implemented controller for a running Koikatsu / Koikatsu Party H scene. The C# source uses the original game's HFlag and HSceneProc public members, not a wrapper around the original KK_HCtrl.dll.
 
+## 0.1.6 — stop unintended motion on scene entry
+
+- Existing HCtrl INI/BepInEx saved automatic-speed preferences no longer authorize active hand control at H-scene entry. Automatic motion, native caress, auto-finish and auto-replay stay idle until the player actively changes an HSControl speed control **within the current scene**. An explicit selector or slider change arms it; the arm is cleared on scene transition and plugin disable. No extra auto-caress toggle.
+- Prevents spontaneous motion and repeated one-frame Aibu pulses solely because an old INI happened to select random speed. The native hand remains in control until the user acts, even when the UI displays a remembered speed mode.
+- This is an intentional safety refinement of the HCtrl-style speed behavior. Actual motion/hand choreography still needs in-game E2E validation across animation packs.
+
 ## 0.1.5 — native one-update auto-caress and direct action dispatch
 
 - Removed the separate auto-caress checkbox: original HCtrl automatically drives Aibu while an automatic speed mode is enabled. No new toggle is required.
