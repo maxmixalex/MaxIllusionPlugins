@@ -71,25 +71,18 @@ internal static class Program
               FemboyRules.UnderwearClearanceDeficit(-.10f, .15f) == 0f &&
               FemboyRules.UnderwearClearanceDeficit(float.NaN, .15f) == 0f,
               "pre-adapted underwear and invalid geometry must not be warped");
-        var covered = FemboyRules.FluidProfileForUnderwear(false, 0);
-        var shifted = FemboyRules.FluidProfileForUnderwear(false, 1);
-        var hanging = FemboyRules.FluidProfileForUnderwear(false, 2);
-        var removed = FemboyRules.FluidProfileForUnderwear(false, 3);
-        var noMesh = FemboyRules.FluidProfileForUnderwear(true, 0);
-        var unknownClothes = FemboyRules.FluidProfileForUnderwear(false, -1);
-        Check(covered.SpeedMultiplier > 0f &&
-              covered.SpeedMultiplier < shifted.SpeedMultiplier &&
-              shifted.SpeedMultiplier < removed.SpeedMultiplier &&
-              covered.LocalPitchOffset != removed.LocalPitchOffset,
-              "worn underwear deflects and slows the native projectile");
-        Check(Math.Abs(hanging.SpeedMultiplier - shifted.SpeedMultiplier) < .0001f &&
-              hanging.LocalPitchOffset == shifted.LocalPitchOffset,
-              "shifted and hanging underwear preserve a partially exposed path");
-        Check(noMesh.SpeedMultiplier == 1f &&
-              unknownClothes.SpeedMultiplier == 1f &&
-              removed.LocalPitchOffset == 0f &&
-              removed.SpreadMultiplier == 1f,
-              "missing underwear model/state preserves original naked trajectory");
+        var hiddenAnatomy = FemboyRules.FluidProfileForVisibility(false);
+        var shownAnatomy = FemboyRules.FluidProfileForVisibility(true);
+        Check(hiddenAnatomy.SpeedMultiplier > 0f &&
+              hiddenAnatomy.SpeedMultiplier < shownAnatomy.SpeedMultiplier &&
+              hiddenAnatomy.LocalPitchOffset != shownAnatomy.LocalPitchOffset,
+              "concealed male anatomy uses a shorter redirected ballistic path");
+        Check(shownAnatomy.SpeedMultiplier == 1f &&
+              shownAnatomy.SpreadMultiplier == 1f &&
+              shownAnatomy.LocalPitchOffset == 0f,
+              "visible penis preserves normal shaft-relative parabola");
+        // The live visibleSon flag is independent of any single shorts slot:
+        // a covered one-piece outfit does not become naked when shorts are absent.
 
         Check(Math.Abs(FemboyMakerAxisMath.DragValue(1f, 50f, 0, false, false) - 1.8f) < .001f,
             "native scale handle updates the correct unit");
