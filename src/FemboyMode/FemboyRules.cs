@@ -68,6 +68,12 @@ namespace FemboyMode
                 };
         }
 
+        // Native clothing slots: 0 top (including many one-piece outfits),
+        // 1 bottom, 3 underwear. Accessories and body meshes are not fitted.
+        internal static bool IsPotentialCrotchGarmentSlot(int slot) {
+            return slot == 0 || slot == 1 || slot == 3;
+        }
+
         internal static bool ShouldFitUnderwear(bool marked, bool enabled,
             bool meshAvailable, int liveShortsState)
         {
@@ -85,9 +91,9 @@ namespace FemboyMode
                 float.IsNaN(requiredFront) ||
                 float.IsInfinity(requiredFront))
                 return 0f;
-            if (observedFront < -.02f || requiredFront <= observedFront)
+            if (observedFront < -.06f || requiredFront <= observedFront)
                 return 0f;
-            return Math.Max(0f, Math.Min(.05f, requiredFront - observedFront));
+            return Math.Max(0f, Math.Min(.07f, requiredFront - observedFront));
         }
 
         internal static bool NeedsNewFluidPreset(int existingMode,
