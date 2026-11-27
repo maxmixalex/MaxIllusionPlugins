@@ -78,7 +78,7 @@ namespace FemboyMode
             bool meshAvailable, int liveShortsState)
         {
             return marked && enabled && meshAvailable &&
-                liveShortsState >= 0 && liveShortsState < 3;
+                liveShortsState == 0;
         }
 
         // An already roomy garment (including native penis-adapted models)
@@ -93,7 +93,7 @@ namespace FemboyMode
                 return 0f;
             if (observedFront < -.06f || requiredFront <= observedFront)
                 return 0f;
-            return Math.Max(0f, Math.Min(.07f, requiredFront - observedFront));
+            return Math.Max(0f, Math.Min(.018f, requiredFront - observedFront));
         }
 
         internal static bool NeedsNewFluidPreset(int existingMode,
