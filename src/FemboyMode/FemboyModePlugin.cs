@@ -39,6 +39,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> EnableMaleGeometryTransforms;
         internal static ConfigEntry<bool> EnableUnderwearMeshFit;
+        internal static ConfigEntry<float> UnderwearFitStrength;
         internal static ConfigEntry<bool> EnableBodyAllNativeScroll;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<string> MaleBallsBone;
@@ -126,6 +127,11 @@ namespace FemboyMode
             EnableUnderwearMeshFit = Config.Bind("Maker",
                 "Automatically fit unadapted underwear meshes", true,
                 "Create a private reversible mesh clone only when the active underwear's measured crotch silhouette lacks clearance for the marked character's male geometry. Already-adapted meshes are left untouched.");
+            UnderwearFitStrength = Config.Bind("Maker",
+                "Underwear mesh correction strength", .4f,
+                new ConfigDescription(
+                    "Conservative per-model clothing clearance correction. 0 disables deformation, 1 uses the limited 18mm maximum. Only fully worn garments are reshaped; shifting or removing clothes immediately restores them.",
+                    new AcceptableValueRange<float>(0f, 1f)));
             MaleGeometryBone = Config.Bind("Maker", "Male geometry bone", "cm_j_dan100",
                 "Penis root bone (usually cm_J_dan100_00), independent of Aibu anchor.");
             MaleBallsBone = Config.Bind("Maker", "Male balls bone", "cm_J_dan_f_top",
