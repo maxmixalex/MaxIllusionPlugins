@@ -42,6 +42,16 @@ internal static class Program
             !HSControlActionRules.IsAutoCaressState(0, "Orgasm_Loop", false) &&
             !HSControlActionRules.IsAutoCaressState(2, "A_Idle", false),
             "automatic Aibu only starts during vanilla caress idle transitions");
+        Check(HSControlActionRules.OriginalCanForce(0, 6) &&
+            !HSControlActionRules.OriginalCanForce(0, 5) &&
+            !HSControlActionRules.OriginalCanForce(0, 7) &&
+            HSControlActionRules.OriginalCanForce(2, 3) &&
+            HSControlActionRules.OriginalCanForce(2, 7) &&
+            HSControlActionRules.OriginalCanForce(7, 4) &&
+            !HSControlActionRules.OriginalCanForce(1, 3) &&
+            !HSControlActionRules.OriginalCanForce(5, 2) &&
+            !HSControlActionRules.OriginalCanForce(4, 8),
+            "original HCtrl CanProc per-mode button availability matrix");
         Check(HSControlActionRules.CanStageGauge(1, true, false) &&
             HSControlActionRules.CanStageGauge(2, true, false) &&
             HSControlActionRules.CanStageGauge(7, true, false) &&
