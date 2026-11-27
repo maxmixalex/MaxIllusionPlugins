@@ -12,7 +12,7 @@ namespace MaximumUI.Tests {
             DisplayEqualityIncludesBusinessIdentity();
             FiltersAndBatchOperateOnDisplayedRows();
             GarmentPageDispatchesNativeCommands();
-            MissingBottomGarmentShowsDisabledStatus();
+            LinkedOnePieceBottomRemainsOperable();
             NineGarmentRowsFitWindowWithoutInternalScroll();
             ClothingStateOptionsInvalidateTheRetainedUi();
             FreeHDisablesFullCoordinateReloadWithoutDisablingClothing();
@@ -132,13 +132,13 @@ namespace MaximumUI.Tests {
             Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
         }
 
-        private static void MissingBottomGarmentShowsDisabledStatus() {
-            // Native IsClothesStateKind can hide a lower garment when
-            // a full-body top is selected. The row must not disappear.
+        private static void LinkedOnePieceBottomRemainsOperable() {
+            // A genuine empty lower slot is distinct from a one-piece
+            // top that supplies the game's native bottom-state channel.
             WardrobeViewModel model = Create();
             model.Page = 0;
             model.Garments.Add(new WardrobeRow {
-                Slot = 0, Label = "上衣", State = 0, Item = 48,
+                Slot = 0, Label = "上衣", State = 0, Item = 120,
                 AllowedStates = new[] {0, 1, 3}, ChangeState = delegate {}
             });
             model.Garments.Add(new WardrobeRow {
@@ -146,17 +146,25 @@ namespace MaximumUI.Tests {
                 AllowedStates = new int[0]
             });
             Widget widget = new WardrobeView { Model = model }.Build(null);
-            Require(Find(widget, "garment-1") != null &&
-                Find(widget, "garment-not-equipped-1") != null,
-                "Bottom garment always has a visible disabled state when missing");
-            Require(Find(widget, "garment-state-1-current") == null,
-                "Missing bottom garment cannot issue a nonexistent native clothing command");
-            model.Garments[1].Item = 60;
+            Require(Find(widget, "garment-not-equipped-1") != null,
+                "Truly absent bottom may show an unequipped placeholder");
+
+            int requested = -1;
+            model.Garments[1].Item = 120; // native linked top identity
+            model.Garments[1].Label = "下装（连体）";
             model.Garments[1].State = 1;
-            model.Garments[1].AllowedStates = new[] {1};
+            model.Garments[1].AllowedStates = new[] {0, 1, 3};
+            model.Garments[1].ChangeState = value => requested = value;
             widget = new WardrobeView { Model = model }.Build(null);
-            Require(Find(widget, "garment-not-changeable-1") != null,
-                "Masked native lower garment is visible without unsafe state writes");
+            Require(Find(widget, "garment-not-equipped-1") == null &&
+                Find(widget, "garment-not-changeable-1") == null &&
+                Find(widget, "garment-state-1-current") is Button,
+                "One-piece bottom must retain a real cycling control");
+            ((ArrowButton)Find(widget, "garment-state-1-next")).OnClick();
+            Require(requested == 3,
+                "One-piece lower half dispatches native bottom-state change");
+            Require(Find(widget, "wardrobe-restore-clothing") != null,
+                "Cross-slot state does not displace regular wardrobe controls");
         }
 
         private static void NineGarmentRowsFitWindowWithoutInternalScroll() {
