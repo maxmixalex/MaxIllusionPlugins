@@ -80,7 +80,7 @@ namespace LoveJuice {
                 new Checkbox("实验性球形液滴（默认关闭）",
                     m.ExperimentalSpheres, m.ChangeExperimentalSpheres,
                     "lovejuice-experimental-spheres").Enabled(m.Enabled).Height(32f),
-                new Label("物理与性能（仅实验性液滴）", "lovejuice-physics"),
+                new Label("物理与性能（原生 Metaball；实验模式可调整）", "lovejuice-physics"),
                 new SliderFloat("发射间隔", m.Interval, .06f, 4f, m.ChangeInterval, "lovejuice-interval")
                     .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("重力", m.Gravity, 0f, 30f, m.ChangeGravity, "lovejuice-gravity")
