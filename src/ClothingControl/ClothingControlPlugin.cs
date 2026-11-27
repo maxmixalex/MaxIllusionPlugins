@@ -26,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.6";
+        public const string Version = "0.5.7";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -703,9 +703,13 @@ namespace ClothingControl {
                     GarmentVisibility entry;
                     bool present = TryReadGarment(character, kind, out entry);
                     int[] states = present ? ReadGarmentOptions(character, kind) : new int[0];
+                    // A one-piece top with native notBot owns the bottom
+                    // channel even when parts[bot].id is zero. Display and
+                    // control its REAL bot state, not a disabled placeholder.
+                    bool linkedBottom = present && IsLinkedBottom(character, kind);
                     WardrobeRow row = new WardrobeRow {
                         Slot = i, Item = present ? entry.Item : 0,
-                        Label = GarmentLabels[i],
+                        Label = linkedBottom ? "下装（连体）" : GarmentLabels[i],
                         Visible = present && entry.Visible,
                         State = present ? entry.State : -1,
                         AllowedStates = states
@@ -778,20 +782,53 @@ namespace ClothingControl {
             Refresh();
         }
 
-        private static bool TryReadGarment(ChaControl character, string kind, out GarmentVisibility entry) {
+        // ChaControl.ChangeClothesTopAsync sets notBot from the top
+        // asset's Coordinate=2 flag. AddClothesStateKind(0) then adds
+        // a separate native state dictionary for bot, even when there
+        // is no independently loaded lower-clothes prefab/id. This is
+        // how one-piece swimsuits and dresses keep lower-half states.
+        private static bool IsLinkedBottom(ChaControl character, string kind) {
+            if (character == null || character.nowCoordinate == null ||
+                character.nowCoordinate.clothes == null ||
+                character.nowCoordinate.clothes.parts == null ||
+                character.nowCoordinate.clothes.parts.Length < 2)
+                return false;
+            var parts = character.nowCoordinate.clothes.parts;
+            int topItem = parts[0] == null ? 0 : parts[0].id;
+            return WardrobeGarmentIdentity.IsLinkedBottom(
+                kind, character.notBot, topItem,
+                character.IsClothesStateKind(1));
+        }
+
+        private static bool TryReadGarment(ChaControl character, string kind,
+            out GarmentVisibility entry) {
             entry = null;
-            if (!GarmentVisibility.IsSupported(kind) || character == null || character.fileStatus == null ||
-                character.fileStatus.clothesState == null || character.nowCoordinate == null ||
-                character.nowCoordinate.clothes == null || character.nowCoordinate.clothes.parts == null) return false;
-            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), kind);
+            if (!GarmentVisibility.IsSupported(kind) || character == null ||
+                character.fileStatus == null ||
+                character.fileStatus.clothesState == null ||
+                character.nowCoordinate == null ||
+                character.nowCoordinate.clothes == null ||
+                character.nowCoordinate.clothes.parts == null) return false;
+            int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(
+                typeof(ChaFileDefine.ClothesKind), kind);
             var parts = character.nowCoordinate.clothes.parts;
             var states = character.fileStatus.clothesState;
-            if (slot < 0 || slot >= parts.Length || slot >= states.Length || parts[slot] == null ||
-                parts[slot].id <= 0) return false;
+            if (slot < 0 || slot >= parts.Length ||
+                slot >= states.Length) return false;
+
+            int ownItem = parts[slot] == null ? 0 : parts[slot].id;
+            int topItem = parts.Length == 0 || parts[0] == null
+                ? 0 : parts[0].id;
+            bool linkedBottom = IsLinkedBottom(character, kind);
+            int effectiveItem = WardrobeGarmentIdentity.EffectiveItem(
+                kind, ownItem, topItem, linkedBottom);
+            if (effectiveItem <= 0) return false;
+
             int current = states[slot];
             if (current < 0 || current > 3) return false;
             entry = new GarmentVisibility {
-                Kind = kind, Item = parts[slot].id, Visible = current == 0, State = current
+                Kind = kind, Item = effectiveItem,
+                Visible = current == 0, State = current
             };
             return true;
         }
