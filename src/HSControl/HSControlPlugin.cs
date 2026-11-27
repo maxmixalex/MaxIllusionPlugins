@@ -32,7 +32,7 @@ namespace HSControl
         private HSControlView view;
         private HSceneProc scene;
         private Harmony harmony;
-        private bool visible, didMaleFinish, strengthPending;
+        private bool visible, didMaleFinish, strengthPending, strongMotionSelected;
         private readonly HSControlReplayGate replayGate = new HSControlReplayGate();
         private float nextViewPoll;
         private int generation, sceneCheck;
@@ -257,20 +257,24 @@ namespace HSControl
         private void PerformSceneCommand(int version, HSceneProc owner, int kind) {
             if (!SessionCurrent(version, owner) || !master.Value || owner.flags == null) return;
             HFlag flags = owner.flags;
-            if (kind <= 1 && !CanNativeCommands(flags, false)) {
+            if ((kind <= 1 || kind == 8) && !CanNativeCommands(flags, false)) {
                 status = "当前场景无法切换原生动作。";
                 RefreshView();
                 return;
             }
-            if (kind >= 2 && !CanStageGauge(flags)) {
+            if (kind >= 2 && kind <= 7 &&
+                (!CanStageGauge(flags) ||
+                 !HSControlActionRules.OriginalCanForce((int)flags.mode, kind))) {
                 status = "当前场景正在执行其他动作，暂不可修改状态。";
                 RefreshView();
                 return;
             }
             try {
                 bool okay;
-                if (kind <= 1) {
-                    okay = HSControlNativeActions.TryStartLoop(owner, kind == 1);
+                if (kind <= 1 || kind == 8) {
+                    if (kind == 0) strongMotionSelected = false;
+                    if (kind == 1) strongMotionSelected = true;
+                    okay = HSControlNativeActions.TryStartLoop(owner, strongMotionSelected);
                     if (okay) motion.Reset(flags.speedCalc);
                 } else if (kind == 6 && (int)flags.mode == 0) {
                     // Original HCtrl's female-finish button does not just
@@ -319,8 +323,18 @@ namespace HSControl
                 AnimationState = flags == null ? string.Empty : flags.nowAnimStateName,
                 SceneMode = flags == null ? -1 : (int)flags.mode,
                 CanForceLoop = master.Value && CanNativeCommands(flags, false),
-                CanStage = master.Value && CanStageGauge(flags),
-                CanFemaleFinish = master.Value && CanStageGauge(flags),
+                CanStageMale = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 2),
+                CanStageFemale = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 3),
+                CanStageBoth = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 4),
+                CanFinishMale = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 5),
+                CanFemaleFinish = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 6),
+                CanFinishBoth = master.Value && CanStageGauge(flags) &&
+                    HSControlActionRules.OriginalCanForce((int)flags.mode, 7),
                 AutoCaress = autoCaress.Value,
                 FemaleLocked = flags != null && flags.lockGugeFemale,
                 MaleLocked = flags != null && flags.lockGugeMale,
@@ -372,6 +386,7 @@ namespace HSControl
                 flags.gaugeFemale = Mathf.Clamp(value, 0f, 100f); RefreshView();
             }};
             model.Reroll = () => { if (live()) { motion.Reset(flags.speedCalc); RefreshView(); } };
+            model.PlayLoop = () => PerformSceneCommand(token, owner, 8);
             model.PlayWeak = () => PerformSceneCommand(token, owner, 0);
             model.PlayStrong = () => PerformSceneCommand(token, owner, 1);
             model.StageMale = () => PerformSceneCommand(token, owner, 2);
