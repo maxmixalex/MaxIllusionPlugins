@@ -23,6 +23,7 @@ namespace UnityEngine
             return Math.Max(min, Math.Min(max, value));
         }
         internal static float Clamp01(float value) { return Clamp(value, 0f, 1f); }
+        internal static float Max(float a, float b) { return Math.Max(a, b); }
     }
 }
 
@@ -39,7 +40,7 @@ internal sealed class HandCtrl
 {
     public int action;
     public TestArea[] useAreaItems = { new TestArea() };
-    public IDictionary actionUseItem = new Hashtable { { 1, new object() } };
+    public int actionUseItem = -1;
     public TestMotion nowMES = new TestMotion();
 }
 internal sealed class HSceneProc
