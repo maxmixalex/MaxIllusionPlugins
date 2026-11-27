@@ -4,7 +4,7 @@ namespace MaximumUI {
     /// <summary>Small, consistent line icons. Geometry is shared by the native and managed renderers.</summary>
     public enum Mdl2Icon {
         ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-        Close, Add, Remove, Check, Search, More
+        Close, Add, Remove, Check, Search, More, Opacity
     }
 
     public static class Mdl2IconGeometry {
@@ -14,6 +14,7 @@ namespace MaximumUI {
             if (icon == Mdl2Icon.Remove) return 1;
             if (icon == Mdl2Icon.Search) return 13;
             if (icon == Mdl2Icon.More) return 3;
+            if (icon == Mdl2Icon.Opacity) return 7;
             return 2;
         }
 
@@ -49,6 +50,17 @@ namespace MaximumUI {
                 x2 = index == 0 ? 6f : 14f; y2 = index == 0 ? 12f : 4f;
             } else if (icon == Mdl2Icon.More) {
                 x1 = 3f + index * 5f; y1 = 8f; x2 = x1 + 0.5f; y2 = 8f;
+            } else if (icon == Mdl2Icon.Opacity) {
+                // Half-shaded pane: a visible transparency indicator in the title bar.
+                switch (index) {
+                    case 0: x1 = 3f; y1 = 3f; x2 = 13f; y2 = 3f; break;
+                    case 1: x1 = 13f; y1 = 3f; x2 = 13f; y2 = 13f; break;
+                    case 2: x1 = 13f; y1 = 13f; x2 = 3f; y2 = 13f; break;
+                    case 3: x1 = 3f; y1 = 13f; x2 = 3f; y2 = 3f; break;
+                    case 4: x1 = 8f; y1 = 3f; x2 = 8f; y2 = 13f; break;
+                    case 5: x1 = 9f; y1 = 6f; x2 = 12f; y2 = 3f; break;
+                    default: x1 = 9f; y1 = 11f; x2 = 12f; y2 = 8f; break;
+                }
             } else if (icon == Mdl2Icon.Search) {
                 if (index == 12) { x1 = 10f; y1 = 10f; x2 = 14f; y2 = 14f; }
                 else {
