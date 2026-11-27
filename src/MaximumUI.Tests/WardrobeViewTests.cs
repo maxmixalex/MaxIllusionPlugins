@@ -4,7 +4,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 9;
+        internal const int TestCount = 10;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
@@ -12,6 +12,7 @@ namespace MaximumUI.Tests {
             DisplayEqualityIncludesBusinessIdentity();
             FiltersAndBatchOperateOnDisplayedRows();
             GarmentPageDispatchesNativeCommands();
+            MissingBottomGarmentShowsDisabledStatus();
             NineGarmentRowsFitWindowWithoutInternalScroll();
             ClothingStateOptionsInvalidateTheRetainedUi();
             FreeHDisablesFullCoordinateReloadWithoutDisablingClothing();
@@ -129,6 +130,33 @@ namespace MaximumUI.Tests {
             ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
             ((ArrowButton)Find(root, "garment-state-0-next")).OnClick();
             Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
+        }
+
+        private static void MissingBottomGarmentShowsDisabledStatus() {
+            // Native IsClothesStateKind can hide a lower garment when
+            // a full-body top is selected. The row must not disappear.
+            WardrobeViewModel model = Create();
+            model.Page = 0;
+            model.Garments.Add(new WardrobeRow {
+                Slot = 0, Label = "上衣", State = 0, Item = 48,
+                AllowedStates = new[] {0, 1, 3}, ChangeState = delegate {}
+            });
+            model.Garments.Add(new WardrobeRow {
+                Slot = 1, Label = "下装", State = -1, Item = 0,
+                AllowedStates = new int[0]
+            });
+            Widget widget = new WardrobeView { Model = model }.Build(null);
+            Require(Find(widget, "garment-1") != null &&
+                Find(widget, "garment-not-equipped-1") != null,
+                "Bottom garment always has a visible disabled state when missing");
+            Require(Find(widget, "garment-state-1-current") == null,
+                "Missing bottom garment cannot issue a nonexistent native clothing command");
+            model.Garments[1].Item = 60;
+            model.Garments[1].State = 1;
+            model.Garments[1].AllowedStates = new[] {1};
+            widget = new WardrobeView { Model = model }.Build(null);
+            Require(Find(widget, "garment-not-changeable-1") != null,
+                "Masked native lower garment is visible without unsafe state writes");
         }
 
         private static void NineGarmentRowsFitWindowWithoutInternalScroll() {
