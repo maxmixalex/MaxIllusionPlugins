@@ -152,7 +152,7 @@ namespace HSControl
             }
 
             controls.Add(new HStack(6f) {
-                new Label("自动速度模式同时控制原生爱抚，不独占双手输入",
+                new Label("自动速度同步爱抚",
                     "hscontrol-aibu-explain").ExpandWidth(),
                 new Label("速度 " + m.CurrentSpeed.ToString("0.00") +
                     " → " + m.TargetSpeed.ToString("0.00"),
