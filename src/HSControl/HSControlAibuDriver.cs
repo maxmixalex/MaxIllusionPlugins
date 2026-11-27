@@ -63,8 +63,9 @@ namespace HSControl
 
         private static bool HasNativeCaressArea(HandCtrl hand)
         {
-            // Match HCtrl's useAreaItems/kindTouch path. This guards against
-            // raising gauges for an idle scene with no active contact.
+            // Match HCtrl's useAreaItems/kindTouch path when selecting a
+            // synthetic hand drag. The original still invokes FemaleGaugeUp
+            // even if none of these areas is currently selected.
             if (hand == null || AvailableAreas == null) return false;
             IEnumerable areas;
             try { areas = AvailableAreas.GetValue(hand) as IEnumerable; }
@@ -121,21 +122,27 @@ namespace HSControl
 
             // Native player input has priority. Neither hand may be
             // overwritten to manufacture a fake automatic caress.
-            if (ReadAction(scene.hand1) != 0) return false;
+            if (ReadAction(scene.hand1) != 0) {
+                // Release only our primary-hand action when the second hand
+                // becomes manually controlled; do not clear global drag.
+                if (Running) Stop(scene);
+                return false;
+            }
             if (!Running && ReadAction(hand) != 0) return false;
 
-            if (!Running)
+            if (!Running && HasNativeCaressArea(hand) && flags.DragStart())
             {
-                if (!HasNativeCaressArea(hand) || !flags.DragStart()) return false;
-                if (!WriteAction(hand, 1)) {
-                    flags.FinishDrag();
-                    return false;
+                if (!WriteAction(hand, 1)) flags.FinishDrag();
+                else {
+                    ownedHand = hand;
+                    ownedFlags = flags;
+                    remaining = UnityEngine.Random.Range(.7f, 3f);
                 }
-                ownedHand = hand;
-                ownedFlags = flags;
-                remaining = UnityEngine.Random.Range(.7f, 3f);
             }
 
+            // The installed HCtrl's IL invokes FemaleGaugeUp on every Aibu
+            // auto-speed frame, even if no eligible area started a new drag.
+            // Guard both manual hands, not the automatic speed contribution.
             // Original HCtrl's essential missing path:
             // HFlag.speed -> FemaleGaugeUp(speed * 5 * rateDragGauge, false,
             //   hand.nowMES.stateMotion == 0).
@@ -144,8 +151,10 @@ namespace HSControl
                 flags.FemaleGaugeUp(flags.speed * 5f * flags.rateDragGauge,
                     false, hand.nowMES.stateMotion == 0);
 
-            remaining -= Mathf.Clamp(dt, 0f, .2f);
-            if (remaining <= 0f) Stop(scene);
+            if (Running) {
+                remaining -= Mathf.Clamp(dt, 0f, .2f);
+                if (remaining <= 0f) Stop(scene);
+            }
             return true;
         }
     }
