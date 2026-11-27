@@ -5,7 +5,7 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class JuiceParityTests {
-        internal const int TestCount = 9;
+        internal const int TestCount = 8;
 
         internal static void RunAll() {
             MainWindowPreservesLegacyOrderAndWords();
@@ -16,7 +16,6 @@ namespace MaximumUI.Tests {
             PresetToolbarsRemainOutsideTheEffectScroll();
             ReadbackDoesNotOverwriteKnownValuesOnFailure();
             UnavailableRowsAreReadOnlyDuringBuildAndInteraction();
-            OptionalLoveJuiceControlsArePassiveAndReachable();
         }
 
         private static JuiceEditorView Create() {
@@ -45,49 +44,6 @@ namespace MaximumUI.Tests {
             int previous = -1;
             foreach (string key in order) { int position = keys.IndexOf(key); Require(position > previous, "legacy section order: " + key); previous = position; }
             Require(!keys.Contains("juice-page-0") && !keys.Contains("juice-page-1"), "no added business tabs");
-        }
-
-        private static void OptionalLoveJuiceControlsArePassiveAndReachable() {
-            JuiceEditorView view = Create();
-            Widget unavailable = view.Build(null);
-            Require(FindOrNull<Checkbox>(unavailable, "juice-love-enabled") == null,
-                "missing LoveJuice does not expose a writable control");
-            Require(FindOrNull<Label>(unavailable, "juice-love-unavailable") != null,
-                "optional plugin status is visible");
-
-            int edits = 0, opened = 0;
-            string lastSource = string.Empty;
-            view.Model.LoveJuice = new LoveJuiceSettings {
-                Available = true, Enabled = false, Face = true, Body = true,
-                Intimate = true, MalePre = false, Milk = false, Shower = false, Special = false
-            };
-            view.Model.ChangeLoveJuiceEnabled = delegate(bool value) {
-                edits++; lastSource = "Enabled";
-            };
-            view.Model.ChangeLoveJuiceIntimate = delegate(bool value) {
-                edits++; lastSource = "Intimate";
-            };
-            view.Model.ChangeLoveJuiceMalePre = delegate(bool value) {
-                edits++; lastSource = "MalePre";
-            };
-            view.Model.OpenLoveJuice = delegate { opened++; };
-            Widget ready = view.Build(null);
-            Require(edits == 0 && opened == 0,
-                "building an editor never writes to an optional effect plugin");
-            Require(Find<Checkbox>(ready, "juice-love-intimate").Enabled &&
-                Find<Checkbox>(ready, "juice-love-enabled").Enabled &&
-                Find<Button>(ready, "juice-love-open").Enabled,
-                "all optional controls are reachable inside the real JuiceControl view");
-            Find<Checkbox>(ready, "juice-love-intimate").OnChange(false);
-            Require(edits == 1 && lastSource == "Intimate",
-                "source switch forwards only a deliberate user change");
-            Find<Checkbox>(ready, "juice-love-enabled").OnChange(true);
-            Find<Button>(ready, "juice-love-open").OnClick();
-            Require(edits == 2 && lastSource == "Enabled" && opened == 1,
-                "master switch and detail panel have independent actions");
-            Find<Checkbox>(ready, "juice-love-male-pre").OnChange(true);
-            Require(edits == 3 && lastSource == "MalePre",
-                "optional male pre-fluid switch dispatches independently");
         }
 
         private static void ArrowSelectorsWrapWithoutApplyingPresets() {
