@@ -37,8 +37,9 @@ internal static class Program
         Check(HSControlActionRules.IsAutoCaressState(0, "M_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "A_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "S_Idle", false) &&
-            !HSControlActionRules.IsAutoCaressState(0, "Idle", false) &&
-            !HSControlActionRules.IsAutoCaressState(0, "A_Idle", true) &&
+            HSControlActionRules.IsAutoCaressState(0, "Idle", false) &&
+            HSControlActionRules.IsAutoCaressState(0, "A_Idle", true) &&
+            !HSControlActionRules.IsAutoCaressState(0, "Orgasm_Loop", false) &&
             !HSControlActionRules.IsAutoCaressState(2, "A_Idle", false),
             "automatic Aibu only starts during vanilla caress idle transitions");
         Check(HSControlActionRules.CanStageGauge(1, true, false) &&
@@ -56,7 +57,9 @@ internal static class Program
             "unsupported game modes remain excluded");
         Check(HSControlActionRules.IsLoop("A_WLoop") &&
             !HSControlActionRules.IsLoop("Stop_Idle"), "only loop animations accept gated finish actions");
-        Check(HSControlMotionEngine.CanDrive(0, "M_Idle", false), "native Aibu idle is supported");
+        Check(HSControlMotionEngine.CanDrive(0, "M_Idle", false) &&
+            HSControlMotionEngine.CanDrive(0, "Idle", false),
+            "native and imported Aibu idle states are supported");
         Check(HSControlMotionEngine.CanDrive(1, "WLoop", false), "Houshi loop supported");
         Check(!HSControlMotionEngine.CanDrive(1, "Stop_Idle", false), "no edits during transitions");
         Check(!HSControlMotionEngine.CanDrive(1, "WLoop", true), "native rely guard");
