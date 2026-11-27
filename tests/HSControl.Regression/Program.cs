@@ -37,7 +37,7 @@ internal static class Program
         Check(HSControlActionRules.IsAutoCaressState(0, "M_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "A_Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "S_Idle", false) &&
-            HSControlActionRules.IsAutoCaressState(0, "Idle", false) &&
+            !HSControlActionRules.IsAutoCaressState(0, "Idle", false) &&
             HSControlActionRules.IsAutoCaressState(0, "A_Idle", true) &&
             !HSControlActionRules.IsAutoCaressState(0, "Orgasm_Loop", false) &&
             !HSControlActionRules.IsAutoCaressState(2, "A_Idle", false),
