@@ -53,7 +53,10 @@ namespace FemboyMode
         protected override void Update()
         {
             base.Update();
-            if (Time.frameCount % 20 == 0) ApplyMaleGeometry();
+            if (Time.frameCount % 20 == 0) {
+                ApplyMaleGeometry();
+                SyncUnderwearMeshFit();
+            }
         }
 
         private void LateUpdate()
@@ -63,6 +66,7 @@ namespace FemboyMode
 
         protected override void OnDestroy()
         {
+            RestoreUnderwearMeshes();
             RestoreMaleGeometry();
             base.OnDestroy();
         }
