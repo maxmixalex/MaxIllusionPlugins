@@ -12,12 +12,21 @@ namespace LoveJuice {
                    name.IndexOf("ベロ", StringComparison.Ordinal) >= 0;
         }
 
+        // Oral contact, visible drool or explicit preview should produce
+        // saliva without requiring a kissing animation. The installed Cyu
+        // original is used only when it is actually managing a kiss string.
+        internal static bool SalivaActive(bool kissing, bool oralScene,
+            bool wetFace, bool explicitPreview, bool allowWithoutKiss) {
+            return kissing || (allowWithoutKiss &&
+                (oralScene || wetFace || explicitPreview));
+        }
+
         internal static bool DrawSalivaFilament(bool enabled,
-            bool nativeKiss, float mouthDistance, bool nativeFilamentPresent) {
-            if (!enabled || !nativeKiss || nativeFilamentPresent ||
-                float.IsNaN(mouthDistance) || float.IsInfinity(mouthDistance))
+            bool activity, float distance, bool visibleNativeKissString) {
+            if (!enabled || !activity || visibleNativeKissString ||
+                float.IsNaN(distance) || float.IsInfinity(distance))
                 return false;
-            return mouthDistance > .001f && mouthDistance < .15f;
+            return distance > .001f && distance < .15f;
         }
 
         internal static int MalePreLevel(int sex, bool activeLoop, bool isPrimary,
