@@ -17,9 +17,11 @@ namespace FemboyMode
         private sealed class ClothingFitRecord
         {
             internal SkinnedMeshRenderer Renderer;
+            internal MeshFilter RigidFilter;
             internal Mesh Original;
             internal Mesh Copy;
             internal int Slot;
+            internal bool Accessory;
         }
 
         private static readonly int[] FitSlots = { 0, 1, 3 };
@@ -114,6 +116,7 @@ namespace FemboyMode
                             renderer.sharedMesh.GetInstanceID());
                 }
             }
+            AppendAccessoryFitSignature(parts);
             return string.Join("/", parts.ToArray());
         }
 
@@ -123,6 +126,8 @@ namespace FemboyMode
             {
                 if (item.Renderer != null && item.Renderer.sharedMesh == item.Copy)
                     item.Renderer.sharedMesh = item.Original;
+                if (item.RigidFilter != null && item.RigidFilter.sharedMesh == item.Copy)
+                    item.RigidFilter.sharedMesh = item.Original;
                 if (item.Copy != null) UnityEngine.Object.Destroy(item.Copy);
             }
             clothingFits.Clear();
@@ -137,9 +142,14 @@ namespace FemboyMode
             if (clothingFits.Count > 0) {
                 for (int i = 0; i < clothingFits.Count; i++) {
                     ClothingFitRecord fitted = clothingFits[i];
-                    GameObject garment = GarmentAt(fitted.Slot);
-                    if (garment == null || fitted.Renderer == null ||
-                        !fitted.Renderer.transform.IsChildOf(garment.transform)) {
+                    GameObject garment = fitted.Accessory
+                        ? AccessoryAt(fitted.Slot)
+                        : GarmentAt(fitted.Slot);
+                    Transform fittedTransform = fitted.Renderer != null ?
+                        fitted.Renderer.transform : fitted.RigidFilter == null ?
+                            null : fitted.RigidFilter.transform;
+                    if (garment == null || fittedTransform == null ||
+                        !fittedTransform.IsChildOf(garment.transform)) {
                         RestoreUnderwearMeshes();
                         break;
                     }
@@ -212,6 +222,9 @@ namespace FemboyMode
                         }
                     }
                 }
+                // Accessories may be a skinned panty mesh OR an ordinary
+                // MeshFilter. Both require the same reversible fit path.
+                ScanAccessoryUnderwear(origin, direction, length, seen, ref adjusted);
             }
             finally { if (accessEnabled) LeaveReadableScope(); }
 
@@ -219,7 +232,7 @@ namespace FemboyMode
             if (FemboyModePlugin.VerboseLogging != null &&
                 FemboyModePlugin.VerboseLogging.Value)
                 FemboyModePlugin.LogOptionalIntegrationProblem(
-                    "Clothing fit scanned top/bottom/underwear; modified renderers=" +
+                    "Clothing fit scanned top/bottom/underwear and accessories; modified renderers=" +
                     adjusted + ", active clones=" + clothingFits.Count);
         }
 
@@ -240,7 +253,8 @@ namespace FemboyMode
         }
 
         private bool FitRenderer(SkinnedMeshRenderer renderer, int slot,
-            Vector3 shaftOrigin, Vector3 shaftForward, float shaftLength)
+            Vector3 shaftOrigin, Vector3 shaftForward, float shaftLength,
+            bool accessory = false)
         {
             Mesh original = renderer.sharedMesh;
             if (original == null || original.vertexCount < 24) return false;
@@ -338,7 +352,7 @@ namespace FemboyMode
                 renderer.sharedMesh = copy;
                 clothingFits.Add(new ClothingFitRecord {
                     Renderer = renderer, Original = original, Copy = copy,
-                    Slot = slot
+                    Slot = slot, Accessory = accessory
                 });
                 return true;
             }
