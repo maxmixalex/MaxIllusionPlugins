@@ -9,6 +9,13 @@ namespace MaximumUI {
         private readonly Dictionary<TextStyleKey, GUIStyle> textStyles = new Dictionary<TextStyleKey, GUIStyle>();
         private GUIStyle defaultTextStyle;
         private MaximumTheme theme;
+        // Passed by ImguiRenderer for the current window. Retained colors
+        // must share the same alpha as ordinary GUIStyle drawing.
+        public float OpacityMultiplier { get; set; } = 1f;
+        private Color Transparent(Color color) {
+            return new Color(color.r, color.g, color.b,
+                color.a * Mathf.Clamp01(OpacityMultiplier));
+        }
         private readonly Stack<MuiVec2> clipOrigins = new Stack<MuiVec2>();
         private MuiVec2 clipOrigin;
 
@@ -167,7 +174,7 @@ namespace MaximumUI {
 
             Color oldColor = GUI.color;
             try {
-                GUI.color = ToColor(color);
+                GUI.color = Transparent(ToColor(color));
                 GUI.DrawTexture(ToRectRelative(rect), texture);
             } finally {
                 GUI.color = oldColor;
@@ -191,7 +198,7 @@ namespace MaximumUI {
             Matrix4x4 oldMatrix = GUI.matrix;
             Color oldColor = GUI.color;
             try {
-                GUI.color = ToColor(color);
+                GUI.color = Transparent(ToColor(color));
                 float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
                 GUIUtility.RotateAroundPivot(angle, new Vector2(start.X, start.Y));
                 GUI.DrawTexture(new Rect(start.X, start.Y - t * 0.5f, length, t), white);
