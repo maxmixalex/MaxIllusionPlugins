@@ -34,6 +34,13 @@ internal static class Program
             HSControlActionRules.LoopName(1, false, false) == "WLoop" &&
             HSControlActionRules.LoopName(5, false, true) == null,
             "native loop state names match installed original two-person and 3P action families");
+        Check(HSControlActionRules.IsAutoCaressState(0, "M_Idle", false) &&
+            HSControlActionRules.IsAutoCaressState(0, "A_Idle", false) &&
+            HSControlActionRules.IsAutoCaressState(0, "S_Idle", false) &&
+            !HSControlActionRules.IsAutoCaressState(0, "Idle", false) &&
+            !HSControlActionRules.IsAutoCaressState(0, "A_Idle", true) &&
+            !HSControlActionRules.IsAutoCaressState(2, "A_Idle", false),
+            "automatic Aibu only starts during vanilla caress idle transitions");
         Check(HSControlActionRules.CanStageGauge(1, true, false) &&
             HSControlActionRules.CanStageGauge(2, true, false) &&
             HSControlActionRules.CanStageGauge(7, true, false) &&
