@@ -31,6 +31,21 @@ namespace LoveJuice {
 
         // Stable 0.55–0.95s physical tear cycle. Both endpoints may remain
         // still while the filament continues to sag and shed droplets.
+        // Tube radius varies along the actual 3-D centreline: bulbous
+        // near roots, a fluid neck before the tear separates and an
+        // extremely thin end cap. Never a flat alpha-textured ribbon.
+        internal static float SalivaRadius(float t, float phase,
+            float strength) {
+            t = Math.Max(0f, Math.Min(1f, t));
+            phase = Math.Max(0f, Math.Min(1f, phase));
+            strength = Math.Max(0f, Math.Min(1f, strength));
+            float root = (float)Math.Sin(Math.PI * t);
+            float taper = .00025f + .0035f * Math.Max(.0f, root);
+            float neck = 1f - .83f * (float)Math.Pow(phase, 4f) *
+                (float)Math.Pow(t, 3f);
+            return taper * Math.Max(.08f, neck) * strength;
+        }
+
         internal static float SalivaTearPeriod(float mouthDistance) {
             if (float.IsNaN(mouthDistance) ||
                 float.IsInfinity(mouthDistance)) return .72f;
