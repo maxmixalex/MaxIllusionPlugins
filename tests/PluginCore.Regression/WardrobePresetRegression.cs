@@ -70,12 +70,52 @@ internal static class WardrobePresetRegression {
 
     internal static void RunAll() {
         CoordinateLoadBarrier();
+
+        // ChaControl.notBot means the TOP garment owns the lower
+        // clothes state dictionary. A one-piece bathing suit does NOT
+        // need a second standalone bottom item ID.
+        Require(WardrobeGarmentIdentity.IsLinkedBottom(
+            "bot", true, 120, true), "One-piece top provides bot state");
+        Require(WardrobeGarmentIdentity.EffectiveItem(
+            "bot", 0, 120, true) == 120,
+            "Native linked bottom is identified by its owning top item");
+        Require(WardrobeGarmentIdentity.EffectiveItem(
+            "bot", 211, 120, true) == 120,
+            "Linked top identity takes priority over stale standalone bot ID");
+        Require(!WardrobeGarmentIdentity.IsLinkedBottom(
+            "bot", false, 120, true) &&
+            WardrobeGarmentIdentity.EffectiveItem(
+                "bot", 211, 120, false) == 211,
+            "Ordinary separately equipped bottom stays independent");
+        Require(!WardrobeGarmentIdentity.IsLinkedBottom(
+            "bot", true, 0, true) &&
+            !WardrobeGarmentIdentity.IsLinkedBottom(
+                "bot", true, 120, false),
+            "Neither a bare top nor a missing native bot-state channel invents clothing");
+        Require(WardrobeGarmentIdentity.EffectiveItem(
+            "shorts", 0, 120, true) == 0,
+            "Linked one-piece lower half must not mutate underwear identity");
         string directory = Path.Combine(Path.GetTempPath(), "wardrobe-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try {
             string path = Path.Combine(directory, "presets.xml");
             WardrobePresetStore store = new WardrobePresetStore(path);
             Require(store.Reload(), "Missing preset file loads empty.");
+            WardrobePreset onePiece = new WardrobePreset { Coordinate = 3 };
+            onePiece.Garments.Add(new GarmentVisibility {
+                Kind = "bot", Item = 120, Visible = false, State = 1
+            });
+            string linkedError;
+            Require(store.Save(onePiece, "OnePieceSwimsuit", false,
+                out linkedError), "Linked one-piece lower garment saves: " + linkedError);
+            WardrobePresetStore linkedReload = new WardrobePresetStore(path);
+            Require(linkedReload.Reload() &&
+                linkedReload.Find("OnePieceSwimsuit").Garments[0]
+                    .Matches("bot", 120) &&
+                linkedReload.Find("OnePieceSwimsuit").Garments[0].State == 1,
+                "Linked lower-half state survives XML save/reload and identity checks");
+            Require(store.Delete("OnePieceSwimsuit", out linkedError),
+                "Remove test linked outfit without touching other presets");
             WardrobePreset state = new WardrobePreset { Coordinate = 2, ShoeMode = 1 };
             state.Garments.Add(new GarmentVisibility { Kind = "gloves", Item = 42, Visible = false, State = 3 });
             state.Accessories.Add(new AccessoryVisibility { Slot = 21, Type = 121, Item = 42, Visible = false });
