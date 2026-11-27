@@ -104,6 +104,7 @@ namespace FemboyMode
         {
             if (maintainState) return;
 
+            RestoreUnderwearMeshes();
             RestoreMaleGeometry();
             IsInitialized = true;
             isFemboy = false;
