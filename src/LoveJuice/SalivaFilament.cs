@@ -225,11 +225,11 @@ namespace LoveJuice
                 if (line != null) line.enabled = false;
                 if (ownedMaterial == null)
                     ownedMaterial = CloneNativeSalivaMaterial();
-                float cycle = LiquidSourceTriggers.SalivaTearPeriod(distance);
+                float nativeCycle = LiquidSourceTriggers.SalivaTearPeriod(distance);
                 phase += dt;
-                if (phase >= cycle && nativeFilament != null &&
+                if (phase >= nativeCycle && nativeFilament != null &&
                     ownedMaterial != null) {
-                    phase %= cycle;
+                    phase %= nativeCycle;
                     int last = nativeFilament.positionCount - 1;
                     Vector3 tip = nativeFilament.GetPosition(last);
                     Vector3 previous = nativeFilament.GetPosition(last - 1);
