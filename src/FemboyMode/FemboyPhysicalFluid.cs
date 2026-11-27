@@ -319,8 +319,7 @@ namespace FemboyMode
         private GameObject privateSourceRoot;
         private float lastFired = -999f;
         private float activeUntil;
-        private int appliedUnderwearState = int.MinValue;
-        private bool appliedNoShorts;
+        private bool appliedVisibleSon;
         private float[] nativeIntervals;
         private bool warnedUnavailable;
         private bool waitingForFirstDroplet;
@@ -717,13 +716,10 @@ namespace FemboyMode
                         owner.flags != null && owner.flags.isAnalPlay));
         }
 
-        private int LiveUnderwearState()
+        private bool IsAnatomyVisible()
         {
-            if (character == null || character.fileStatus == null ||
-                character.fileStatus.clothesState == null ||
-                character.fileStatus.clothesState.Length <= 3)
-                return 3;
-            return character.fileStatus.clothesState[3];
+            return character != null && character.fileStatus != null &&
+                   character.fileStatus.visibleSon;
         }
 
         private void ApplyLaunchPhysics()
@@ -733,20 +729,19 @@ namespace FemboyMode
                 FemboyModePlugin.FluidSpread == null)
                 return;
 
-            int clothingState = LiveUnderwearState();
+            bool visible = IsAnatomyVisible();
             FemboyRules.FluidClothingProfile profile =
-                FemboyRules.FluidProfileForUnderwear(
-                    character.notShorts, clothingState);
-            // Redirect along the bone-local fabric contact rather than
-            // projecting a bare-shaft jet straight through worn underwear.
+                FemboyRules.FluidProfileForVisibility(visible);
+            // Genital visibility is authoritative even when no separate
+            // underwear asset exists (bodysuits and one-piece swimsuits).
+            // Keep pitch relative to the shaft's animated bone frame.
             float speed = Mathf.Clamp(FemboyModePlugin.FluidLaunchSpeed.Value *
                 profile.SpeedMultiplier, 0.1f, 4f);
             float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value *
                 profile.SpreadMultiplier, 0f, 30f);
             if (trajectory != null)
                 trajectory.SetClothingPitchOffset(profile.LocalPitchOffset);
-            appliedUnderwearState = clothingState;
-            appliedNoShorts = character.notShorts;
+            appliedVisibleSon = visible;
             // Native MetaballShoot.SetRigidForce uses ShootAxis.forward,
             // then applies a relative force. Its original ForceMode.Force
             // is too weak with some modded Rigidbody masses. VelocityChange
@@ -789,9 +784,7 @@ namespace FemboyMode
             {
                 // The player may move/remove underwear while an emission is
                 // in progress. Subsequent native droplets use the new pose.
-                if (character != null &&
-                    (appliedNoShorts != character.notShorts ||
-                     appliedUnderwearState != LiveUnderwearState()))
+                if (character != null && appliedVisibleSon != IsAnatomyVisible())
                 {
                     ApplyLaunchPhysics();
                     if (trajectory != null) trajectory.AlignToModel();
@@ -844,8 +837,7 @@ namespace FemboyMode
             host = null;
             axis = null;
             trajectory = null;
-            appliedUnderwearState = int.MinValue;
-            appliedNoShorts = false;
+            appliedVisibleSon = false;
             privateSourceRoot = null;
             boundMode = HFlag.EMode.none;
             boundPoseId = -1;
