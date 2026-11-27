@@ -125,7 +125,12 @@ namespace LoveJuice
                 points[i] = u * u * leftMouth +
                     2f * u * t * control + t * t * rightMouth;
             }
-            line.widthMultiplier = .0045f * strength;
+            float width = .0045f * strength;
+            line.widthCurve = new AnimationCurve(
+                new Keyframe(0f, width * .25f),
+                new Keyframe(.25f, width),
+                new Keyframe(.75f, width * .8f),
+                new Keyframe(1f, width * .15f));
             line.enabled = true;
             line.SetPositions(points);
         }
