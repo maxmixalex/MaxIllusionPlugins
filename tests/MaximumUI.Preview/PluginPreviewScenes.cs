@@ -42,7 +42,7 @@ internal static class PluginPreviewScenes {
         // variants, not three separate UI pages.
         int speedMode = scenario == 0 ? 2 : scenario == 1 ? 0 : 1;
         var model = new HSControlViewModel {
-            Version = "0.1.5", Available = true, Enabled = true,
+            Version = "0.1.6", Available = true, Enabled = true,
             SceneMode = scenario == 2 ? 1 : 0, AnimationState = scenario == 2 ? "WLoop" : "M_Idle",
             Status = "已连接当前 H 场景",
             Mode = speedMode, ManualOverride = scenario == 1,
@@ -99,7 +99,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene LoveJuicePanel() {
         var model = new LoveJuiceViewModel {
-            Version = "0.3.8", Enabled = true, HasScene = true,
+            Version = "0.3.9", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 8, MaximumParticles = 48,
             ActorNames = new[] { "示例角色 A", "示例角色 B" },
             SelectedActorIndex = 0, Face = true, SalivaAnytime = true,
@@ -131,7 +131,7 @@ internal static class PluginPreviewScenes {
             .Build(new BuildContext());
         return new PreviewScene {
             Slug = "lovejuice-control-preview",
-            Title = "LoveJuice 0.3.5",
+            Title = "LoveJuice 0.3.9",
             Source = "LoveJuice.LoveJuiceView.Build",
             Detail = "Actual standalone material-droplet and kiss control panel",
             Widget = window, StateId = "default",
@@ -144,7 +144,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.5.5", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.6", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
