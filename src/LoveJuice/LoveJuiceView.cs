@@ -61,7 +61,7 @@ namespace LoveJuice {
                 });
             var controls = new VStack(6f) {
                 new Label("Studio 原生粒子素材", "lovejuice-sources"),
-                new Checkbox("面部滴落", m.Face, m.ChangeFace, "lovejuice-face").Enabled(m.Enabled).Height(32f),
+                new Checkbox("亲吻口水拉丝", m.Face, m.ChangeFace, "lovejuice-face").Enabled(m.Enabled).Height(32f),
                 new Checkbox("身体滴落", m.Body, m.ChangeBody, "lovejuice-body").Enabled(m.Enabled).Height(32f),
                 new Checkbox("爱液滴落（SkinEffects）", m.Intimate, m.ChangeIntimate, "lovejuice-intimate").Enabled(m.Enabled).Height(32f),
                 new Checkbox("男性前液（可选）", m.MalePre, m.ChangeMalePre, "lovejuice-male-pre").Enabled(m.Enabled).Height(32f),
