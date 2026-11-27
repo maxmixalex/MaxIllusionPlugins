@@ -207,8 +207,10 @@ namespace FemboyMode
             Vector3 shaftOrigin, Vector3 shaftForward, float shaftLength)
         {
             Mesh original = renderer.sharedMesh;
-            if (original == null || original.vertexCount < 24 ||
-                !original.isReadable) return false;
+            if (original == null || original.vertexCount < 24) return false;
+            // Do not reject before a scoped Mesh.canAccess detour can expose
+            // optimized game assets. Unreadable meshes fail in the guarded
+            // vertex read below without touching the original renderer.
 
             Mesh posed = new Mesh();
             try
