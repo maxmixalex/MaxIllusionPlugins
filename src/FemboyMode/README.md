@@ -1,6 +1,12 @@
-# Femboy Mode for Koikatsu — v0.6.6
+# Femboy Mode for Koikatsu — v0.6.7
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.7 — restrained clothing clearance and native Shift/Hang restoration
+
+- Active fitting is restricted to native clothing state **On (0)** across relevant top/bottom/underwear slots. **Shift (1)**, **Hang (2)** and **Off (3)** immediately restore the original mesh: adjusted panty bulges must never persist after underwear is moved aside.
+- Maximum local relief is now 18 mm rather than 70 mm, multiplied by a new Maker `Underwear mesh correction strength` slider defaulting to 0.4 (at most 7.2 mm nominal local displacement before vertex weights). The influence radius and target depth were also reduced to avoid stretching the whole crotch panel.
+- In-game screenshots of stocked, shifted, hanging, off, and modded one-piece outfits remain necessary for acceptance. No original game/third-party mesh is saved or overwritten.
 
 ## 0.6.6 — actual genital visibility and expanded garment fitting
 
