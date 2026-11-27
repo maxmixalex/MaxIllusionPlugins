@@ -86,8 +86,11 @@ namespace FemboyMode
                 return;
             }
 
-            if (garment == fittedUnderwear && underwearFits.Count > 0)
+            if (garment == fittedUnderwear)
             {
+                // An already-adapted or nonmatching mesh stays untouched,
+                // without rescanning all vertices every 20 frames.
+                if (underwearFits.Count == 0) return;
                 bool allValid = true;
                 foreach (UnderwearFitRecord item in underwearFits)
                     if (item.Renderer == null || item.Renderer.sharedMesh != item.Copy)
