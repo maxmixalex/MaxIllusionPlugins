@@ -21,8 +21,12 @@ namespace HSControl
         // climax policy or on whether the current animation is a loop.
         internal static bool IsAutoCaressState(int nativeMode, string state, bool rely)
         {
-            return nativeMode == 0 && !rely &&
-                   (state == "M_Idle" || state == "A_Idle" || state == "S_Idle");
+            // HCtrl has M/A/S_Idle, while some installed animation packs
+            // expose plain Idle. Actual caress still requires a live native
+            // HandCtrl.useAreaItems entry (validated by HSControlAibuDriver).
+            return nativeMode == 0 &&
+                   (state == "M_Idle" || state == "A_Idle" ||
+                    state == "S_Idle" || state == "Idle");
         }
 
         internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
