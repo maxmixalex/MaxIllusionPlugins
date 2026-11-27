@@ -11,7 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
     <Compile Include="..\JuiceControl\JuiceEditorView.cs" Link="Production\JuiceEditorView.cs" />
-    <Compile Include="..\JuiceControl\LoveJuiceIntegration.cs" Link="Production\LoveJuiceIntegration.cs" />
     <Compile Include="..\JuiceControl\JuiceEditorSession.cs" Link="Production\JuiceEditorSession.cs" />
     <Compile Include="..\JuiceControl\ReadbackState.cs" Link="Production\ReadbackState.cs" />
     <Compile Include="..\ClothingControl\WardrobeView.cs" Link="Production\WardrobeView.cs" />
