@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.6.4";
+        public const string Version = "0.6.5";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -38,6 +38,7 @@ namespace FemboyMode
         internal static ConfigEntry<bool> EnableMakerAssetUnlock;
         internal static ConfigEntry<bool> EnableMaleBoneScale;
         internal static ConfigEntry<bool> EnableMaleGeometryTransforms;
+        internal static ConfigEntry<bool> EnableUnderwearMeshFit;
         internal static ConfigEntry<bool> EnableBodyAllNativeScroll;
         internal static ConfigEntry<string> MaleGeometryBone;
         internal static ConfigEntry<string> MaleBallsBone;
@@ -122,6 +123,9 @@ namespace FemboyMode
                 "Apply saved per-card Penis X/Y/Z scaling. Position and rotation remain independent.");
             EnableMaleGeometryTransforms = Config.Bind("Maker", "Enable male genital bone transforms", true,
                 "Apply per-card Penis/Balls position, rotation and scale. Disable to restore original bone transforms.");
+            EnableUnderwearMeshFit = Config.Bind("Maker",
+                "Automatically fit unadapted underwear meshes", true,
+                "Create a private reversible mesh clone only when the active underwear's measured crotch silhouette lacks clearance for the marked character's male geometry. Already-adapted meshes are left untouched.");
             MaleGeometryBone = Config.Bind("Maker", "Male geometry bone", "cm_j_dan100",
                 "Penis root bone (usually cm_J_dan100_00), independent of Aibu anchor.");
             MaleBallsBone = Config.Bind("Maker", "Male balls bone", "cm_J_dan_f_top",
