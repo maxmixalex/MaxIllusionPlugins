@@ -234,6 +234,13 @@ namespace FemboyMode
         private ChaControl actor;
         private Transform shaftRoot;
         private Transform shaftTip;
+        private float clothingPitchOffset;
+
+        public void SetClothingPitchOffset(float degrees)
+        {
+            clothingPitchOffset = FemboyRules.SafeLocalFluidPitch(degrees);
+        }
+
         public void Configure(ChaControl target, Transform root, Transform tip)
         {
             actor = target;
@@ -291,7 +298,7 @@ namespace FemboyMode
             float localPitch = FemboyRules.SafeLocalFluidPitch(
                 FemboyModePlugin.FluidLocalPitch.Value);
             transform.rotation = boneFrame * Quaternion.Euler(
-                -localPitch, 0f, 0f);
+                -(localPitch + clothingPitchOffset), 0f, 0f);
 
             // Existing model-specific manual correction is expressed in
             // this local shaft frame, never in world Euler angles.
@@ -312,6 +319,8 @@ namespace FemboyMode
         private GameObject privateSourceRoot;
         private float lastFired = -999f;
         private float activeUntil;
+        private int appliedUnderwearState = int.MinValue;
+        private bool appliedNoShorts;
         private float[] nativeIntervals;
         private bool warnedUnavailable;
         private bool waitingForFirstDroplet;
@@ -708,15 +717,36 @@ namespace FemboyMode
                         owner.flags != null && owner.flags.isAnalPlay));
         }
 
+        private int LiveUnderwearState()
+        {
+            if (character == null || character.fileStatus == null ||
+                character.fileStatus.clothesState == null ||
+                character.fileStatus.clothesState.Length <= 3)
+                return 3;
+            return character.fileStatus.clothesState[3];
+        }
+
         private void ApplyLaunchPhysics()
         {
-            if (shooter == null || FemboyModePlugin.FluidLaunchSpeed == null)
+            if (shooter == null || character == null ||
+                FemboyModePlugin.FluidLaunchSpeed == null ||
+                FemboyModePlugin.FluidSpread == null)
                 return;
 
-            float speed = Mathf.Clamp(FemboyModePlugin.FluidLaunchSpeed.Value,
-                0.2f, 4f);
-            float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value,
-                0f, 30f);
+            int clothingState = LiveUnderwearState();
+            FemboyRules.FluidClothingProfile profile =
+                FemboyRules.FluidProfileForUnderwear(
+                    character.notShorts, clothingState);
+            // Redirect along the bone-local fabric contact rather than
+            // projecting a bare-shaft jet straight through worn underwear.
+            float speed = Mathf.Clamp(FemboyModePlugin.FluidLaunchSpeed.Value *
+                profile.SpeedMultiplier, 0.1f, 4f);
+            float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value *
+                profile.SpreadMultiplier, 0f, 30f);
+            if (trajectory != null)
+                trajectory.SetClothingPitchOffset(profile.LocalPitchOffset);
+            appliedUnderwearState = clothingState;
+            appliedNoShorts = character.notShorts;
             // Native MetaballShoot.SetRigidForce uses ShootAxis.forward,
             // then applies a relative force. Its original ForceMode.Force
             // is too weak with some modded Rigidbody masses. VelocityChange
@@ -757,6 +787,15 @@ namespace FemboyMode
 
             if (Time.time <= activeUntil)
             {
+                // The player may move/remove underwear while an emission is
+                // in progress. Subsequent native droplets use the new pose.
+                if (character != null &&
+                    (appliedNoShorts != character.notShorts ||
+                     appliedUnderwearState != LiveUnderwearState()))
+                {
+                    ApplyLaunchPhysics();
+                    if (trajectory != null) trajectory.AlignToModel();
+                }
                 int before = privateSourceRoot == null ? -1 :
                     privateSourceRoot.transform.childCount;
                 shooter.ShootMetaBall();
@@ -805,6 +844,8 @@ namespace FemboyMode
             host = null;
             axis = null;
             trajectory = null;
+            appliedUnderwearState = int.MinValue;
+            appliedNoShorts = false;
             privateSourceRoot = null;
             boundMode = HFlag.EMode.none;
             boundPoseId = -1;
