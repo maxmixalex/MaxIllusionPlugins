@@ -17,6 +17,14 @@ namespace HSControl
                  mode == 8 || mode == 9);
         }
 
+        // Gauge staging is a manual action: it must not depend on the automatic
+        // climax policy or on whether the current animation is a loop.
+        internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
+            return hasAnimation && !nativeClickPending &&
+                (mode == 1 || mode == 2 || mode == 6 || mode == 7 ||
+                 mode == 8 || mode == 9);
+        }
+
         internal static bool IsLoop(string state) {
             return !string.IsNullOrEmpty(state) &&
                 (state.IndexOf("WLoop", StringComparison.Ordinal) >= 0 ||
