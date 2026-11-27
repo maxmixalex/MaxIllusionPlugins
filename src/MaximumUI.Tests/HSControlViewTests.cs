@@ -2,125 +2,152 @@ using System;
 using HSControl;
 using MaximumUI;
 
-namespace MaximumUI.Tests {
-    internal static class HSControlViewTests {
-        internal const int TestCount = 4;
+namespace MaximumUI.Tests
+{
+    internal static class HSControlViewTests
+    {
+        internal const int TestCount = 5;
         internal static void RunAll() {
-            OriginalControlModesRemainReachable();
-            DisabledAndManualStatesGuardActions();
-            RetainedComparisonDetectsNativeStateUpdates();
-            SceneActionButtonsRespectTheNativeReadinessGate();
+            OriginalModesAndOrder();
+            NoInputAndManualModes();
+            GaugeLocksAndAutoCaressSwitch();
+            RetainedUpdates();
+            NativeActionButtons();
         }
 
         private static HSControlViewModel Make() {
             return new HSControlViewModel {
                 Version = "test", Available = true, Enabled = true,
-                Mode = 2, ManualSpeed = .5f, CurrentSpeed = .42f, TargetSpeed = .71f,
+                SceneMode = 0, Mode = 2, ManualSpeed = .5f, CurrentSpeed = .42f,
+                TargetSpeed = .71f, RangeMin = .1f, RangeMax = .9f,
+                CanForceLoop = true, CanStageMale = true,
+                CanStageFemale = true, CanStageBoth = true,
+                CanFinishMale = true, CanFemaleFinish = true,
+                CanFinishBoth = true,
                 ChangeEnabled = delegate { }, ChangeMode = delegate { },
                 ChangeManualOverride = delegate { }, ChangeManualSpeed = delegate { },
-                ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
-                ChangeGaugeMale = delegate { }, ChangeGaugeFemale = delegate { },
-                ChangeBand = delegate { }, ChangeLinkage = delegate { },
-                ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
-                ChangeStrengthMax = delegate { }, ChangeAutoMaleFinish = delegate { },
+                ChangeAutoCaress = delegate { }, ChangeRangeMin = delegate { },
+                ChangeRangeMax = delegate { }, ChangeGaugeMale = delegate { },
+                ChangeGaugeFemale = delegate { }, ChangeBand = delegate { },
+                ChangeLinkage = delegate { }, ChangeAutoStrength = delegate { },
+                ChangeStrengthMin = delegate { }, ChangeStrengthMax = delegate { },
+                ChangeAutoMaleFinish = delegate { },
                 ChangeAutoFemaleFinish = delegate { }, ChangeAutoReplay = delegate { },
+                ToggleFemaleLock = delegate { }, ToggleMaleLock = delegate { },
+                PlayLoop = delegate { }, PlayWeak = delegate { }, PlayStrong = delegate { },
+                StageMale = delegate { }, StageFemale = delegate { },
+                StageBoth = delegate { }, FinishMale = delegate { },
+                FinishFemale = delegate { }, FinishBoth = delegate { },
                 Reroll = delegate { }, Close = delegate { }
             };
         }
 
-        private static void OriginalControlModesRemainReachable() {
+        private static void OriginalModesAndOrder() {
             HSControlView view = new HSControlView { Model = Make() };
-            int selected = -1;
-            view.Model.ChangeMode = value => selected = value;
-            Window window = (Window)view.Build(null);
-            ComboBox<int> chooser = Find<ComboBox<int>>(window, "hscontrol-speed-mode");
-            Check(chooser.Options.Count == 4, "Original mode count is not reduced");
-            chooser.OnChange(3);
-            Check(selected == 3, "Gauge linkage can be selected");
-            Check(Find<SliderFloat>(window, "hscontrol-min").Enabled, "Range slider is enabled in range mode");
-            Check(Find<ProgressBar>(window, "hscontrol-current").Value == .42f,
-                "Live speed indicator displays actual runtime data");
-            Tabs tabs = Find<Tabs>(window, "hscontrol-pages");
-            Check(tabs.Children.Count == 3 && FindOrNull<ScrollView>(window,
-                "hscontrol-scroll") == null,
-                "Compact controls use three pages without an oversized scroll container");
+            int selection = -1;
+            view.Model.ChangeMode = x => selection = x;
+            Widget window = view.Build(null);
+            Find<RadioButton>(window, "hscontrol-mode-linkage").OnSelect();
+            Check(selection == 3, "Original gauge-linkage radio is operable");
+            Check(Find<RadioButton>(window, "hscontrol-mode-none") != null &&
+                Find<RadioButton>(window, "hscontrol-mode-half") != null &&
+                Find<RadioButton>(window, "hscontrol-mode-range") != null,
+                "Four original speed modes occupy one row");
+            Check(Find<SliderFloat>(window, "hscontrol-min").Enabled &&
+                Find<SliderFloat>(window, "hscontrol-max").Enabled,
+                "Range controls stay adjacent and reachable");
+            Check(FindOrNull<ScrollView>(window, "hscontrol-scroll") == null &&
+                FindOrNull<Tabs>(window, "hscontrol-pages") == null,
+                "HCtrl parity requires one window, not tab pages or scroll");
+            Check(Find<Button>(window, "hscontrol-female-lock") != null &&
+                Find<Button>(window, "hscontrol-male-lock") != null &&
+                Find<Button>(window, "hscontrol-play-loop") != null &&
+                Find<Button>(window, "hscontrol-stage-both") != null &&
+                Find<Button>(window, "hscontrol-finish-both") != null,
+                "Original top gauge locks and all bottom actions are on the same page");
         }
 
-        private static void DisabledAndManualStatesGuardActions() {
+        private static void NoInputAndManualModes() {
             HSControlView view = new HSControlView { Model = Make() };
-            view.Model.Available = false; view.Model.Enabled = false;
-            Widget widget = view.Build(null);
-            Check(FindOrNull<SliderFloat>(widget, "hscontrol-manual-speed") == null &&
-                !Find<SliderFloat>(widget, "hscontrol-gauge-male").Enabled,
-                "The manual speed widget is hidden until enabled; unavailable gauges are inert");
-            view.Model.Available = true;
+            view.Model.Enabled = false;
+            view.Model.Available = false;
+            Widget window = view.Build(null);
+            Check(!Find<SliderFloat>(window, "hscontrol-gauge-female").Enabled &&
+                !Find<SliderFloat>(window, "hscontrol-gauge-male").Enabled,
+                "Unavailable scene has no gauge write access");
             view.Model.Enabled = true;
+            view.Model.Available = true;
             view.Model.ManualOverride = true;
             view.Model.Mode = 0;
-            widget = view.Build(null);
-            Check(FindOrNull<SliderFloat>(widget, "hscontrol-min") == null &&
-                FindOrNull<ComboBox<int>>(widget, "hscontrol-band") == null &&
-                Find<SliderFloat>(widget, "hscontrol-manual-speed").Enabled,
-                "Compact speed page hides irrelevant mode controls");
-            Check(Find<Checkbox>(widget, "hscontrol-enabled").Enabled,
-                "Master toggle remains enabled for recovery");
+            window = view.Build(null);
+            Check(Find<SliderFloat>(window, "hscontrol-manual-speed").Enabled &&
+                FindOrNull<SliderFloat>(window, "hscontrol-min") == null,
+                "Off mode displays original manual speed without irrelevant range");
         }
 
-        private static void RetainedComparisonDetectsNativeStateUpdates() {
+        private static void GaugeLocksAndAutoCaressSwitch() {
+            HSControlView view = new HSControlView { Model = Make() };
+            int locks = 0;
+            view.Model.ToggleFemaleLock = () => locks += 1;
+            view.Model.ToggleMaleLock = () => locks += 10;
+            int autoCaressChanges = 0;
+            view.Model.ChangeAutoCaress = x => autoCaressChanges += x ? 1 : -1;
+            Widget window = view.Build(null);
+            Find<Button>(window, "hscontrol-female-lock").OnClick();
+            Find<Button>(window, "hscontrol-male-lock").OnClick();
+            Find<Checkbox>(window, "hscontrol-aibu").OnChange(true);
+            Check(locks == 11 && autoCaressChanges == 1,
+                "Original gauge locking and explicit auto-caress are independently operable");
+            Check(!view.Model.AutoCaress,
+                "Automatic caress must be disabled by default even when speed mode is active");
+        }
+
+        private static void RetainedUpdates() {
             HSControlViewModel model = Make();
             HSControlViewModel same = Make();
-            Check(model.SameDisplay(same), "Unchanged controls avoid unnecessary rebuilds");
-            same.CurrentSpeed = .60f;
-            Check(!model.SameDisplay(same), "The progress widget must refresh after a speed change");
-            same = Make(); same.AnimationState = "SLoop";
-            Check(!model.SameDisplay(same), "Animation transitions refresh the status");
+            Check(model.SameDisplay(same), "Unchanged state keeps the retained view");
+            same.FemaleLocked = true;
+            Check(!model.SameDisplay(same), "Native gauge lock state repaints");
+            same = Make(); same.AutoCaress = true;
+            Check(!model.SameDisplay(same), "Auto-caress toggle repaints");
+            same = Make(); same.CurrentSpeed = .62f;
+            Check(!model.SameDisplay(same), "Native speed readback repaints");
         }
 
-        private static void SceneActionButtonsRespectTheNativeReadinessGate() {
+        private static void NativeActionButtons() {
             HSControlViewModel model = Make();
-            int calls = 0;
-            model.CanForceLoop = true;
-            model.CanStage = true;
             model.CanFemaleFinish = false;
-            model.PlayWeak = delegate { calls++; };
-            model.PlayStrong = delegate { calls++; };
-            model.FinishFemale = delegate { calls += 100; };
+            int weak = 0, strong = 0, loop = 0;
+            model.PlayWeak = () => weak++;
+            model.PlayStrong = () => strong++;
+            model.PlayLoop = () => loop++;
             HSControlView view = new HSControlView { Model = model };
-            Widget widget = view.Build(null);
-            Check(Find<Button>(widget, "hscontrol-play-weak").Enabled &&
-                Find<Button>(widget, "hscontrol-play-strong").Enabled, "Loop actions enabled for native HActionBase.");
-            Check(!Find<Button>(widget, "hscontrol-finish-female").Enabled,
-                "Unsupported female-only finish remains disabled.");
-            Find<Button>(widget, "hscontrol-play-weak").OnClick();
-            Find<Button>(widget, "hscontrol-play-strong").OnClick();
-            Check(calls == 2, "Native motion commands dispatch directly.");
-            model.CanForceLoop = false;
-            widget = view.Build(null);
-            Check(!Find<Button>(widget, "hscontrol-play-weak").Enabled,
-                "Lost scene readiness disables native motion action.");
+            Widget window = view.Build(null);
+            Check(!Find<Button>(window, "hscontrol-finish-female").Enabled,
+                "Original mode/action readiness prevents unsafe climax commands");
+            Find<Button>(window, "hscontrol-play-loop").OnClick();
+            Find<Button>(window, "hscontrol-play-weak").OnClick();
+            Find<Button>(window, "hscontrol-play-strong").OnClick();
+            Check(loop == 1 && weak == 1 && strong == 1,
+                "Loop, weak and strong are three distinct original actions");
         }
 
         private static T Find<T>(Widget root, string key) where T : Widget {
-            if (root == null) throw new InvalidOperationException("Missing " + key);
-            if (root is T && Equals(root.Key, key)) return (T)root;
-            foreach (Widget child in root.Children) {
-                T found = FindOrNull<T>(child, key);
-                if (found != null) return found;
-            }
-            throw new InvalidOperationException("Missing " + key);
+            T value = FindOrNull<T>(root, key);
+            if (value == null) throw new InvalidOperationException("Missing " + key);
+            return value;
         }
-
         private static T FindOrNull<T>(Widget root, string key) where T : Widget {
+            if (root == null) return null;
             if (root is T && Equals(root.Key, key)) return (T)root;
             foreach (Widget child in root.Children) {
-                T found = FindOrNull<T>(child, key);
-                if (found != null) return found;
+                T candidate = FindOrNull<T>(child, key);
+                if (candidate != null) return candidate;
             }
             return null;
         }
-
-        private static void Check(bool okay, string description) {
-            if (!okay) throw new InvalidOperationException("HSControl View: " + description);
+        private static void Check(bool okay, string message) {
+            if (!okay) throw new InvalidOperationException("HSControl View: " + message);
         }
     }
 }
