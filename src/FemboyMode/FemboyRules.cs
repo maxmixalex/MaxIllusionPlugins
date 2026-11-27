@@ -70,6 +70,36 @@ namespace FemboyMode
 
         // Native clothing slots: 0 top (including many one-piece outfits),
         // 1 bottom, 3 underwear. Accessories and body meshes are not fitted.
+        internal static bool IsUnderwearAccessoryName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            string[] fragments = {
+                "panty", "panties", "pantsu", "shorts", "briefs",
+                "thong", "underwear", "lingerie", "loincloth",
+                "swimsuit", "bikini", "leotard", "bodysuit",
+                "innerwear", "crotch", "bloomers",
+                "パンツ", "ショーツ", "下着", "水着", "内裤", "內褲", "內衣"
+            };
+            foreach (string fragment in fragments)
+                if (name.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            return false;
+        }
+
+        internal static bool AccessoryCoverageQualified(int count, float left,
+            float right, float low, float high, bool namedUnderwear)
+        {
+            if (count < (namedUnderwear ? 12 : 24) ||
+                float.IsNaN(left) || float.IsNaN(right) ||
+                float.IsNaN(low) || float.IsNaN(high)) return false;
+            float width = right - left, height = high - low;
+            // Symmetric undergarment fabric crosses both sides of the
+            // anatomical center; small rings/pendants do not.
+            return left < -.014f && right > .014f &&
+                width >= (namedUnderwear ? .04f : .065f) &&
+                height >= (namedUnderwear ? .026f : .045f);
+        }
+
         internal static bool IsPotentialCrotchGarmentSlot(int slot) {
             return slot == 0 || slot == 1 || slot == 3;
         }
