@@ -138,7 +138,8 @@ internal static class Program {
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Special) ==
                 "p_koi_syu_LiquidKancho_00_00", "Real Studio heavy-liquid item");
             Check(StudioLiquidCatalog.Prefab(LoveJuiceChannel.Shower) ==
-                "p_koi_syu_LiquidShower_01_00", "Real Studio shower-liquid item");
+                "p_koi_syu_LiquidWater_00_00",
+                "Optional shower environment uses discrete water drops, never the continuous shower prefab");
             Check(!StudioLiquidCatalog.Valid((LoveJuiceChannel)77), "Unknown item is not replaced by synthetic visuals");
             DropletMotion initial = new DropletMotion { Y = 1f, VY = 0f, VX = 1f };
             DropletMotion next = DropletPhysics.Step(initial, .03f, 9.8f, 0f);
