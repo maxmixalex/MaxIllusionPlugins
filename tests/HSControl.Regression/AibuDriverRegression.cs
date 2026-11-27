@@ -43,6 +43,11 @@ internal static class AibuDriverRegression
         Check(!driver.Tick(scene, flags, .5f, .016f) &&
               scene.hand.action == 2, "native primary manual hand takes precedence");
         scene.hand.action = 0;
+        UnityEngine.Input.PrimaryDown = true;
+        Check(!driver.Tick(scene, flags, .5f, .016f) &&
+              scene.hand.action == 0,
+              "manual mouse press always defeats automatic caress capture");
+        UnityEngine.Input.PrimaryDown = false;
         scene.hand.useAreaItems = new TestArea[0];
         Check(driver.Tick(scene, flags, .5f, .016f) &&
               flags.dragStarts == 0 && scene.hand.action == 0 &&
