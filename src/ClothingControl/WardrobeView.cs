@@ -221,10 +221,18 @@ namespace ClothingControl {
                         if (editable && index >= 0 && index < row.AllowedStates.Length)
                             row.ChangeState(row.AllowedStates[index]);
                     };
+                    Widget control = row.Item <= 0
+                        ? (Widget)new Label("未装备", "garment-not-equipped-" + row.Slot).ExpandWidth()
+                        : row.AllowedStates.Length <= 1
+                            ? (Widget)new Label(row.State == 0 ? "穿好 · 当前无法切换" :
+                                row.State == 1 ? "半脱 · 当前无法切换" :
+                                row.State == 2 ? "挂下 · 当前无法切换" :
+                                row.State == 3 ? "脱掉 · 当前无法切换" : "状态不可用",
+                                "garment-not-changeable-" + row.Slot).ExpandWidth()
+                            : CycleButtons("garment-state-" + row.Slot, labels,
+                                selected, change, editable).ExpandWidth();
                     garmentRows.Add(new HStack(4f, "garment-" + row.Slot) {
-                        new Label(row.Label).Width(94f),
-                        CycleButtons("garment-state-" + row.Slot, labels,
-                            selected, change, editable).ExpandWidth()
+                        new Label(row.Label).Width(94f), control
                     }.Height(36f));
                 }
                 body.Add(garmentRows.ExpandWidth());
