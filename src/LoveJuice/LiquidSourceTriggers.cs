@@ -17,8 +17,8 @@ namespace LoveJuice {
         // original is used only when it is actually managing a kiss string.
         internal static bool SalivaActive(bool kissing, bool oralScene,
             bool wetFace, bool explicitPreview, bool allowWithoutKiss) {
-            return kissing || (allowWithoutKiss &&
-                (oralScene || wetFace || explicitPreview));
+            return kissing || explicitPreview || (allowWithoutKiss &&
+                (oralScene || wetFace));
         }
 
         internal static bool DrawSalivaFilament(bool enabled,
