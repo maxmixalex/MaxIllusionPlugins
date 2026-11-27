@@ -1,6 +1,13 @@
-# Femboy Mode for Koikatsu — v0.6.7
+# Femboy Mode for Koikatsu — v0.6.8
 
 Independent per-female-character **伪娘标志 (Femboy)** and scoped Maker / Free H extensions for original Koikatsu and Koikatsu Party. This is **not** a port of [KK_BecomeTrap](https://github.com/Totofer77/KK_BecomeTrap), which instead marks the *male school player*. We never overwrite a female card's vanilla `sex` field.
+
+## 0.6.8 — accessory-slot panties and non-destructive fitting
+
+- Inspect visible `ChaControl.objAccessory` and `fileStatus.showAccessory` in addition to normal clothing slots. Many imported panties are worn as accessory objects rather than in the underwear slot.
+- Examine both `SkinnedMeshRenderer` and rigid `MeshFilter` clothing accessories. An accessory must cover the pelvis symmetrically (measured on the current posed geometry) before it is eligible for a small reversible shape adjustment; small or off-center jewelry is excluded. Underwear-related names improve recognition but do not replace the geometric checks.
+- Restore the original accessory mesh immediately when hidden or when the native underwear is shifted/hanging. Accessory position changes invalidate the previous fit signature so moved-aside models can be rescanned.
+- This only verifies the code path and pure geometry gates. Real modded accessory models with custom bones, imported meshes and additional slot extensions still need in-game visual testing.
 
 ## 0.6.7 — restrained clothing clearance and native Shift/Hang restoration
 
