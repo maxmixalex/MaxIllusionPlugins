@@ -3,6 +3,15 @@ using System.Collections;
 
 namespace UnityEngine
 {
+    internal static class Input
+    {
+        internal static bool PrimaryDown;
+        internal static bool SecondaryDown;
+        internal static bool GetMouseButton(int index) {
+            return index == 0 ? PrimaryDown :
+                index == 1 && SecondaryDown;
+        }
+    }
     internal static class Random
     {
         internal static float Range(float min, float max) { return min; }
