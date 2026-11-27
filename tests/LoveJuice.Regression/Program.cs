@@ -133,6 +133,18 @@ internal static class Program {
                 !LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, true) &&
                 !LiquidSourceTriggers.DrawSalivaFilament(false, true, .035f, false),
                 "native kiss string suppresses only overlapping original thread");
+            Check(LiquidSourceTriggers.SalivaTearPeriod(.015f) >= .55f &&
+                LiquidSourceTriggers.SalivaTearPeriod(.150f) <= .95f &&
+                LiquidSourceTriggers.SalivaTearPeriod(.15f) >
+                    LiquidSourceTriggers.SalivaTearPeriod(.015f),
+                "saliva tear period varies with filament length");
+            Check(LiquidSourceTriggers.SalivaSag(.08f, .20f, .80f) >
+                    LiquidSourceTriggers.SalivaSag(.08f, .20f, .10f) &&
+                Math.Abs(LiquidSourceTriggers.SalivaSag(.08f, .12f, .50f) -
+                    LiquidSourceTriggers.SalivaSag(.08f, .42f, .50f)) > .0001f &&
+                !float.IsNaN(LiquidSourceTriggers.SalivaSag(
+                    float.NaN, 0f, 0f)),
+                "saliva filament visibly sags, stretches and oscillates even when anchors are still");
             Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 65f, 45f) == 2,
                 "Active primary male with sufficient gauge emits at a bounded level");
             Check(LiquidSourceTriggers.MalePreLevel(1, true, true, 100f, 0f) == 0 &&
