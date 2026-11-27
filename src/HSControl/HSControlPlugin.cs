@@ -20,12 +20,12 @@ namespace HSControl
     public sealed class HSControlPlugin : BaseUnityPlugin
     {
         public const string GUID = "MaxMixAlex.HSControl";
-        public const string Version = "0.1.3";
+        public const string Version = "0.1.4";
         private const string MountId = GUID + ".window";
         internal static HSControlPlugin Instance;
         private readonly HSControlMotionEngine motion = new HSControlMotionEngine(Environment.TickCount);
         private readonly HSControlAibuDriver aibu = new HSControlAibuDriver();
-        private ConfigEntry<bool> master, manual, autoStrength, autoMaleFinish, autoFemaleFinish, autoReplay;
+        private ConfigEntry<bool> master, manual, autoStrength, autoMaleFinish, autoFemaleFinish, autoReplay, autoCaress;
         private ConfigEntry<int> mode, band, linkage;
         private ConfigEntry<float> manualSpeed, rangeMin, rangeMax, strengthMin, strengthMax;
         private ConfigEntry<KeyboardShortcut> hotkey;
@@ -51,14 +51,17 @@ namespace HSControl
             rangeMax = Config.Bind("Motion", "Random range max", ini.RangeMax, "Maximum speed for random range mode.");
             manual = Config.Bind("Motion", "Manual override", false, "Use a manual speed until disabled.");
             manualSpeed = Config.Bind("Motion", "Manual speed", .5f, "Manual normalized speed 0 to 1.");
+            // HCtrl's original AibuAuto mutates hand actions and directly
+            // raises the gauge; those are NOT safe side-effects of changing
+            // speed settings. This action must be opt-in.
+            autoCaress = Config.Bind("Motion", "Auto caress (explicit opt-in)", false,
+                "Automate native Aibu interaction only when a compatible contact is found. Disabled by default; speed mode alone never raises a gauge.");
             autoStrength = Config.Bind("Motion", "Auto strength", ini.AutoStrength, "Alternate native motion strength on an interval.");
             strengthMin = Config.Bind("Motion", "Strength timer minimum", ini.StrengthMinSeconds, "Minimum seconds between changes.");
             strengthMax = Config.Bind("Motion", "Strength timer maximum", ini.StrengthMaxSeconds, "Maximum seconds between changes.");
             autoMaleFinish = Config.Bind("Scene", "Auto male finish", ini.AutoMaleFinish, "Request the native finish action at a full gauge.");
-            // Retain the legacy setting on disk, but never cap the game's native
-            // female gauge: disabling HSControl automation cannot block gameplay.
             autoFemaleFinish = Config.Bind("Scene", "Auto female finish", ini.AutoFemaleFinish,
-                "Legacy setting (no longer suppresses native female climax).");
+                "Enable native Aibu climax transition after a successful automatic caress. Never caps the game's own gauge.");
             autoReplay = Config.Bind("Scene", "Auto replay", ini.AutoReplay, "Request native repeat after the final state.");
             try { harmony = Harmony.CreateAndPatchAll(typeof(HSControlHooks), GUID); }
             catch (Exception ex) { Logger.LogError("HSControl native hooks could not be installed: " + ex); }
@@ -90,12 +93,12 @@ namespace HSControl
             }
 
             if (scene == null || scene.flags == null) {
-                aibu.Stop(scene);
+                aibu.Clear(scene);
                 if (visible) Close();
                 return;
             }
             if (!master.Value) {
-                aibu.Stop(scene);
+                aibu.Clear(scene);
                 // An enabled/disabled master switch must be recoverable from
                 // the same window; do not freeze the UI on the disabled branch.
                 if (visible && view != null && Time.unscaledTime >= nextViewPoll) {
@@ -114,9 +117,15 @@ namespace HSControl
             // HFlag.FemaleGaugeUp. Previously we only updated speed (and only
             // for manual override), so the visible gauge stayed frozen.
             // The scene-local driver yields to either active manual hand.
-            if (canDrive && hmode == 0)
-                aibu.Tick(scene, flags, motion.Current, Time.deltaTime);
-            else aibu.Stop(scene);
+            if (canDrive && hmode == 0) {
+                aibu.Tick(scene, flags, motion.Current, Time.deltaTime,
+                    autoCaress.Value);
+                if (aibu.TakeCompleted() && autoFemaleFinish.Value) {
+                    bool entered = HSControlNativeActions.TryStartAibuFemaleFinish(scene);
+                    status = entered ? "已进入原生爱抚高潮动作" :
+                        "自动爱抚结束，原生高潮动作暂不可切换";
+                }
+            } else aibu.Clear(scene);
             if (motion.StrengthToggleRequested && flags.click == HFlag.ClickKind.none &&
                 hmode != 0 && HSControlMotionEngine.CanDrive(hmode, state, flags.rely)) {
                 flags.click = HFlag.ClickKind.motionchange;
@@ -132,7 +141,7 @@ namespace HSControl
         }
 
         private void SwapScene(HSceneProc next) {
-            aibu.Stop(scene);
+            aibu.Clear(scene);
             scene = next;
             didMaleFinish = false;
             replayGate.Reset();
@@ -263,6 +272,12 @@ namespace HSControl
                 if (kind <= 1) {
                     okay = HSControlNativeActions.TryStartLoop(owner, kind == 1);
                     if (okay) motion.Reset(flags.speedCalc);
+                } else if (kind == 6 && (int)flags.mode == 0) {
+                    // Original HCtrl's female-finish button does not just
+                    // force gaugeFemale to 100: it starts Orgasm_Start and
+                    // records the native Aibu orgasm event.
+                    aibu.Clear(owner);
+                    okay = HSControlNativeActions.TryStartAibuFemaleFinish(owner);
                 } else {
                     // Staging a native gauge is a data update only. Never
                     // clear a touch/drag click to make this button usable.
@@ -306,6 +321,9 @@ namespace HSControl
                 CanForceLoop = master.Value && CanNativeCommands(flags, false),
                 CanStage = master.Value && CanStageGauge(flags),
                 CanFemaleFinish = master.Value && CanStageGauge(flags),
+                AutoCaress = autoCaress.Value,
+                FemaleLocked = flags != null && flags.lockGugeFemale,
+                MaleLocked = flags != null && flags.lockGugeMale,
                 Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,
                 GaugeFemale = flags == null ? 0f : flags.gaugeFemale,
@@ -325,6 +343,11 @@ namespace HSControl
             model.ChangeRangeMin = value => { if (live()) { rangeMin.Value = value; RefreshView(); } };
             model.ChangeRangeMax = value => { if (live()) { rangeMax.Value = value; RefreshView(); } };
             model.ChangeManualOverride = value => { if (live()) { manual.Value = value; RefreshView(); } };
+            model.ChangeAutoCaress = value => { if (live()) {
+                autoCaress.Value = value;
+                if (!value) aibu.Clear(owner);
+                RefreshView();
+            } };
             model.ChangeManualSpeed = value => { if (live()) { manualSpeed.Value = value; RefreshView(); } };
             model.ChangeAutoStrength = value => { if (live()) { autoStrength.Value = value; RefreshView(); } };
             model.ChangeStrengthMin = value => { if (live()) { strengthMin.Value = value; RefreshView(); } };
@@ -332,6 +355,18 @@ namespace HSControl
             model.ChangeAutoMaleFinish = value => { if (live()) { autoMaleFinish.Value = value; RefreshView(); } };
             model.ChangeAutoFemaleFinish = value => { if (live()) { autoFemaleFinish.Value = value; RefreshView(); } };
             model.ChangeAutoReplay = value => { if (live()) { autoReplay.Value = value; RefreshView(); } };
+            model.ToggleFemaleLock = () => { if (live() && owner.sprite != null) {
+                if (!owner.sprite.IsSpriteAciotn()) return;
+                flags.lockGugeFemale = !flags.lockGugeFemale;
+                owner.sprite.OnFemaleGaugeLockOnGauge();
+                RefreshView();
+            } };
+            model.ToggleMaleLock = () => { if (live() && owner.sprite != null) {
+                if (!owner.sprite.IsSpriteAciotn()) return;
+                flags.lockGugeMale = !flags.lockGugeMale;
+                owner.sprite.OnMaleGaugeLockOnGauge();
+                RefreshView();
+            } };
             model.ChangeGaugeMale = value => { if (live()) { flags.gaugeMale = Mathf.Clamp(value, 0f, 100f); RefreshView(); } };
             model.ChangeGaugeFemale = value => { if (live()) {
                 flags.gaugeFemale = Mathf.Clamp(value, 0f, 100f); RefreshView();
@@ -355,7 +390,7 @@ namespace HSControl
         private void OnDestroy() { Cleanup(); }
 
         private void Cleanup() {
-            aibu.Stop(scene);
+            aibu.Clear(scene);
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             visible = false;
