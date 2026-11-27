@@ -5,7 +5,7 @@ namespace HSControl
 {
     internal sealed class HSControlViewModel
     {
-        internal string Version = "0.1.2", Status = "Ready", AnimationState = string.Empty;
+        internal string Version = "0.1.3", Status = "Ready", AnimationState = string.Empty;
         internal bool Available, Enabled, ManualOverride, AutoStrength;
         internal bool AutoMaleFinish, AutoFemaleFinish, AutoReplay, Driving;
         internal bool CanForceLoop, CanStage, CanFemaleFinish;
@@ -159,8 +159,8 @@ namespace HSControl
 
         public override Widget Build(BuildContext context) {
             HSControlViewModel m = Model;
-            Window window = new Window("HSControl " + m.Version, 488f, 378f,
-                key: "hscontrol-window", minWidth: 448f, minHeight: 348f,
+            Window window = new Window("HSControl " + m.Version, 488f, 440f,
+                key: "hscontrol-window", minWidth: 448f, minHeight: 405f,
                 closable: true, onVisibleChange: delegate(bool value) {
                     if (!value && m.Close != null) m.Close();
                 });
