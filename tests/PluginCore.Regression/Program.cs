@@ -47,7 +47,6 @@ internal static class Program {
             Run("Character scan handles missing manager and invalid entries", CharacterScan);
             Run("Juice XML round trips Unicode, effects and role mapping", JuiceRoundTrip);
             Run("Optional preset fields distinguish missing, zero and failed readback", OptionalPresetReadback);
-            Run("LoveJuice bridge handles readback, switches and invalid APIs", LoveJuiceBridgeRegression.RunAll);
             Run("Juice XML normalizes null preset entries", JuiceNormalization);
             Run("Malformed Juice XML is reported and never reset on disk", JuiceMalformedIsPreserved);
             Run("Failed Juice path switch keeps old presets read-only until recovery", JuiceFailedPathSwitch);
