@@ -60,8 +60,8 @@ namespace HSControl
         public override Widget Build(BuildContext context)
         {
             HSControlViewModel m = Model;
-            Window window = new Window("HSControl " + m.Version, 570f, 525f,
-                key: "hscontrol-window", minWidth: 515f, minHeight: 505f,
+            Window window = new Window("HSControl " + m.Version, 470f, 545f,
+                key: "hscontrol-window", minWidth: 440f, minHeight: 525f,
                 closable: true, onVisibleChange: visible => {
                     if (!visible && m.Close != null) m.Close();
                 });
@@ -95,17 +95,25 @@ namespace HSControl
                         .Enabled(m.Enabled && m.Available).ExpandWidth()
                 }.Height(33f),
 
-                new HStack(6f) {
-                    new Label("自动速度", "hscontrol-speed-heading").Width(78f),
+                // Match HCtrl.GUIFunc's actual TWO speed-control rows,
+                // rather than squeezing four modes into one tiny line:
+                // first Off / auto strong, then half / range / linkage.
+                new HStack(7f) {
+                    new Label("自动速度", "hscontrol-speed-heading").Width(75f),
                     new RadioButton("关闭", m.Mode == 0, () => m.ChangeMode(0),
                         "hscontrol-mode-none").ExpandWidth(),
-                    new RadioButton("慢/全/快", m.Mode == 1, () => m.ChangeMode(1),
+                    new Checkbox("自动强弱", m.AutoStrength, m.ChangeAutoStrength,
+                        "hscontrol-strength")
+                        .Enabled(m.Enabled && m.SceneMode != 0).ExpandWidth()
+                }.Height(31f),
+                new HStack(7f) {
+                    new RadioButton("慢 / 全 / 快", m.Mode == 1, () => m.ChangeMode(1),
                         "hscontrol-mode-half").ExpandWidth(),
                     new RadioButton("范围", m.Mode == 2, () => m.ChangeMode(2),
                         "hscontrol-mode-range").ExpandWidth(),
                     new RadioButton("感度联动", m.Mode == 3, () => m.ChangeMode(3),
                         "hscontrol-mode-linkage").ExpandWidth()
-                }.Enabled(m.Enabled && m.Available).Height(32f)
+                }.Enabled(m.Enabled && m.Available).Height(31f)
             };
 
             if (m.Mode == 1) {
@@ -144,12 +152,12 @@ namespace HSControl
             }
 
             controls.Add(new HStack(6f) {
-                new Checkbox("自动强弱", m.AutoStrength, m.ChangeAutoStrength,
-                    "hscontrol-strength").Enabled(m.Enabled && m.SceneMode != 0).ExpandWidth(),
-                new Checkbox("自动爱抚", m.AutoCaress, m.ChangeAutoCaress,
-                    "hscontrol-aibu").Enabled(m.Enabled && m.SceneMode == 0).ExpandWidth(),
-                new Label("当前 " + m.CurrentSpeed.ToString("0.00") +
-                    " / 目标 " + m.TargetSpeed.ToString("0.00"),
+                new Checkbox("自动爱抚（需主动启用）", m.AutoCaress, m.ChangeAutoCaress,
+                    "hscontrol-aibu")
+                    .Enabled(m.Enabled && m.SceneMode == 0 &&
+                        (m.Mode != 0 || m.ManualOverride)).ExpandWidth(),
+                new Label("速度 " + m.CurrentSpeed.ToString("0.00") +
+                    " → " + m.TargetSpeed.ToString("0.00"),
                     "hscontrol-current-readout").ExpandWidth()
             }.Height(30f));
             if (m.AutoStrength && m.SceneMode != 0) {
