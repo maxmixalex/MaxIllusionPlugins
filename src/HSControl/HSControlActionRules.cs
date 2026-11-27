@@ -19,6 +19,11 @@ namespace HSControl
 
         // Gauge staging is a manual action: it must not depend on the automatic
         // climax policy or on whether the current animation is a loop.
+        internal static bool CanApplyAutoMotion(
+            bool armedInCurrentScene, int mode, bool manualOverride) {
+            return armedInCurrentScene && (mode != 0 || manualOverride);
+        }
+
         internal static bool IsAutoCaressState(int nativeMode, string state, bool rely)
         {
             // HCtrl has M/A/S_Idle, while some installed animation packs
