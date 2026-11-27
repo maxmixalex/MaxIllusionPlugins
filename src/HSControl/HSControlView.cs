@@ -5,8 +5,8 @@ namespace HSControl
 {
     internal sealed class HSControlViewModel
     {
-        internal string Version = "0.1.4", Status = "就绪", AnimationState = string.Empty;
-        internal bool Available, Enabled, ManualOverride, AutoStrength, AutoCaress;
+        internal string Version = "0.1.5", Status = "就绪", AnimationState = string.Empty;
+        internal bool Available, Enabled, ManualOverride, AutoStrength;
         internal bool AutoMaleFinish, AutoFemaleFinish, AutoReplay, Driving;
         internal bool MaleLocked, FemaleLocked;
         internal bool CanForceLoop, CanStageMale, CanStageFemale, CanStageBoth;
@@ -14,7 +14,7 @@ namespace HSControl
         internal float ManualSpeed, CurrentSpeed, TargetSpeed, GaugeMale, GaugeFemale;
         internal float RangeMin, RangeMax, StrengthMinSeconds, StrengthMaxSeconds;
         internal int Mode, Band, Linkage, SceneMode;
-        internal Action<bool> ChangeEnabled, ChangeManualOverride, ChangeAutoStrength, ChangeAutoCaress;
+        internal Action<bool> ChangeEnabled, ChangeManualOverride, ChangeAutoStrength;
         internal Action<bool> ChangeAutoMaleFinish, ChangeAutoFemaleFinish, ChangeAutoReplay;
         internal Action<float> ChangeManualSpeed, ChangeGaugeMale, ChangeGaugeFemale;
         internal Action<float> ChangeRangeMin, ChangeRangeMax, ChangeStrengthMin, ChangeStrengthMax;
@@ -27,7 +27,7 @@ namespace HSControl
             return other != null && Version == other.Version && Status == other.Status &&
                 AnimationState == other.AnimationState && Available == other.Available &&
                 Enabled == other.Enabled && ManualOverride == other.ManualOverride &&
-                AutoStrength == other.AutoStrength && AutoCaress == other.AutoCaress &&
+                AutoStrength == other.AutoStrength &&
                 AutoMaleFinish == other.AutoMaleFinish && AutoFemaleFinish == other.AutoFemaleFinish &&
                 AutoReplay == other.AutoReplay && Driving == other.Driving &&
                 MaleLocked == other.MaleLocked && FemaleLocked == other.FemaleLocked &&
@@ -152,13 +152,11 @@ namespace HSControl
             }
 
             controls.Add(new HStack(6f) {
-                new Checkbox("自动爱抚（需主动启用）", m.AutoCaress, m.ChangeAutoCaress,
-                    "hscontrol-aibu")
-                    .Enabled(m.Enabled && m.SceneMode == 0 &&
-                        (m.Mode != 0 || m.ManualOverride)).ExpandWidth(),
+                new Label("自动速度模式同时控制原生爱抚，不独占双手输入",
+                    "hscontrol-aibu-explain").ExpandWidth(),
                 new Label("速度 " + m.CurrentSpeed.ToString("0.00") +
                     " → " + m.TargetSpeed.ToString("0.00"),
-                    "hscontrol-current-readout").ExpandWidth()
+                    "hscontrol-current-readout").Width(155f)
             }.Height(30f));
             if (m.AutoStrength && m.SceneMode != 0) {
                 controls.Add(new HStack(6f) {
