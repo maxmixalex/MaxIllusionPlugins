@@ -219,6 +219,7 @@ internal static class Program
     public static int Main() {
         try {
             EngineTests();
+            AibuDriverRegression.RunAll();
             OriginalSpeedCalibration();
             IniTests();
             ReplayTests();
