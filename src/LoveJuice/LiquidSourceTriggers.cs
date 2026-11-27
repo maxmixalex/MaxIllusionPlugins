@@ -29,6 +29,25 @@ namespace LoveJuice {
             return distance > .001f && distance < .15f;
         }
 
+        // Stable 0.55–0.95s physical tear cycle. Both endpoints may remain
+        // still while the filament continues to sag and shed droplets.
+        internal static float SalivaTearPeriod(float mouthDistance) {
+            if (float.IsNaN(mouthDistance) ||
+                float.IsInfinity(mouthDistance)) return .72f;
+            return Math.Max(.55f, Math.Min(.95f, .55f + mouthDistance * 2.4f));
+        }
+
+        internal static float SalivaSag(float distance, float seconds, float phase) {
+            if (float.IsNaN(distance) || float.IsInfinity(distance) ||
+                float.IsNaN(seconds) || float.IsInfinity(seconds) ||
+                float.IsNaN(phase) || float.IsInfinity(phase))
+                return .009f;
+            float baseSag = Math.Max(.008f, Math.Min(.022f, distance * .13f));
+            float wave = (float)Math.Sin(seconds * 5.5f) * .0035f;
+            float tearStretch = Math.Max(0f, Math.Min(1f, phase));
+            return Math.Max(.003f, baseSag + wave + .010f * tearStretch * tearStretch);
+        }
+
         internal static int MalePreLevel(int sex, bool activeLoop, bool isPrimary,
             float gauge, float threshold) {
             if (sex != 0 || !activeLoop || !isPrimary ||
