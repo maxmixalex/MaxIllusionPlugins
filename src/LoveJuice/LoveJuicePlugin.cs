@@ -20,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.7";
+        public const string Version = "0.3.8";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -542,8 +542,8 @@ namespace LoveJuice {
             // or a shower / droplet ParticleSystem.
             Vector3 end = contact != null
                 ? contact.position
-                : start - source.Character.transform.up * .09f +
-                    source.Character.transform.forward * .01f;
+                : start + Vector3.down * .085f +
+                    source.Character.transform.forward * .006f;
             saliva.Tick(true, active, nativeKiss && contact != null,
                 start, end, delta);
         }
