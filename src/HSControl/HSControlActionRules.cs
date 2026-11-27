@@ -38,6 +38,27 @@ namespace HSControl
                    mode == 6 || mode == 7 || mode == 8 || mode == 9;
         }
 
+        // Original HCtrl.CanProc(PlayState): 0=loop,
+        // 2/3/4=male/female/simultaneous pre-climax,
+        // 5/6/7=male/female/simultaneous climax.
+        internal static bool OriginalCanForce(int mode, int kind) {
+            if (kind == 8 || kind == 0 || kind == 1)
+                return mode == 1 || mode == 2 || mode == 6 ||
+                       mode == 7 || mode == 8 || mode == 9;
+            if (kind == 2 || kind == 5)
+                return mode == 1 || mode == 2 || mode == 6 ||
+                       mode == 7 || mode == 8 || mode == 9;
+            if (kind == 3)
+                return mode == 2 || mode == 3 || mode == 5 ||
+                       mode == 7 || mode == 9;
+            if (kind == 6)
+                return mode == 0 || mode == 2 || mode == 3 ||
+                       mode == 5 || mode == 7 || mode == 9;
+            if (kind == 4 || kind == 7)
+                return mode == 2 || mode == 7 || mode == 9;
+            return false;
+        }
+
         internal static bool IsLoop(string state) {
             return !string.IsNullOrEmpty(state) &&
                 (state.IndexOf("WLoop", StringComparison.Ordinal) >= 0 ||
