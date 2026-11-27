@@ -13,7 +13,6 @@ using UnityEngine;
 namespace LoveJuice {
     [BepInDependency(KoikatuAPI.GUID)]
     [BepInDependency("Marco.SkinEffects", BepInDependency.DependencyFlags.SoftDependency)]
-    [BepInDependency("MaxMixAlex.JuiceControl", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInDependency("MaxMixAlex.FemboyMode", BepInDependency.DependencyFlags.SoftDependency)]
     [BepInProcess(KoikatuAPI.GameProcessName)]
     [BepInProcess(KoikatuAPI.GameProcessNameSteam)]
@@ -21,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.3";
+        public const string Version = "0.3.4";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -45,6 +44,7 @@ namespace LoveJuice {
         private readonly Dictionary<ChaControl, Actor> actors = new Dictionary<ChaControl, Actor>();
         private readonly LiveActorRoster<ChaControl> roster = new LiveActorRoster<ChaControl>();
         private StudioLiquidPool visuals;
+        private readonly SalivaFilament saliva = new SalivaFilament();
         private HSceneProc scene;
         private float nextProbe, nextResolve;
         private readonly System.Random random = new System.Random();
@@ -63,8 +63,8 @@ namespace LoveJuice {
         public bool IsEnabled { get { return isActiveAndEnabled && masterEnabled != null && masterEnabled.Value; } }
         public static int ActiveDrops { get { return instance != null && instance.visuals != null ? instance.visuals.ActiveCount : 0; } }
 
-        // Optional readback/write interface used by JuiceControl. Exact keys only:
-        // the adapter never touches game overlays or another plugin's state.
+        // Optional readback/write interface for independent integrations.
+        // The adapter never touches game overlays or another plugin's state.
         private ConfigEntry<bool> FindToggle(string key) {
             switch (key) {
                 case "Enabled": return masterEnabled;
@@ -118,7 +118,7 @@ namespace LoveJuice {
             previewChannel = Config.Bind("General", "Preview channel", 0,
                 "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special, 6 intimate, 7 male pre-fluid.");
             face = Config.Bind("Sources", "Face drips", true,
-                "Read current face overlay / optional SkinEffects levels, including JuiceControl changes.");
+                "Show native CyuNoVR kissing saliva strings, or a lightweight matching filament when the native effect is absent. No face-level shower particles.");
             body = Config.Bind("Sources", "Body drips", true,
                 "Read current body overlay / optional SkinEffects levels, including JuiceControl changes.");
             intimate = Config.Bind("Sources", "Intimate fluid drips", true,
@@ -243,6 +243,9 @@ namespace LoveJuice {
         private float RandomSigned() { return (float)(random.NextDouble() * 2.0 - 1.0); }
 
         private bool EmitFrom(Actor actor, LoveJuiceChannel kind, int n) {
+            // Saliva is an elastic kiss filament, NOT a native Studio spray.
+            // Deliberate and automatic face events must never fire shower-like jets.
+            if (kind == LoveJuiceChannel.Saliva) return false;
             if (kind == LoveJuiceChannel.Intimate && actor.Character.sex != 1) return false;
             if (kind == LoveJuiceChannel.MalePre && actor.Character.sex != 0) return false;
             Transform source = kind == LoveJuiceChannel.Saliva ? actor.Mouth :
@@ -283,6 +286,7 @@ namespace LoveJuice {
             integrations.Reset();
             nextResolve = 0f;
             if (visuals != null) visuals.Attach(scene == null ? null : scene.transform);
+            saliva.Attach(scene == null ? null : scene.transform);
         }
 
         private void AddActorToRoster(ChaControl cha, HashSet<ChaControl> seen, List<ChaControl> order) {
@@ -360,8 +364,6 @@ namespace LoveJuice {
                 actor.FaceLevel, actor.BodyLevel, actor.SpecialLevel, actor.IntimateLevel);
             // Match the currently selected effect sources; one readback rise
             // produces a bounded native burst before the periodic drips.
-            if (face.Value) for (int i = 0; i < bursts.Face; i++)
-                EmitFrom(actor, LoveJuiceChannel.Saliva, i);
             if (body.Value) for (int i = 0; i < bursts.Body; i++)
                 EmitFrom(actor, LoveJuiceChannel.Body, i);
             if (intimate.Value) for (int i = 0; i < bursts.Intimate; i++)
@@ -380,6 +382,42 @@ namespace LoveJuice {
             timer -= period;
             timer = Mathf.Min(timer, period);
             EmitFrom(actor, kind, random.Next(0, 2));
+        }
+
+        private void TickSaliva(float delta)
+        {
+            if (scene == null || scene.flags == null || !face.Value) {
+                saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
+                return;
+            }
+            Actor nearestFemale = null, nearestMale = null;
+            float closest = float.MaxValue;
+            foreach (Actor femaleActor in actors.Values) {
+                if (femaleActor.Character == null || femaleActor.Character.sex != 1 ||
+                    femaleActor.Mouth == null) continue;
+                foreach (Actor maleActor in actors.Values) {
+                    if (maleActor.Character == null || maleActor.Character.sex != 0 ||
+                        maleActor.Mouth == null) continue;
+                    float distance = Vector3.Distance(
+                        femaleActor.Mouth.position, maleActor.Mouth.position);
+                    if (distance < closest) {
+                        closest = distance;
+                        nearestFemale = femaleActor;
+                        nearestMale = maleActor;
+                    }
+                }
+            }
+            if (nearestFemale == null || nearestMale == null) {
+                saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
+                return;
+            }
+
+            bool kiss = LiquidSourceTriggers.KissAnimationSignal(
+                scene.flags.nowAnimStateName,
+                scene.flags.click == HFlag.ClickKind.mouth);
+            saliva.Tick(true, kiss,
+                nearestFemale.Mouth.position, nearestMale.Mouth.position,
+                delta);
         }
 
         private void Update() {
@@ -421,7 +459,6 @@ namespace LoveJuice {
                 scene.flags.gaugeFemale >= DropletPhysics.Clamp(milkThreshold.Value, 0f, 100f)
                 ? Mathf.Clamp(Mathf.RoundToInt(scene.flags.gaugeFemale / 33f), 1, 3) : 0;
             foreach (Actor actor in actors.Values) {
-                if (face.Value) TickSource(actor, LoveJuiceChannel.Saliva, actor.FaceLevel, ref actor.FaceTime, dt);
                 if (body.Value) TickSource(actor, LoveJuiceChannel.Body, actor.BodyLevel, ref actor.BodyTime, dt);
                 if (intimate.Value && actor.Character.sex == 1)
                     TickSource(actor, LoveJuiceChannel.Intimate, actor.IntimateLevel, ref actor.IntimateTime, dt);
@@ -439,6 +476,7 @@ namespace LoveJuice {
                 if (special.Value) TickSource(actor, LoveJuiceChannel.Special,
                     actor.SpecialLevel, ref actor.SpecialTime, dt);
             }
+            TickSaliva(dt);
             visuals.Tick(dt, gravity.Value, drag.Value, collision.Value);
         }
 
@@ -471,6 +509,10 @@ namespace LoveJuice {
                 return;
             }
             LoveJuiceChannel channel = (LoveJuiceChannel)previewChannel.Value;
+            if (channel == LoveJuiceChannel.Saliva) {
+                panelStatus = "口水拉丝只在游戏原生亲吻动作中出现；不支持喷射式预览。";
+                return;
+            }
             int emitted = 0;
             Actor actor;
             if (actors.TryGetValue(roster.Selected, out actor))
