@@ -244,6 +244,7 @@ namespace HSControl
 
         private bool CanNativeCommands(HFlag flags, bool needsLoop) {
             if (flags == null || flags.nowAnimationInfo == null ||
+                flags.click != HFlag.ClickKind.none ||
                 !HSControlActionRules.CanStartLoop((int)flags.mode, flags.rely, true)) return false;
             return !needsLoop || HSControlActionRules.IsLoop(flags.nowAnimStateName);
         }
@@ -273,7 +274,8 @@ namespace HSControl
                     okay = HSControlNativeActions.TryStartLoop(owner, kind == 1);
                     if (okay) motion.Reset(flags.speedCalc);
                 } else {
-                    if (flags.click != HFlag.ClickKind.none) return;
+                    // Staging a native gauge is a data update only. Never
+                    // clear a touch/drag click to make this button usable.
                     if (kind == 2 || kind == 4) flags.gaugeMale = Math.Max(flags.gaugeMale, 70f);
                     if (kind == 3 || kind == 4) flags.gaugeFemale = Math.Max(flags.gaugeFemale, 70f);
                     if (kind >= 5) {
