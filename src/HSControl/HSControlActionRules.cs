@@ -42,7 +42,11 @@ namespace HSControl
         // 2/3/4=male/female/simultaneous pre-climax,
         // 5/6/7=male/female/simultaneous climax.
         internal static bool OriginalCanForce(int mode, int kind) {
-            if (kind == 8 || kind == 0 || kind == 1)
+            if (kind == 8)
+                return mode == 1 || mode == 2 || mode == 3 ||
+                       mode == 5 || mode == 6 || mode == 7 ||
+                       mode == 8 || mode == 9;
+            if (kind == 0 || kind == 1)
                 return mode == 1 || mode == 2 || mode == 6 ||
                        mode == 7 || mode == 8 || mode == 9;
             if (kind == 2 || kind == 5)
