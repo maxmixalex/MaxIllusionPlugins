@@ -1,6 +1,13 @@
-# LoveJuice — 0.3.7 (saliva strings and native Studio asset diagnosis)
+# LoveJuice — 0.3.8 (dynamic saliva filaments with falling tears)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects borrow the **materials** of installed Studio item prefabs without invoking the original continuous emitters. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+
+## 0.3.8 — kinetic saliva, necking and gravity drops
+
+- Saliva now visibly moves even when both mouth anchors are stationary: time-varying sag, lateral flutter, pulsating thickness and progressive necking. About every 0.55–0.95 seconds (dependent on filament length) a narrow tear separates and continues falling under world gravity.
+- Tears are scene-local tapered `LineRenderer` segments using the borrowed native CyuNoVR or Studio-liquid material. They are not spheres, a 2-D sprite stuck to a mouth, or the shower ParticleSystem.
+- Recycles up to eight detached droplets, follows updated mouth anchors every frame, and completely tears down all owned objects on scene exit. If the installed CyuNoVR `BeroIto` already renders a native kiss filament, we leave it untouched.
+- The running-game appearance, shader compatibility and collision with body/world still need E2E acceptance.
 
 ## 0.3.7 — stop shipping unverified drops as finished native effects
 
