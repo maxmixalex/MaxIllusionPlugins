@@ -48,6 +48,11 @@ namespace LoveJuice {
         private HSceneProc scene;
         private float nextProbe, nextResolve;
         private readonly System.Random random = new System.Random();
+        private Type cyuType;
+        private PropertyInfo cyuIsKiss;
+        private FieldInfo cyuKissing;
+        private float nextCyuProbe;
+        private bool cachedCyuKiss;
 
         private sealed class Actor {
             internal ChaControl Character;
@@ -289,6 +294,8 @@ namespace LoveJuice {
             panelRevision++;
             panelStatus = next == null ? "尚未进入场景。" : "已连接当前场景。";
             scene = next;
+            cachedCyuKiss = false;
+            nextCyuProbe = 0f;
             actors.Clear();
             roster.Replace(null);
             integrations.Reset();
@@ -392,6 +399,47 @@ namespace LoveJuice {
             EmitFrom(actor, kind, random.Next(0, 2));
         }
 
+        // The installed Sabakan CyuNoVR mod drives its own kiss state,
+        // independently of vanilla HFlag.ClickKind.mouth and animation
+        // names. Read this state when available; never require a native
+        // kiss animation to let the saliva thread appear.
+        private bool IsModdedKissActive()
+        {
+            if (Time.unscaledTime < nextCyuProbe) return cachedCyuKiss;
+            nextCyuProbe = Time.unscaledTime + .12f;
+            cachedCyuKiss = false;
+            if (cyuType == null)
+            {
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    try {
+                        cyuType = assembly.GetType("Bero.CyuVR.Cyu", false);
+                        if (cyuType != null) break;
+                    } catch { }
+                }
+                if (cyuType == null) return false;
+                const BindingFlags flags = BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.Instance;
+                cyuIsKiss = cyuType.GetProperty("IsKiss", flags);
+                cyuKissing = cyuType.GetField("kissing", flags);
+            }
+            try {
+                foreach (UnityEngine.Object instance in
+                    UnityEngine.Object.FindObjectsOfType(cyuType))
+                {
+                    Behaviour behaviour = instance as Behaviour;
+                    if (behaviour != null && !behaviour.isActiveAndEnabled)
+                        continue;
+                    bool now = cyuIsKiss != null &&
+                        Convert.ToBoolean(cyuIsKiss.GetValue(instance, null));
+                    now |= cyuKissing != null &&
+                        Convert.ToBoolean(cyuKissing.GetValue(instance));
+                    if (now) { cachedCyuKiss = true; break; }
+                }
+            } catch { }
+            return cachedCyuKiss;
+        }
+
         private void TickSaliva(float delta)
         {
             if (scene == null || scene.flags == null || !face.Value) {
@@ -420,9 +468,10 @@ namespace LoveJuice {
                 return;
             }
 
-            bool kiss = LiquidSourceTriggers.KissAnimationSignal(
-                scene.flags.nowAnimStateName,
-                scene.flags.click == HFlag.ClickKind.mouth);
+            bool kiss = IsModdedKissActive() ||
+                LiquidSourceTriggers.KissAnimationSignal(
+                    scene.flags.nowAnimStateName,
+                    scene.flags.click == HFlag.ClickKind.mouth);
             saliva.Tick(true, kiss,
                 nearestFemale.Mouth.position, nearestMale.Mouth.position,
                 delta);
