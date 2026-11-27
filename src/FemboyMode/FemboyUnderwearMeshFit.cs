@@ -31,22 +31,32 @@ namespace FemboyMode
         // Same narrow mesh-access technique as the existing
         // ClothingCompression plugin. The runtime detour is applied only
         // while reading/cloning a garment and always undone in finally.
-        private static NativeDetour meshReadDetour;
-        private static bool CanReadMesh() { return true; }
+        // Keep the proven instance-method detour signature used by
+        // ClothingCompression.MeshAccessDetour; a static no-argument hook
+        // does not match the original Mesh.canAccess instance getter.
+        private sealed class MeshReadAccess
+        {
+            private readonly NativeDetour detour;
+            public MeshReadAccess()
+            {
+                detour = new NativeDetour(
+                    AccessTools.Property(typeof(Mesh), "canAccess")
+                        .GetGetMethod(true),
+                    AccessTools.Method(typeof(MeshReadAccess), "CanAccess"));
+                detour.Undo();
+            }
+            public bool CanAccess() { return true; }
+            public void Apply() { detour.Apply(); }
+            public void Undo() { detour.Undo(); }
+        }
+
+        private static MeshReadAccess meshReadDetour;
         private static bool EnterReadableScope()
         {
             try
             {
                 if (meshReadDetour == null)
-                {
-                    var getter = AccessTools.Property(typeof(Mesh),
-                        "canAccess").GetGetMethod(true);
-                    var hook = AccessTools.Method(
-                        typeof(FemboyCharacterController), "CanReadMesh");
-                    if (getter == null || hook == null) return false;
-                    meshReadDetour = new NativeDetour(getter, hook);
-                    meshReadDetour.Undo();
-                }
+                    meshReadDetour = new MeshReadAccess();
                 meshReadDetour.Apply();
                 return true;
             }
