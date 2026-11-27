@@ -99,10 +99,11 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene LoveJuicePanel() {
         var model = new LoveJuiceViewModel {
-            Version = "0.3.6", Enabled = true, HasScene = true,
+            Version = "0.3.7", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 8, MaximumParticles = 48,
             ActorNames = new[] { "示例角色 A", "示例角色 B" },
-            SelectedActorIndex = 0, Face = true, SalivaAnytime = true, Body = true,
+            SelectedActorIndex = 0, Face = true, SalivaAnytime = true,
+            ExperimentalSpheres = false, Body = true,
             Intimate = true, MalePre = false, Milk = false,
             Shower = false, Special = false, Collision = true,
             Interval = .26f, Gravity = 8f, Damping = 1f,
@@ -112,6 +113,8 @@ internal static class PluginPreviewScenes {
             Status = "独立液滴与亲吻拉丝预览",
             ChangeEnabled = delegate { }, ChangeFace = delegate { },
             ChangeSalivaAnytime = delegate { },
+            ChangeExperimentalSpheres = delegate { },
+            InspectStudio = delegate { },
             ChangeBody = delegate { }, ChangeIntimate = delegate { },
             ChangeMalePre = delegate { }, ChangeMilk = delegate { },
             ChangeShower = delegate { }, ChangeSpecial = delegate { },
@@ -134,6 +137,7 @@ internal static class PluginPreviewScenes {
             Widget = window, StateId = "default",
             RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-scroll",
                 "lovejuice-face", "lovejuice-saliva-anytime",
+                "lovejuice-inspect-studio", "lovejuice-experimental-spheres",
                 "lovejuice-body", "lovejuice-preview-channel" }
         };
     }
