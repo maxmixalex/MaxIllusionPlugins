@@ -3,12 +3,18 @@ using System.Collections.Generic;
 using AccessoryBatchManager;
 using ClothingControl;
 using JuiceControl;
+using HSControl;
+using LoveJuice;
 using MaximumUI;
 
 // Public examples only. These fixtures do not read cards, XML, configuration,
 // the game, or the user's uploaded files. Composition is the shipped View code.
 internal static class PluginPreviewScenes {
     internal static IEnumerable<PreviewScene> Create() {
+        yield return HsControl(0);
+        yield return HsControl(1);
+        yield return HsControl(2);
+        yield return LoveJuicePanel();
         yield return Juice("main");
         yield return Juice("name");
         yield return Juice("xml-error");
@@ -26,6 +32,98 @@ internal static class PluginPreviewScenes {
         yield return Wardrobe("filtered");
         yield return Wardrobe("scene");
         yield return Wardrobe("scene-applying");
+    }
+
+    // These business previews use the shipped production View classes,
+    // not hand-drawn mock-ups. Cover each HSControl tab independently:
+    // the previous exporter did not include any HSControl/ LoveJuice cases.
+    private static PreviewScene HsControl(int page) {
+        var model = new HSControlViewModel {
+            Version = "0.1.3", Available = true, Enabled = true,
+            AnimationState = "M_Idle", Status = "已连接当前场景",
+            ManualOverride = true, ManualSpeed = .62f,
+            Mode = 2, RangeMin = .25f, RangeMax = .80f,
+            Band = 1, Linkage = 0, CurrentSpeed = .54f,
+            TargetSpeed = .65f, GaugeMale = 45f, GaugeFemale = 72f,
+            AutoStrength = true, StrengthMinSeconds = 10f,
+            StrengthMaxSeconds = 30f, CanForceLoop = true,
+            CanStage = true, CanFemaleFinish = true,
+            AutoMaleFinish = false, AutoReplay = false,
+            ChangeEnabled = delegate { }, ChangeManualOverride = delegate { },
+            ChangeManualSpeed = delegate { }, ChangeMode = delegate { },
+            ChangeRangeMin = delegate { }, ChangeRangeMax = delegate { },
+            ChangeBand = delegate { }, ChangeLinkage = delegate { },
+            ChangeGaugeMale = delegate { }, ChangeGaugeFemale = delegate { },
+            ChangeAutoStrength = delegate { }, ChangeStrengthMin = delegate { },
+            ChangeStrengthMax = delegate { }, ChangeAutoMaleFinish = delegate { },
+            ChangeAutoReplay = delegate { }, Reroll = delegate { },
+            PlayWeak = delegate { }, PlayStrong = delegate { },
+            StageMale = delegate { }, StageFemale = delegate { },
+            StageBoth = delegate { }, FinishMale = delegate { },
+            FinishFemale = delegate { }, FinishBoth = delegate { },
+            Close = delegate { }
+        };
+        Window window = (Window)new HSControlView { Model = model }
+            .Build(new BuildContext());
+        Tabs tabs = Find(window, "hscontrol-pages") as Tabs;
+        if (tabs == null || tabs.Children.Count != 3)
+            throw new InvalidOperationException("HSControl compact page selector absent");
+        tabs.SelectedIndex = page;
+        string name = page == 0 ? "speed" : page == 1 ? "scene" : "auto";
+        return new PreviewScene {
+            Slug = "hscontrol-" + name + "-preview",
+            Title = "HSControl / " + name,
+            Source = "HSControl.HSControlView.Build",
+            Detail = "Actual compact HSControl tab " + page + "; no vertical scroll",
+            Widget = window, StateId = page == 0 ? "default" : name,
+            RequiredKeys = page == 0
+                ? new[] { "hscontrol-enabled", "hscontrol-pages", "hscontrol-speed-mode",
+                    "hscontrol-manual-speed", "hscontrol-status" }
+                : page == 1
+                    ? new[] { "hscontrol-enabled", "hscontrol-pages",
+                        "hscontrol-gauge-male", "hscontrol-finish-male", "hscontrol-status" }
+                    : new[] { "hscontrol-enabled", "hscontrol-pages",
+                        "hscontrol-strength", "hscontrol-strength-min", "hscontrol-status" }
+        };
+    }
+
+    private static PreviewScene LoveJuicePanel() {
+        var model = new LoveJuiceViewModel {
+            Version = "0.3.5", Enabled = true, HasScene = true,
+            ActorCount = 2, ActiveParticles = 8, MaximumParticles = 48,
+            ActorNames = new[] { "示例角色 A", "示例角色 B" },
+            SelectedActorIndex = 0, Face = true, Body = true,
+            Intimate = true, MalePre = false, Milk = false,
+            Shower = false, Special = false, Collision = true,
+            Interval = .26f, Gravity = 8f, Damping = 1f,
+            Lifetime = 1.6f, Scale = .045f, LaunchSpeed = .35f,
+            MilkThreshold = 65f, MalePreThreshold = 45f,
+            Integration = "SkinEffects：只读连接",
+            Status = "独立液滴与亲吻拉丝预览",
+            ChangeEnabled = delegate { }, ChangeFace = delegate { },
+            ChangeBody = delegate { }, ChangeIntimate = delegate { },
+            ChangeMalePre = delegate { }, ChangeMilk = delegate { },
+            ChangeShower = delegate { }, ChangeSpecial = delegate { },
+            ChangeCollision = delegate { }, ChangeMaximum = delegate { },
+            ChangePreviewChannel = delegate { }, SelectActor = delegate { },
+            ChangeInterval = delegate { }, ChangeGravity = delegate { },
+            ChangeDamping = delegate { }, ChangeLifetime = delegate { },
+            ChangeScale = delegate { }, ChangeLaunchSpeed = delegate { },
+            ChangeMilkThreshold = delegate { },
+            ChangeMalePreThreshold = delegate { }, Preview = delegate { },
+            Close = delegate { }
+        };
+        Window window = (Window)new LoveJuiceView { Model = model }
+            .Build(new BuildContext());
+        return new PreviewScene {
+            Slug = "lovejuice-control-preview",
+            Title = "LoveJuice 0.3.5",
+            Source = "LoveJuice.LoveJuiceView.Build",
+            Detail = "Actual standalone material-droplet and kiss control panel",
+            Widget = window, StateId = "default",
+            RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-scroll",
+                "lovejuice-face", "lovejuice-body", "lovejuice-preview-channel" }
+        };
     }
 
     private static PreviewScene Wardrobe(string state) {
