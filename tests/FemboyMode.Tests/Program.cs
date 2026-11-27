@@ -58,6 +58,19 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        Check(FemboyRules.ShouldFitUnderwear(true, true, true, 0) &&
+              FemboyRules.ShouldFitUnderwear(true, true, true, 1) &&
+              !FemboyRules.ShouldFitUnderwear(true, true, true, 3) &&
+              !FemboyRules.ShouldFitUnderwear(false, true, true, 0) &&
+              !FemboyRules.ShouldFitUnderwear(true, false, true, 0) &&
+              !FemboyRules.ShouldFitUnderwear(true, true, false, 0),
+              "underwear mesh correction activates only for marked, enabled and worn models");
+        Check(FemboyRules.UnderwearClearanceDeficit(.10f, .18f) == .05f &&
+              FemboyRules.UnderwearClearanceDeficit(.18f, .18f) == 0f &&
+              FemboyRules.UnderwearClearanceDeficit(.21f, .18f) == 0f &&
+              FemboyRules.UnderwearClearanceDeficit(-.10f, .15f) == 0f &&
+              FemboyRules.UnderwearClearanceDeficit(float.NaN, .15f) == 0f,
+              "pre-adapted underwear and invalid geometry must not be warped");
         var covered = FemboyRules.FluidProfileForUnderwear(false, 0);
         var shifted = FemboyRules.FluidProfileForUnderwear(false, 1);
         var hanging = FemboyRules.FluidProfileForUnderwear(false, 2);
