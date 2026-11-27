@@ -10,7 +10,7 @@ namespace MaximumUI.Tests
         internal static void RunAll() {
             OriginalModesAndOrder();
             NoInputAndManualModes();
-            GaugeLocksAndAutoCaressSwitch();
+            GaugeLocksAndNoExtraToggle();
             RetainedUpdates();
             NativeActionButtons();
         }
@@ -26,7 +26,7 @@ namespace MaximumUI.Tests
                 CanFinishBoth = true,
                 ChangeEnabled = delegate { }, ChangeMode = delegate { },
                 ChangeManualOverride = delegate { }, ChangeManualSpeed = delegate { },
-                ChangeAutoCaress = delegate { }, ChangeRangeMin = delegate { },
+                ChangeRangeMin = delegate { },
                 ChangeRangeMax = delegate { }, ChangeGaugeMale = delegate { },
                 ChangeGaugeFemale = delegate { }, ChangeBand = delegate { },
                 ChangeLinkage = delegate { }, ChangeAutoStrength = delegate { },
@@ -85,21 +85,18 @@ namespace MaximumUI.Tests
                 "Off mode displays original manual speed without irrelevant range");
         }
 
-        private static void GaugeLocksAndAutoCaressSwitch() {
+        private static void GaugeLocksAndNoExtraToggle() {
             HSControlView view = new HSControlView { Model = Make() };
             int locks = 0;
             view.Model.ToggleFemaleLock = () => locks += 1;
             view.Model.ToggleMaleLock = () => locks += 10;
-            int autoCaressChanges = 0;
-            view.Model.ChangeAutoCaress = x => autoCaressChanges += x ? 1 : -1;
             Widget window = view.Build(null);
             Find<Button>(window, "hscontrol-female-lock").OnClick();
             Find<Button>(window, "hscontrol-male-lock").OnClick();
-            Find<Checkbox>(window, "hscontrol-aibu").OnChange(true);
-            Check(locks == 11 && autoCaressChanges == 1,
-                "Original gauge locking and explicit auto-caress are independently operable");
-            Check(!view.Model.AutoCaress,
-                "Automatic caress must be disabled by default even when speed mode is active");
+            Check(locks == 11, "original female/male gauge locks are independent");
+            Check(FindOrNull<Checkbox>(window, "hscontrol-aibu") == null &&
+                Find<RadioButton>(window, "hscontrol-mode-range") != null,
+                "auto caress follows selected speed mode without a separate toggle");
         }
 
         private static void RetainedUpdates() {
@@ -108,8 +105,6 @@ namespace MaximumUI.Tests
             Check(model.SameDisplay(same), "Unchanged state keeps the retained view");
             same.FemaleLocked = true;
             Check(!model.SameDisplay(same), "Native gauge lock state repaints");
-            same = Make(); same.AutoCaress = true;
-            Check(!model.SameDisplay(same), "Auto-caress toggle repaints");
             same = Make(); same.CurrentSpeed = .62f;
             Check(!model.SameDisplay(same), "Native speed readback repaints");
         }
