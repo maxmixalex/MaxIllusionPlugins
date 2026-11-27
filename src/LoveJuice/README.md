@@ -1,6 +1,14 @@
-# LoveJuice — 0.3.5 (Studio-material droplets and Cyu kiss filaments)
+# LoveJuice — 0.3.7 (saliva strings and native Studio asset diagnosis)
 
 Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects borrow the **materials** of installed Studio item prefabs without invoking the original continuous emitters. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+
+## 0.3.7 — stop shipping unverified drops as finished native effects
+
+- Saliva strings now support kissing, oral scenes, ongoing mouth-drool/face state and an explicit F9 saliva preview; optional non-kissing saliva is enabled by default in LoveJuice's **own** settings, never JuiceControl.
+- The previous `PrimitiveType.Sphere` + `TrailRenderer` approximation is **disabled by default** behind `Experimental / Enable unverified material spheres`. It is not verified original Studio liquid geometry and should not be presented as a completed effect.
+- A new `检查实际 Studio 素材` command does a read-only survey at runtime on the user's installed assets (`CommonLib.LoadAsset`). It logs exact prefab, component (ParticleSystem, MeshRenderer, LineRenderer, TrailRenderer), material and shader details, without modifying or instantiating borrowed templates. The UI summarizes availability and counts.
+- During this development round the smaller Studio info bundles and the locally installed MaleJuice plugin were inspected, but Bridge's transfer of `abdata/studio/info/00.unity3d` and the main `abdata/studio/00.unity3d` was blocked by unavailable Google Drive file delivery. The in-game inspector is necessary before selecting the final native visual implementation.
+- This version is **not** a completed native droplet release; other non-saliva effects will not spawn unverified spheres unless the explicit experimental switch is enabled.
 
 ## 0.3.5 — replace continuous Studio spray with small viscous drops
 
