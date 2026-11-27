@@ -78,10 +78,10 @@ namespace FemboyMode
         // pass the symmetric panty-panel spatial coverage test.
         private static bool CoversCrotchPanel(Vector3[] points,
             Transform space, Vector3 shaftOrigin, Vector3 forward,
-            bool recognizedName)
+            Vector3 bodyUp, bool recognizedName)
         {
             if (points == null || points.Length < 16) return false;
-            Vector3 up = Vector3.ProjectOnPlane(Vector3.up, forward);
+            Vector3 up = Vector3.ProjectOnPlane(bodyUp, forward);
             if (up.sqrMagnitude < .01f) up = Vector3.right;
             up.Normalize();
             Vector3 right = Vector3.Cross(up, forward).normalized;
@@ -136,6 +136,7 @@ namespace FemboyMode
                             renderer.BakeMesh(posed);
                             covers = CoversCrotchPanel(posed.vertices,
                                 renderer.transform, origin, direction,
+                                ChaControl.transform.up,
                                 recognized || IsAccessoryUnderwearName(renderer.name));
                         } finally { UnityEngine.Object.Destroy(posed); }
                         if (!covers) continue;
@@ -184,7 +185,7 @@ namespace FemboyMode
             Vector3[] vertices = original.vertices;
             Transform space = filter.transform;
             if (!CoversCrotchPanel(vertices, space, shaftOrigin,
-                shaftForward, recognized)) return false;
+                shaftForward, ChaControl.transform.up, recognized)) return false;
 
             Vector3 origin = space.InverseTransformPoint(shaftOrigin);
             Vector3 forward = space.InverseTransformDirection(
