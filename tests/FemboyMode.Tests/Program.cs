@@ -58,6 +58,26 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        var covered = FemboyRules.FluidProfileForUnderwear(false, 0);
+        var shifted = FemboyRules.FluidProfileForUnderwear(false, 1);
+        var hanging = FemboyRules.FluidProfileForUnderwear(false, 2);
+        var removed = FemboyRules.FluidProfileForUnderwear(false, 3);
+        var noMesh = FemboyRules.FluidProfileForUnderwear(true, 0);
+        var unknownClothes = FemboyRules.FluidProfileForUnderwear(false, -1);
+        Check(covered.SpeedMultiplier > 0f &&
+              covered.SpeedMultiplier < shifted.SpeedMultiplier &&
+              shifted.SpeedMultiplier < removed.SpeedMultiplier &&
+              covered.LocalPitchOffset != removed.LocalPitchOffset,
+              "worn underwear deflects and slows the native projectile");
+        Check(Math.Abs(hanging.SpeedMultiplier - shifted.SpeedMultiplier) < .0001f &&
+              hanging.LocalPitchOffset == shifted.LocalPitchOffset,
+              "shifted and hanging underwear preserve a partially exposed path");
+        Check(noMesh.SpeedMultiplier == 1f &&
+              unknownClothes.SpeedMultiplier == 1f &&
+              removed.LocalPitchOffset == 0f &&
+              removed.SpreadMultiplier == 1f,
+              "missing underwear model/state preserves original naked trajectory");
+
         Check(Math.Abs(FemboyMakerAxisMath.DragValue(1f, 50f, 0, false, false) - 1.8f) < .001f,
             "native scale handle updates the correct unit");
         Check(Math.Abs(FemboyMakerAxisMath.DragValue(0f, 100f, 1, false, false) - .15f) < .001f,
