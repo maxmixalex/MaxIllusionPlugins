@@ -1,219 +1,307 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
+using HarmonyLib;
+using MonoMod.RuntimeDetour;
 using UnityEngine;
 
 namespace FemboyMode
 {
     /// <summary>
-    /// Per-instance, reversible underwear clearance correction. Only the
-    /// character's live underwear slot is considered; body meshes, saved
-    /// cards and shared AssetBundle meshes are never modified.
+    /// Non-destructive fit for pants, underwear and one-piece garments.
+    /// Detect on the current posed (baked) mesh, then map a small displacement
+    /// back to the mesh's bind pose. No card, source bundle or shared mesh
+    /// is ever edited.
     /// </summary>
     public sealed partial class FemboyCharacterController
     {
-        private sealed class UnderwearFitRecord
+        private sealed class ClothingFitRecord
         {
             internal SkinnedMeshRenderer Renderer;
             internal Mesh Original;
             internal Mesh Copy;
         }
 
-        private static readonly FieldInfo ClothingObjectsField =
-            typeof(ChaControl).GetField("objClothes",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        private static readonly PropertyInfo ClothingObjectsProperty =
-            typeof(ChaControl).GetProperty("objClothes",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        private static readonly int[] FitSlots = { 0, 1, 3 };
+        private readonly List<ClothingFitRecord> clothingFits =
+            new List<ClothingFitRecord>();
+        private string lastFitSignature;
+        private int nextFitProbe;
+        private bool fitWarned;
 
-        private readonly List<UnderwearFitRecord> underwearFits =
-            new List<UnderwearFitRecord>();
-        private GameObject fittedUnderwear;
-        private int lastUnderwearProbe = -1000;
-
-        private static GameObject UnderwearSlot(ChaControl character)
+        // Same narrow mesh-access technique as the existing
+        // ClothingCompression plugin. The runtime detour is applied only
+        // while reading/cloning a garment and always undone in finally.
+        private static NativeDetour meshReadDetour;
+        private static bool CanReadMesh() { return true; }
+        private static bool EnterReadableScope()
         {
-            if (character == null) return null;
             try
             {
-                object found = ClothingObjectsField != null
-                    ? ClothingObjectsField.GetValue(character)
-                    : ClothingObjectsProperty == null ? null :
-                      ClothingObjectsProperty.GetValue(character, null);
-                IList objects = found as IList;
-                return objects != null && objects.Count > 3
-                    ? objects[3] as GameObject : null;
+                if (meshReadDetour == null)
+                {
+                    var getter = AccessTools.Property(typeof(Mesh),
+                        "canAccess").GetGetMethod(true);
+                    var hook = AccessTools.Method(
+                        typeof(FemboyCharacterController), "CanReadMesh");
+                    if (getter == null || hook == null) return false;
+                    meshReadDetour = new NativeDetour(getter, hook);
+                    meshReadDetour.Undo();
+                }
+                meshReadDetour.Apply();
+                return true;
             }
-            catch { return null; }
+            catch { return false; }
+        }
+        private static void LeaveReadableScope()
+        {
+            try { if (meshReadDetour != null) meshReadDetour.Undo(); }
+            catch { }
         }
 
-        private int CurrentUnderwearState()
+        internal static bool SupportsGarmentSlot(int slot)
         {
-            if (ChaControl == null || ChaControl.fileStatus == null ||
+            // Full-body / one-piece clothing frequently lives in top or
+            // bottom instead of underwear. Never touch body/accessories.
+            return slot == 0 || slot == 1 || slot == 3;
+        }
+
+        private GameObject GarmentAt(int slot)
+        {
+            if (ChaControl == null || ChaControl.objClothes == null ||
+                slot < 0 || slot >= ChaControl.objClothes.Length ||
+                ChaControl.fileStatus == null ||
                 ChaControl.fileStatus.clothesState == null ||
-                ChaControl.fileStatus.clothesState.Length <= 3)
-                return -1;
-            return ChaControl.fileStatus.clothesState[3];
+                slot >= ChaControl.fileStatus.clothesState.Length ||
+                ChaControl.fileStatus.clothesState[slot] >= 3)
+                return null;
+            return ChaControl.objClothes[slot];
+        }
+
+        private string FitSignature()
+        {
+            var parts = new List<string>();
+            for (int i = 0; i < FitSlots.Length; i++)
+            {
+                int slot = FitSlots[i];
+                GameObject root = GarmentAt(slot);
+                if (root == null) continue;
+                parts.Add("slot:" + slot + "|root:" + root.GetInstanceID());
+                foreach (SkinnedMeshRenderer renderer in
+                    root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                {
+                    if (renderer != null && renderer.sharedMesh != null)
+                        parts.Add(renderer.GetInstanceID() + ":" +
+                            renderer.sharedMesh.GetInstanceID());
+                }
+            }
+            return string.Join("/", parts.ToArray());
         }
 
         private void RestoreUnderwearMeshes()
         {
-            for (int i = 0; i < underwearFits.Count; i++)
+            foreach (ClothingFitRecord item in clothingFits)
             {
-                UnderwearFitRecord item = underwearFits[i];
                 if (item.Renderer != null && item.Renderer.sharedMesh == item.Copy)
                     item.Renderer.sharedMesh = item.Original;
                 if (item.Copy != null) UnityEngine.Object.Destroy(item.Copy);
             }
-            underwearFits.Clear();
-            fittedUnderwear = null;
+            clothingFits.Clear();
+            lastFitSignature = null;
         }
 
         private void SyncUnderwearMeshFit()
         {
-            if (Time.frameCount - lastUnderwearProbe < 20) return;
-            lastUnderwearProbe = Time.frameCount;
-            bool enabled = FemboyModePlugin.EnableUnderwearMeshFit != null &&
-                           FemboyModePlugin.EnableUnderwearMeshFit.Value;
-            GameObject garment = UnderwearSlot(ChaControl);
-            int liveState = CurrentUnderwearState();
-            if (!FemboyRules.ShouldFitUnderwear(
-                    IsFemboy, enabled, garment != null, liveState))
+            if (Time.frameCount < nextFitProbe) return;
+            nextFitProbe = Time.frameCount + 20;
+            bool enabled = IsFemboy &&
+                FemboyModePlugin.EnableUnderwearMeshFit != null &&
+                FemboyModePlugin.EnableUnderwearMeshFit.Value;
+            if (!enabled)
             {
-                if (underwearFits.Count > 0 || fittedUnderwear != null)
+                if (clothingFits.Count > 0 || lastFitSignature != null)
                     RestoreUnderwearMeshes();
                 return;
             }
 
-            if (garment == fittedUnderwear)
-            {
-                // An already-adapted or nonmatching mesh stays untouched,
-                // without rescanning all vertices every 20 frames.
-                if (underwearFits.Count == 0) return;
-                bool allValid = true;
-                foreach (UnderwearFitRecord item in underwearFits)
-                    if (item.Renderer == null || item.Renderer.sharedMesh != item.Copy)
-                        allValid = false;
-                if (allValid) return;
-            }
+            string signature = FitSignature();
+            if (signature == lastFitSignature) return;
             RestoreUnderwearMeshes();
 
-            Transform baseBone = GetGeometryBone(0);
-            if (baseBone == null) return;
-            Transform tipBone = ChaControl != null && ChaControl.objBodyBone != null
-                ? FemboyRigResolver.FindBone(ChaControl.objBodyBone.transform,
+            Transform shaftRoot = GetGeometryBone(0);
+            if (shaftRoot == null) return;
+            Transform shaftTip = ChaControl.objBodyBone == null ? null :
+                FemboyRigResolver.FindBone(
+                    ChaControl.objBodyBone.transform,
                     FemboyModePlugin.MaleFinishBone == null ? null :
-                    FemboyModePlugin.MaleFinishBone.Value)
-                : null;
-            Vector3 shaftDirection = tipBone != null
-                ? tipBone.position - baseBone.position : baseBone.forward * .12f;
-            float shaftLength = shaftDirection.magnitude;
-            if (shaftLength < .025f) return;
-            shaftDirection.Normalize();
+                    FemboyModePlugin.MaleFinishBone.Value);
+            Vector3 origin = shaftRoot.position;
+            Vector3 direction = shaftTip == null
+                ? shaftRoot.forward * .12f
+                : shaftTip.position - origin;
+            float length = direction.magnitude;
+            if (length < .035f) return;
+            direction.Normalize();
 
-            // One clothing GameObject can contain several skinned meshes.
-            // Each gets its own private clone, with no mutation of shared
-            // game meshes or other installed modifications.
-            SkinnedMeshRenderer[] renderers =
-                garment.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            if (renderers == null) return;
-            for (int i = 0; i < renderers.Length; i++)
+            int adjusted = 0;
+            bool accessEnabled = EnterReadableScope();
+            if (!accessEnabled && !fitWarned)
             {
-                SkinnedMeshRenderer renderer = renderers[i];
-                if (renderer == null || renderer.sharedMesh == null ||
-                    !renderer.sharedMesh.isReadable)
-                    continue;
-                try { FitRenderer(renderer, baseBone.position,
-                    shaftDirection, shaftLength); }
-                catch (Exception ex) {
-                    if (FemboyModePlugin.VerboseLogging != null &&
-                        FemboyModePlugin.VerboseLogging.Value)
-                        FemboyModePlugin.LogOptionalIntegrationProblem(
-                            "Underwear mesh correction skipped: " + ex.Message);
+                fitWarned = true;
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Underwear fit: mesh access scope unavailable; only readable clothing can be corrected.");
+            }
+            try
+            {
+                var seen = new HashSet<int>();
+                foreach (int slot in FitSlots)
+                {
+                    GameObject garment = GarmentAt(slot);
+                    if (garment == null) continue;
+                    foreach (SkinnedMeshRenderer renderer in
+                        garment.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    {
+                        if (renderer == null || renderer.sharedMesh == null ||
+                            !seen.Add(renderer.GetInstanceID())) continue;
+                        try
+                        {
+                            if (FitRenderer(renderer, origin, direction, length))
+                                adjusted++;
+                        }
+                        catch (Exception ex)
+                        {
+                            if (FemboyModePlugin.VerboseLogging != null &&
+                                FemboyModePlugin.VerboseLogging.Value)
+                                FemboyModePlugin.LogOptionalIntegrationProblem(
+                                    "Clothing fit skipped " + renderer.name + ": " + ex.Message);
+                        }
+                    }
                 }
             }
-            fittedUnderwear = garment;
+            finally { if (accessEnabled) LeaveReadableScope(); }
+
+            lastFitSignature = FitSignature();
+            if (FemboyModePlugin.VerboseLogging != null &&
+                FemboyModePlugin.VerboseLogging.Value)
+                FemboyModePlugin.LogOptionalIntegrationProblem(
+                    "Clothing fit scanned top/bottom/underwear; modified renderers=" +
+                    adjusted + ", active clones=" + clothingFits.Count);
         }
 
-        private void FitRenderer(SkinnedMeshRenderer renderer,
-            Vector3 shaftRoot, Vector3 shaftDirection, float shaftLength)
+        private static int DominantBone(BoneWeight weight)
+        {
+            float best = weight.weight0;
+            int index = weight.boneIndex0;
+            if (weight.weight1 > best) { best = weight.weight1; index = weight.boneIndex1; }
+            if (weight.weight2 > best) { best = weight.weight2; index = weight.boneIndex2; }
+            if (weight.weight3 > best) index = weight.boneIndex3;
+            return index;
+        }
+
+        private static float Smooth(float ratio)
+        {
+            float x = Mathf.Clamp01(1f - ratio);
+            return x * x * (3f - 2f * x);
+        }
+
+        private bool FitRenderer(SkinnedMeshRenderer renderer,
+            Vector3 shaftOrigin, Vector3 shaftForward, float shaftLength)
         {
             Mesh original = renderer.sharedMesh;
-            Vector3[] source = original.vertices;
-            if (source == null || source.Length < 24) return;
+            if (original == null || original.vertexCount < 24 ||
+                !original.isReadable) return false;
 
-            Transform space = renderer.transform;
-            Vector3 origin = space.InverseTransformPoint(shaftRoot);
-            Vector3 forward = space.InverseTransformDirection(
-                shaftDirection).normalized;
-            Vector3 up = Vector3.ProjectOnPlane(
-                space.InverseTransformDirection(ChaControl.transform.up),
-                forward);
-            if (up.sqrMagnitude < .0001f)
-                up = Vector3.ProjectOnPlane(Vector3.up, forward);
-            if (up.sqrMagnitude < .0001f) return;
-            up.Normalize();
-            Vector3 right = Vector3.Cross(up, forward).normalized;
-
-            // The measured cloth silhouette tells us whether a garment
-            // already has sufficient room for the native male geometry.
-            float required = Mathf.Clamp(shaftLength * .8f + .035f, .10f, .20f);
-            float frontMost = float.NegativeInfinity;
-            int candidates = 0;
-            for (int i = 0; i < source.Length; i++)
+            Mesh posed = new Mesh();
+            try
             {
-                Vector3 relative = source[i] - origin;
-                float lateral = Mathf.Abs(Vector3.Dot(relative, right));
-                float vertical = Mathf.Abs(Vector3.Dot(relative, up));
-                float depth = Vector3.Dot(relative, forward);
-                if (lateral < .08f && vertical < .08f &&
-                    depth > -.02f && depth < .27f)
+                renderer.BakeMesh(posed);
+                Vector3[] animated = posed.vertices;
+                if (animated == null || animated.Length != original.vertexCount)
+                    return false;
+
+                Transform space = renderer.transform;
+                Vector3 origin = space.InverseTransformPoint(shaftOrigin);
+                Vector3 forward = space.InverseTransformDirection(shaftForward).normalized;
+                Vector3 up = Vector3.ProjectOnPlane(
+                    space.InverseTransformDirection(ChaControl.transform.up), forward);
+                if (up.sqrMagnitude < 1e-5f)
+                    up = Vector3.ProjectOnPlane(Vector3.up, forward);
+                if (up.sqrMagnitude < 1e-5f) return false;
+                up.Normalize();
+                Vector3 right = Vector3.Cross(up, forward).normalized;
+
+                float requiredDepth = Mathf.Clamp(shaftLength * .9f + .035f,
+                    .09f, .23f);
+                float frontMost = -1f;
+                int candidates = 0;
+                for (int i = 0; i < animated.Length; i++)
                 {
-                    candidates++;
-                    frontMost = Mathf.Max(frontMost, depth);
+                    Vector3 relative = animated[i] - origin;
+                    float side = Mathf.Abs(Vector3.Dot(relative, right));
+                    float vertical = Mathf.Abs(Vector3.Dot(relative, up));
+                    float depth = Vector3.Dot(relative, forward);
+                    if (side < .115f && vertical < .13f &&
+                        depth > -.035f && depth < .30f)
+                    {
+                        candidates++;
+                        frontMost = Mathf.Max(frontMost, depth);
+                    }
                 }
-            }
-            if (candidates < 12) return;
-            float deficit = FemboyRules.UnderwearClearanceDeficit(
-                frontMost, required);
-            if (deficit <= .001f) return; // Already adapted / roomy.
+                if (candidates < 8) return false;
+                float deficit = FemboyRules.UnderwearClearanceDeficit(
+                    frontMost, requiredDepth);
+                if (deficit <= .001f) return false;
 
-            Mesh copy = UnityEngine.Object.Instantiate(original);
-            copy.name = original.name + "_FemboyClearance";
-            Vector3[] vertices = copy.vertices;
-            int changed = 0;
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                Vector3 relative = vertices[i] - origin;
-                float lateral = Mathf.Abs(Vector3.Dot(relative, right));
-                float vertical = Mathf.Abs(Vector3.Dot(relative, up));
-                float depth = Vector3.Dot(relative, forward);
-                if (lateral >= .13f || vertical >= .13f ||
-                    depth < -.045f || depth > .27f)
-                    continue;
-                float lateralWeight = 1f - lateral / .13f;
-                float verticalWeight = 1f - vertical / .13f;
-                float depthWeight = 1f - Mathf.Clamp01(
-                    Mathf.Abs(depth - frontMost) / .13f);
-                float weight = lateralWeight * lateralWeight *
-                    verticalWeight * verticalWeight * depthWeight;
-                if (weight < .001f) continue;
-                vertices[i] += forward * (deficit * weight);
-                changed++;
-            }
-            if (changed < 8)
-            {
-                UnityEngine.Object.Destroy(copy);
-                return;
-            }
+                Mesh copy = UnityEngine.Object.Instantiate(original);
+                copy.name = original.name + "_FemboyClearance";
+                Vector3[] baseVertices = copy.vertices;
+                BoneWeight[] weights = original.boneWeights;
+                Matrix4x4[] bind = original.bindposes;
+                Transform[] bones = renderer.bones;
+                bool skinned = weights != null && weights.Length == animated.Length &&
+                    bind != null && bones != null;
+                int modified = 0;
+                for (int i = 0; i < animated.Length; i++)
+                {
+                    Vector3 relative = animated[i] - origin;
+                    float lateral = Mathf.Abs(Vector3.Dot(relative, right));
+                    float vertical = Mathf.Abs(Vector3.Dot(relative, up));
+                    float depth = Vector3.Dot(relative, forward);
+                    if (lateral > .15f || vertical > .16f ||
+                        depth < -.06f || depth > .30f) continue;
+                    float weight = Smooth(lateral / .15f) *
+                        Smooth(vertical / .16f) *
+                        Smooth(Mathf.Abs(depth - frontMost) / .17f);
+                    if (weight < .015f) continue;
 
-            copy.vertices = vertices;
-            copy.RecalculateBounds();
-            renderer.sharedMesh = copy;
-            underwearFits.Add(new UnderwearFitRecord {
-                Renderer = renderer, Original = original, Copy = copy
-            });
+                    Vector3 delta = forward * (deficit * weight);
+                    if (skinned)
+                    {
+                        int bone = DominantBone(weights[i]);
+                        if (bone >= 0 && bone < bones.Length &&
+                            bone < bind.Length && bones[bone] != null)
+                        {
+                            Matrix4x4 skin = space.worldToLocalMatrix *
+                                bones[bone].localToWorldMatrix * bind[bone];
+                            delta = skin.inverse.MultiplyVector(delta);
+                        }
+                    }
+                    baseVertices[i] += delta;
+                    modified++;
+                }
+                if (modified < 8)
+                {
+                    UnityEngine.Object.Destroy(copy);
+                    return false;
+                }
+                copy.vertices = baseVertices;
+                copy.RecalculateBounds();
+                renderer.sharedMesh = copy;
+                clothingFits.Add(new ClothingFitRecord {
+                    Renderer = renderer, Original = original, Copy = copy
+                });
+                return true;
+            }
+            finally { UnityEngine.Object.Destroy(posed); }
         }
     }
 }
