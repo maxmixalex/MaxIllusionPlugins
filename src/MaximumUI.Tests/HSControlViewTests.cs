@@ -40,24 +40,27 @@ namespace MaximumUI.Tests {
             Check(Find<SliderFloat>(window, "hscontrol-min").Enabled, "Range slider is enabled in range mode");
             Check(Find<ProgressBar>(window, "hscontrol-current").Value == .42f,
                 "Live speed indicator displays actual runtime data");
-            Check(Find<ScrollView>(window, "hscontrol-scroll") != null,
-                "The editor uses one bounded scroll container");
+            Tabs tabs = Find<Tabs>(window, "hscontrol-pages");
+            Check(tabs.Children.Count == 3 && FindOrNull<ScrollView>(window,
+                "hscontrol-scroll") == null,
+                "Compact controls use three pages without an oversized scroll container");
         }
 
         private static void DisabledAndManualStatesGuardActions() {
             HSControlView view = new HSControlView { Model = Make() };
             view.Model.Available = false; view.Model.Enabled = false;
             Widget widget = view.Build(null);
-            Check(!Find<SliderFloat>(widget, "hscontrol-manual-speed").Enabled &&
+            Check(FindOrNull<SliderFloat>(widget, "hscontrol-manual-speed") == null &&
                 !Find<SliderFloat>(widget, "hscontrol-gauge-male").Enabled,
-                "No scene means no writes to native gauges");
+                "The manual speed widget is hidden until enabled; unavailable gauges are inert");
             view.Model.Available = true;
             view.Model.ManualOverride = true;
             view.Model.Mode = 0;
             widget = view.Build(null);
-            Check(!Find<SliderFloat>(widget, "hscontrol-min").Enabled &&
-                !Find<ComboBox<int>>(widget, "hscontrol-band").Enabled,
-                "Unused controls stay disabled in manual mode");
+            Check(FindOrNull<SliderFloat>(widget, "hscontrol-min") == null &&
+                FindOrNull<ComboBox<int>>(widget, "hscontrol-band") == null &&
+                Find<SliderFloat>(widget, "hscontrol-manual-speed").Enabled,
+                "Compact speed page hides irrelevant mode controls");
             Check(Find<Checkbox>(widget, "hscontrol-enabled").Enabled,
                 "Master toggle remains enabled for recovery");
         }
