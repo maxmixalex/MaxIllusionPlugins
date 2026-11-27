@@ -44,12 +44,14 @@ internal static class AibuDriverRegression
               scene.hand.action == 2, "native primary manual hand takes precedence");
         scene.hand.action = 0;
         scene.hand.useAreaItems = new TestArea[0];
-        Check(!driver.Tick(scene, flags, .5f, .016f) &&
-              flags.femaleGaugeCalls == 0,
-              "no phantom stimulation without native contact region");
+        Check(driver.Tick(scene, flags, .5f, .016f) &&
+              flags.dragStarts == 0 && scene.hand.action == 0 &&
+              flags.femaleGaugeCalls == 1,
+              "original HCtrl still raises gauge in Aibu auto-speed without inventing a hand drag");
         scene.hand.useAreaItems = new[] { new TestArea() };
-        Check(driver.Tick(scene, flags, .5f, .016f),
-            "imported plain Idle can use a valid native Aibu region");
+        Check(driver.Tick(scene, flags, .5f, .016f) &&
+              driver.Running,
+            "imported plain Idle can start a valid native Aibu hand drag");
         scene.hand1.action = 1;
         int before = flags.femaleGaugeCalls;
         Check(!driver.Tick(scene, flags, .5f, .016f) &&
