@@ -61,7 +61,7 @@ namespace LoveJuice {
                     if (!visible && m.Close != null) m.Close();
                 });
             var controls = new VStack(6f) {
-                new Label("Studio 原生粒子素材", "lovejuice-sources"),
+                new Label("液体来源与原生素材检查", "lovejuice-sources"),
                 new Checkbox("口水拉丝", m.Face, m.ChangeFace, "lovejuice-face")
                     .Enabled(m.Enabled).Height(32f),
                 new Checkbox("非接吻场景也可拉丝", m.SalivaAnytime,
@@ -82,25 +82,25 @@ namespace LoveJuice {
                     "lovejuice-experimental-spheres").Enabled(m.Enabled).Height(32f),
                 new Label("物理与性能（仅实验性液滴）", "lovejuice-physics"),
                 new SliderFloat("发射间隔", m.Interval, .06f, 4f, m.ChangeInterval, "lovejuice-interval")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("重力", m.Gravity, 0f, 30f, m.ChangeGravity, "lovejuice-gravity")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("空气阻力", m.Damping, 0f, 10f, m.ChangeDamping, "lovejuice-damping")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("持续时间", m.Lifetime, .2f, 8f, m.ChangeLifetime, "lovejuice-lifetime")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("粒子尺寸", m.Scale, .001f, .3f, m.ChangeScale, "lovejuice-scale")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("初始速度", m.LaunchSpeed, 0f, 5f, m.ChangeLaunchSpeed, "lovejuice-launch")
-                    .Enabled(m.Enabled).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(36f),
                 new SliderFloat("乳液触发值", m.MilkThreshold, 0f, 100f, m.ChangeMilkThreshold, "lovejuice-milk-threshold")
-                    .Enabled(m.Enabled && m.Milk).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres && m.Milk).Height(36f),
                 new SliderFloat("男性前液触发值", m.MalePreThreshold, 0f, 100f, m.ChangeMalePreThreshold, "lovejuice-male-pre-threshold")
-                    .Enabled(m.Enabled && m.MalePre).Height(36f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres && m.MalePre).Height(36f),
                 new Checkbox("世界碰撞", m.Collision, m.ChangeCollision, "lovejuice-collision")
-                    .Enabled(m.Enabled).Height(32f),
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(32f),
                 new SliderInt("最大粒子数", m.MaximumParticles, 1, 128, m.ChangeMaximum, "lovejuice-maximum")
-                    .Enabled(m.Enabled).Height(40f)
+                    .Enabled(m.Enabled && m.ExperimentalSpheres).Height(40f)
             };
             window.Add(new VStack(5f) {
                 new Checkbox("启用 LoveJuice", m.Enabled, m.ChangeEnabled,
