@@ -20,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.8";
+        public const string Version = "0.3.9";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -49,15 +49,7 @@ namespace LoveJuice {
         private HSceneProc scene;
         private float nextProbe, nextResolve;
         private readonly System.Random random = new System.Random();
-        private Type cyuType;
-        private PropertyInfo cyuIsKiss;
-        private FieldInfo cyuKissing;
-        private float nextCyuProbe;
         private float manualSalivaUntil;
-        private bool cachedCyuKiss;
-        private FieldInfo cyuFemaleField, cyuMouthField;
-        private ChaControl cachedCyuFemale;
-        private Transform cachedCyuMouth;
 
         private sealed class Actor {
             internal ChaControl Character;
@@ -322,11 +314,7 @@ namespace LoveJuice {
             panelRevision++;
             panelStatus = next == null ? "尚未进入场景。" : "已连接当前场景。";
             scene = next;
-            cachedCyuKiss = false;
-            cachedCyuFemale = null;
-            cachedCyuMouth = null;
             manualSalivaUntil = 0f;
-            nextCyuProbe = 0f;
             actors.Clear();
             roster.Replace(null);
             integrations.Reset();
@@ -431,133 +419,70 @@ namespace LoveJuice {
             EmitFrom(actor, kind, random.Next(0, 2));
         }
 
-        // The installed Sabakan CyuNoVR mod drives its own kiss state,
-        // independently of vanilla HFlag.ClickKind.mouth and animation
-        // names. Read this state when available; never require a native
-        // kiss animation to let the saliva thread appear.
-        private bool IsModdedKissActive()
-        {
-            if (Time.unscaledTime < nextCyuProbe) return cachedCyuKiss;
-            nextCyuProbe = Time.unscaledTime + .12f;
-            cachedCyuKiss = false;
-            cachedCyuFemale = null;
-            cachedCyuMouth = null;
-            if (cyuType == null)
-            {
-                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    try {
-                        cyuType = assembly.GetType("Bero.CyuVR.Cyu", false) ??
-                                  assembly.GetType("Bero.CyuNoVR.Cyu", false);
-                        if (cyuType != null) break;
-                    } catch { }
-                }
-                if (cyuType == null) return false;
-                const BindingFlags flags = BindingFlags.Public |
-                    BindingFlags.NonPublic | BindingFlags.Instance;
-                cyuIsKiss = cyuType.GetProperty("IsKiss", flags);
-                cyuKissing = cyuType.GetField("kissing", flags);
-                cyuFemaleField = cyuType.GetField("female", flags);
-                cyuMouthField = cyuType.GetField("myMouth", flags);
-            }
-            try {
-                foreach (UnityEngine.Object instance in
-                    UnityEngine.Object.FindObjectsOfType(cyuType))
-                {
-                    Behaviour behaviour = instance as Behaviour;
-                    if (behaviour != null && !behaviour.isActiveAndEnabled)
-                        continue;
-                    bool now = cyuIsKiss != null &&
-                        Convert.ToBoolean(cyuIsKiss.GetValue(instance, null));
-                    now |= cyuKissing != null &&
-                        Convert.ToBoolean(cyuKissing.GetValue(instance));
-                    if (now) {
-                        cachedCyuKiss = true;
-                        cachedCyuFemale = cyuFemaleField == null ? null :
-                            cyuFemaleField.GetValue(instance) as ChaControl;
-                        GameObject target = cyuMouthField == null ? null :
-                            cyuMouthField.GetValue(instance) as GameObject;
-                        cachedCyuMouth = target == null ? null : target.transform;
-                        break;
-                    }
-                }
-            } catch { }
-            return cachedCyuKiss;
-        }
-
+        // Saliva rendering is completely independent of other mods.
+        // CyuNoVR can be used as a visual reference, not an API or asset.
         private void TickSaliva(float delta)
         {
             bool explicitPreview = Time.unscaledTime < manualSalivaUntil;
             bool enabled = face.Value || explicitPreview;
-            if (scene == null || scene.flags == null || !enabled)
-            {
-                saliva.Tick(false, false, false, Vector3.zero, Vector3.zero, delta);
+            if (scene == null || scene.flags == null || !enabled) {
+                saliva.Tick(false, false, false,
+                    Vector3.zero, Vector3.zero, delta);
                 return;
             }
 
-            bool cyuKiss = IsModdedKissActive();
-            bool nativeKiss = cyuKiss ||
-                LiquidSourceTriggers.KissAnimationSignal(
-                    scene.flags.nowAnimStateName,
-                    scene.flags.click == HFlag.ClickKind.mouth);
+            bool nativeKiss = LiquidSourceTriggers.KissAnimationSignal(
+                scene.flags.nowAnimStateName,
+                scene.flags.click == HFlag.ClickKind.mouth);
             int mode = (int)scene.flags.mode;
             bool oralScene = mode == 1 || mode == 6 || mode == 8;
 
-            // Prefer the heroine explicitly involved in CyuNoVR, then the
-            // UI-selected actor, then a live heroine with a resolved mouth.
             Actor source = null;
-            if (cyuKiss && cachedCyuFemale != null)
-                actors.TryGetValue(cachedCyuFemale, out source);
-            if (source == null && roster.Selected != null)
+            if (roster.Selected != null)
                 actors.TryGetValue(roster.Selected, out source);
             if (source == null || source.Mouth == null)
                 foreach (Actor candidate in actors.Values)
                     if (candidate.Character != null &&
                         candidate.Character.sex == 1 &&
-                        candidate.Mouth != null)
-                    { source = candidate; break; }
-
+                        candidate.Mouth != null) {
+                        source = candidate;
+                        break;
+                    }
             if (source == null || source.Mouth == null) {
                 saliva.Tick(false, false, nativeKiss,
                     Vector3.zero, Vector3.zero, delta);
                 return;
             }
-            bool wetMouth = source.FaceLevel > 0;
+
             bool active = LiquidSourceTriggers.SalivaActive(
-                nativeKiss, oralScene, wetMouth, explicitPreview,
-                salivaAnytime.Value);
+                nativeKiss, oralScene, source.FaceLevel > 0,
+                explicitPreview, salivaAnytime.Value);
             if (!active) {
                 saliva.Tick(false, false, nativeKiss,
                     Vector3.zero, Vector3.zero, delta);
                 return;
             }
 
-            Vector3 start = source.Mouth.TransformPoint(
+            Vector3 from = source.Mouth.TransformPoint(
                 new Vector3(0f, -.012f, .025f));
-            Transform contact = cyuKiss && cachedCyuMouth != null
-                ? cachedCyuMouth : null;
-            if (contact == null && nativeKiss) {
-                float best = .15f * .15f;
+            Transform contact = null;
+            if (nativeKiss) {
+                float distanceSquared = .15f * .15f;
                 foreach (Actor candidate in actors.Values) {
                     if (ReferenceEquals(candidate, source) ||
                         candidate.Mouth == null) continue;
-                    float distance = (candidate.Mouth.position - start).sqrMagnitude;
-                    if (distance > .000001f && distance < best) {
-                        best = distance;
+                    float distance = (candidate.Mouth.position - from).sqrMagnitude;
+                    if (distance > .000001f && distance < distanceSquared) {
+                        distanceSquared = distance;
                         contact = candidate.Mouth;
                     }
                 }
             }
-
-            // Outside a kiss, use a short hanging saliva string attached
-            // to the actor's animated mouth, not an invented second mouth
-            // or a shower / droplet ParticleSystem.
-            Vector3 end = contact != null
-                ? contact.position
-                : start + Vector3.down * .085f +
-                    source.Character.transform.forward * .006f;
-            saliva.Tick(true, active, nativeKiss && contact != null,
-                start, end, delta);
+            Vector3 to = contact == null
+                ? from + Vector3.down * .085f
+                : contact.position;
+            saliva.Tick(true, true, nativeKiss,
+                from, to, delta);
         }
 
         private void Update() {
