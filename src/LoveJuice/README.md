@@ -1,6 +1,13 @@
-# LoveJuice — 0.3.4 (Native Studio liquids and kiss saliva filaments)
+# LoveJuice — 0.3.5 (Studio-material droplets and Cyu kiss filaments)
 
-Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects are **clones of installed Studio item prefabs**. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+Unlike the 0.1 scaffold, this version executes native Studio asset visuals in active Koikatsu / Koikatsu Party scenes. Studio dripping effects borrow the **materials** of installed Studio item prefabs without invoking the original continuous emitters. Kissing saliva is different: it reuses the installed CyuNoVR `BeroIto` thread when present, or renders a reversible Bézier `LineRenderer` ribbon with an available native material/fallback. No game asset is packaged.
+
+## 0.3.5 — replace continuous Studio spray with small viscous drops
+
+- The pooled renderer no longer calls `ParticleSystem.Emit`, `LiquidShower` or an entire looping Studio spray prefab. Instead it clones a **material** from the installed Studio item and renders discrete small spherical drops with short `TrailRenderer` strings, updated by gravity, drag, collision and lifetime. All instances are scene-local, bounded by the configured drop limit and destroyed or recycled cleanly.
+- Body, intimate fluid, male pre-fluid, milk and special sources use distinct model-relative origins and gentle launch velocities, not a common shower jet. Optional shower scenes now use individual water drops rather than `LiquidShower` particles.
+- Saliva now checks the installed CyuVR/CyuNoVR `IsKiss` and `kissing` states and, when available, reads that mod's actual female performer and mouth target. The original `BeroIto` renderer takes precedence over our fallback; it is never taken over.
+- Shader/material fidelity, droplet geometry and actor contact under imported animations need **real in-game inspection**. CI cannot certify appearance.
 
 ## 0.3.4 — CyuNoVR-compatible kissing filaments and isolation
 
@@ -11,7 +18,7 @@ Unlike the 0.1 scaffold, this version executes native Studio asset visuals in ac
 
 ## Native asset ownership fix
 
-Studio asset-bundle prefabs are borrowed references. LoveJuice now instantiates the emitter **before** changing active state, hierarchy, name or settings; only the owned instance is parented to its scene pool. This avoids mutating or destroying an asset shared with Studio or another mod. Partially initialized emitters and their material copies are cleaned up on failure.
+Studio asset-bundle prefabs are borrowed references. LoveJuice now clones the verified liquid **material** into the scene's droplet pool; it does not reparent or mutate the borrowed template. This avoids mutating or destroying an asset shared with Studio or another mod. Partially initialized emitters and their material copies are cleaned up on failure.
 
 ## 0.3.3: opt-in male pre-fluid
 
