@@ -33,6 +33,9 @@ namespace HSControl
         private HSceneProc scene;
         private Harmony harmony;
         private bool visible, didMaleFinish, strengthPending, strongMotionSelected;
+        // Imported/previous auto-speed config describes a preference, NOT
+        // authorization to take over hand input on scene start.
+        private bool autoMotionArmed;
         private readonly HSControlReplayGate replayGate = new HSControlReplayGate();
         private float nextViewPoll;
         private int generation, sceneCheck;
@@ -106,13 +109,20 @@ namespace HSControl
             HSControlSettings config = Settings();
             int hmode = (int)flags.mode;
             string state = flags.nowAnimStateName ?? string.Empty;
-            bool canDrive = motion.Step(Time.deltaTime, hmode, state, flags.rely,
+            // No automatic speed or synthetic hand action merely because a
+            // saved setting or old HCtrl.ini specifies a mode. The user must
+            // change the speed controls within this H scene first.
+            bool autoAllowed = HSControlActionRules.CanApplyAutoMotion(
+                autoMotionArmed, config.Mode, config.ManualOverride);
+            bool canDrive = autoAllowed && motion.Step(Time.deltaTime,
+                hmode, state, flags.rely,
                 flags.gaugeMale, flags.gaugeFemale, config);
             // Original KK_HCtrl drives native Aibu using both speed and
             // HFlag.FemaleGaugeUp. Previously we only updated speed (and only
             // for manual override), so the visible gauge stayed frozen.
             // The scene-local driver yields to either active manual hand.
-            if (canDrive && hmode == 0 && config.Mode != 0) {
+            if (canDrive && hmode == 0 &&
+                (config.Mode != 0 || config.ManualOverride)) {
                 // Exactly as original HCtrl: turning on an automatic speed
                 // mode also enables Aibu pulses. No independent opt-in.
                 // Pulses last ONE update, never a multi-second input lock.
@@ -129,8 +139,12 @@ namespace HSControl
                 strengthPending = true;
             }
             if (strengthPending && flags.click == HFlag.ClickKind.none) strengthPending = false;
-            HandleFinish(flags, config);
-            HandleReplay(flags, config);
+            // Automatically triggering finish/replay from loaded defaults
+            // before the user touched a control is also unsafe.
+            if (autoMotionArmed) {
+                HandleFinish(flags, config);
+                HandleReplay(flags, config);
+            }
             if (visible && view != null && Time.unscaledTime >= nextViewPoll) {
                 nextViewPoll = Time.unscaledTime + .15f;
                 RefreshView();
@@ -143,6 +157,7 @@ namespace HSControl
             didMaleFinish = false;
             replayGate.Reset();
             strengthPending = false;
+            autoMotionArmed = false;
             generation++;
             if (next != null && next.flags != null) {
                 motion.Reset(next.flags.speedCalc);
@@ -288,6 +303,10 @@ namespace HSControl
                     (int)owner.flags.mode, kind);
         }
 
+        private bool canDriveSafe(HFlag flags) {
+            return autoMotionArmed && flags != null && master != null && master.Value;
+        }
+
         private void RefreshView() {
             if (view == null || !visible) return;
             HSceneProc owner = scene;
@@ -310,7 +329,9 @@ namespace HSControl
                 CanFinishBoth = NativeButtonAvailable(owner, 7),
                 FemaleLocked = flags != null && flags.lockGugeFemale,
                 MaleLocked = flags != null && flags.lockGugeMale,
-                Driving = motion.Driving, CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
+                Driving = canDriveSafe(flags) && motion.Driving,
+                AutoArmed = autoMotionArmed,
+                CurrentSpeed = motion.Current, TargetSpeed = motion.Target,
                 GaugeMale = flags == null ? 0f : flags.gaugeMale,
                 GaugeFemale = flags == null ? 0f : flags.gaugeFemale,
                 Mode = cfg.Mode, Band = cfg.Band, Linkage = cfg.Linkage,
@@ -323,14 +344,33 @@ namespace HSControl
             };
             Func<bool> live = () => SessionCurrent(token, owner);
             model.ChangeEnabled = value => { if (live()) { master.Value = value; nextViewPoll = 0f; RefreshView(); } };
-            model.ChangeMode = value => { if (live()) { mode.Value = value; motion.Reset(flags.speedCalc); RefreshView(); } };
-            model.ChangeBand = value => { if (live()) { band.Value = value; RefreshView(); } };
-            model.ChangeLinkage = value => { if (live()) { linkage.Value = value; RefreshView(); } };
-            model.ChangeRangeMin = value => { if (live()) { rangeMin.Value = value; RefreshView(); } };
-            model.ChangeRangeMax = value => { if (live()) { rangeMax.Value = value; RefreshView(); } };
-            model.ChangeManualOverride = value => { if (live()) { manual.Value = value; RefreshView(); } };
-            model.ChangeManualSpeed = value => { if (live()) { manualSpeed.Value = value; RefreshView(); } };
-            model.ChangeAutoStrength = value => { if (live()) { autoStrength.Value = value; RefreshView(); } };
+            model.ChangeMode = value => { if (live()) {
+                mode.Value = value;
+                autoMotionArmed = value != 0;
+                if (!autoMotionArmed) aibu.Clear(owner);
+                motion.Reset(flags.speedCalc);
+                RefreshView();
+            } };
+            model.ChangeBand = value => { if (live()) { band.Value = value; autoMotionArmed = true; RefreshView(); } };
+            model.ChangeLinkage = value => { if (live()) { linkage.Value = value; autoMotionArmed = true; RefreshView(); } };
+            model.ChangeRangeMin = value => { if (live()) { rangeMin.Value = value; autoMotionArmed = true; RefreshView(); } };
+            model.ChangeRangeMax = value => { if (live()) { rangeMax.Value = value; autoMotionArmed = true; RefreshView(); } };
+            model.ChangeManualOverride = value => { if (live()) {
+                manual.Value = value;
+                autoMotionArmed = value || mode.Value != 0;
+                if (!autoMotionArmed) aibu.Clear(owner);
+                RefreshView();
+            } };
+            model.ChangeManualSpeed = value => { if (live()) {
+                manualSpeed.Value = value;
+                autoMotionArmed = true;
+                RefreshView();
+            } };
+            model.ChangeAutoStrength = value => { if (live()) {
+                autoStrength.Value = value;
+                if (value) autoMotionArmed = true;
+                RefreshView();
+            } };
             model.ChangeStrengthMin = value => { if (live()) { strengthMin.Value = value; RefreshView(); } };
             model.ChangeStrengthMax = value => { if (live()) { strengthMax.Value = value; RefreshView(); } };
             model.ChangeAutoMaleFinish = value => { if (live()) { autoMaleFinish.Value = value; RefreshView(); } };
@@ -373,6 +413,7 @@ namespace HSControl
 
         private void Cleanup() {
             aibu.Clear(scene);
+            autoMotionArmed = false;
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             visible = false;
