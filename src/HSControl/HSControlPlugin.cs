@@ -30,8 +30,6 @@ namespace HSControl
         private ConfigEntry<KeyboardShortcut> hotkey;
         private HSControlView view;
         private HSceneProc scene;
-        private NativeSceneButton sceneButton;
-        private float nextButtonProbe;
         private Harmony harmony;
         private bool visible, didMaleFinish, strengthPending;
         private readonly HSControlReplayGate replayGate = new HSControlReplayGate();
@@ -44,7 +42,7 @@ namespace HSControl
             HSControlSettings ini = HSLegacyIni.Read(Path.Combine(Paths.PluginPath, "KK_HCtrl.ini"));
             master = Config.Bind("General", "Enabled", true, "Enable the native scene controller.");
             hotkey = Config.Bind("General", "Show menu", new KeyboardShortcut(KeyCode.F8, KeyCode.LeftControl),
-                "Ctrl+F8 opens HSControl during a running scene; F8 is used by ClothingCompression.");
+                "Ctrl+F8 toggles HSControl. Does not alter any native H scene menu button.");
             mode = Config.Bind("Motion", "Auto speed mode", ini.Mode, "0 off; 1 slow/full/fast; 2 range; 3 gauge linked.");
             band = Config.Bind("Motion", "Speed band", ini.Band, "0 slow, 1 alternating full, 2 fast.");
             linkage = Config.Bind("Motion", "Gauge linkage", ini.Linkage, "0 average, 1 larger gauge.");
@@ -83,13 +81,6 @@ namespace HSControl
                 sceneCheck = 0;
                 HSceneProc observed = UnityEngine.Object.FindObjectOfType<HSceneProc>();
                 if (!ReferenceEquals(scene, observed)) SwapScene(observed);
-            }
-            if (scene != null && scene.flags != null && Time.unscaledTime >= nextButtonProbe) {
-                nextButtonProbe = Time.unscaledTime + .5f;
-                if (sceneButton == null || !sceneButton.Matches(scene)) {
-                    if (sceneButton != null) sceneButton.Dispose();
-                    sceneButton = NativeSceneButton.TryInstall(scene, delegate { ToggleFromNativeButton(scene); }, Logger.LogWarning);
-                }
             }
             if (hotkey != null && hotkey.Value.IsDown() &&
                 !MaximumUIRuntime.IsAnyTextFieldFocused && !MaximumUIRuntime.IsModalOpen) {
@@ -134,15 +125,7 @@ namespace HSControl
             }
         }
 
-        internal void ToggleFromNativeButton(HSceneProc owner) {
-            if (!ReferenceEquals(owner, scene) || scene == null || scene.flags == null) return;
-            if (visible) Close(); else Open();
-        }
-
         private void SwapScene(HSceneProc next) {
-            if (sceneButton != null) sceneButton.Dispose();
-            sceneButton = null;
-            nextButtonProbe = 0f;
             scene = next;
             didMaleFinish = false;
             replayGate.Reset();
@@ -365,8 +348,6 @@ namespace HSControl
         private void OnDestroy() { Cleanup(); }
 
         private void Cleanup() {
-            if (sceneButton != null) sceneButton.Dispose();
-            sceneButton = null;
             if (view != null) MaximumUIRuntime.Unmount(MountId);
             view = null;
             visible = false;
