@@ -4,7 +4,8 @@ using UnityEngine;
 namespace LoveJuice
 {
     /// <summary>
-    /// Kiss-only saliva thread. Prefer the already-installed CyuNoVR
+    /// Versatile saliva thread for kisses, oral action, wet-mouth status and
+    /// manual preview. Prefer the already-installed CyuNoVR
     /// BeroIto LineRenderer instead of drawing a second string. If that
     /// component is absent, create an independent Bézier thread from the
     /// same category of native liquid material, never a shower emitter.
@@ -108,17 +109,18 @@ namespace LoveJuice
             return true;
         }
 
-        internal void Tick(bool enabled, bool kissSignal,
-            Vector3 leftMouth, Vector3 rightMouth, float delta)
+        internal void Tick(bool enabled, bool activity, bool nativeKiss,
+            Vector3 from, Vector3 to, float delta)
         {
             if (sceneRoot == null) return;
             ProbeNative();
-            float distance = Vector3.Distance(leftMouth, rightMouth);
+            float distance = Vector3.Distance(from, to);
+            bool suppressNative = nativeKiss && nativeAvailable;
             bool draw = LiquidSourceTriggers.DrawSalivaFilament(
-                enabled, kissSignal, distance, nativeAvailable);
+                enabled, activity, distance, suppressNative);
             strength = Mathf.MoveTowards(strength, draw ? 1f : 0f,
                 Mathf.Clamp(delta, 0f, .05f) * (draw ? 3f : 5f));
-            if (nativeAvailable || strength < .03f ||
+            if (suppressNative || strength < .03f ||
                 distance >= .15f || !enabled)
             {
                 if (line != null) line.enabled = false;
@@ -129,15 +131,15 @@ namespace LoveJuice
             // The same visual principle as the native Cyu kiss string:
             // a tapered, gravity-bent ribbon following both mouths, with
             // thickness decaying when contact is broken.
-            Vector3 centre = (leftMouth + rightMouth) * .5f;
+            Vector3 centre = (from + to) * .5f;
             Vector3 control = centre + Vector3.down *
                 (.15f * distance * distance);
             for (int i = 0; i < points.Length; i++)
             {
                 float t = (float)i / (points.Length - 1);
                 float u = 1f - t;
-                points[i] = u * u * leftMouth +
-                    2f * u * t * control + t * t * rightMouth;
+                points[i] = u * u * from +
+                    2f * u * t * control + t * t * to;
             }
             float width = .0045f * strength;
             line.widthCurve = new AnimationCurve(
