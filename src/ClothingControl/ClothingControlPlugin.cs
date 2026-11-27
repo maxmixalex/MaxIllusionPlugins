@@ -26,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.5";
+        public const string Version = "0.5.6";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -701,19 +701,34 @@ namespace ClothingControl {
                 for (int i = 0; i < GarmentKinds.Length; i++) {
                     string kind = GarmentKinds[i];
                     GarmentVisibility entry;
-                    if (!TryReadGarment(character, kind, out entry)) continue;
-                    int[] states = ReadGarmentOptions(character, kind);
-                    model.Garments.Add(new WardrobeRow {
-                        Slot = i, Item = entry.Item, Label = GarmentLabels[i],
-                        Visible = entry.Visible, State = entry.State, AllowedStates = states,
-                        ChangeState = value => {
-                            if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate ||
-                                Array.IndexOf(states, value) < 0) return;
-                            TryEdit(() => SetMatchingGarment(character, new GarmentVisibility {
-                                Kind = entry.Kind, Item = entry.Item, Visible = value == 0, State = value
-                            }), "已更新服装状态。");
-                        }
-                    });
+                    bool present = TryReadGarment(character, kind, out entry);
+                    int[] states = present ? ReadGarmentOptions(character, kind) : new int[0];
+                    WardrobeRow row = new WardrobeRow {
+                        Slot = i, Item = present ? entry.Item : 0,
+                        Label = GarmentLabels[i],
+                        Visible = present && entry.Visible,
+                        State = present ? entry.State : -1,
+                        AllowedStates = states
+                    };
+                    if (present && states.Length > 1) {
+                        // Capture an immutable per-row identity. Never let
+                        // missing/unsupported lower-garment slots silently
+                        // disappear from the panel.
+                        string selectedKind = entry.Kind;
+                        int selectedItem = entry.Item;
+                        int[] allowed = (int[])states.Clone();
+                        row.ChangeState = value => {
+                            if (!TargetCurrent(token, character) ||
+                                Coordinate(character) != capturedCoordinate ||
+                                Array.IndexOf(allowed, value) < 0) return;
+                            TryEdit(() => SetMatchingGarment(character,
+                                new GarmentVisibility {
+                                    Kind = selectedKind, Item = selectedItem,
+                                    Visible = value == 0, State = value
+                                }), "已更新服装状态。");
+                        };
+                    }
+                    model.Garments.Add(row);
                 }
             }
 
@@ -772,9 +787,9 @@ namespace ClothingControl {
             var parts = character.nowCoordinate.clothes.parts;
             var states = character.fileStatus.clothesState;
             if (slot < 0 || slot >= parts.Length || slot >= states.Length || parts[slot] == null ||
-                parts[slot].id <= 0 || !character.IsClothesStateKind(slot)) return false;
+                parts[slot].id <= 0) return false;
             int current = states[slot];
-            if (current < 0 || current > 3 || !character.IsClothesStateType(slot, (byte)current)) return false;
+            if (current < 0 || current > 3) return false;
             entry = new GarmentVisibility {
                 Kind = kind, Item = parts[slot].id, Visible = current == 0, State = current
             };
@@ -787,6 +802,15 @@ namespace ClothingControl {
             int slot = (int)(ChaFileDefine.ClothesKind)Enum.Parse(typeof(ChaFileDefine.ClothesKind), kind);
             for (int state = 0; state < 4; state++)
                 if (character.IsClothesStateType(slot, (byte)state)) states.Add(state);
+            // Native state predicates may exclude a currently equipped
+            // lower layer while a dress/top masks its controls. Retain
+            // current state as read-only visibility rather than losing row.
+            if (states.Count == 0 && character.fileStatus != null &&
+                character.fileStatus.clothesState != null &&
+                slot >= 0 && slot < character.fileStatus.clothesState.Length) {
+                int current = character.fileStatus.clothesState[slot];
+                if (current >= 0 && current <= 3) states.Add(current);
+            }
             return states.ToArray();
         }
 
