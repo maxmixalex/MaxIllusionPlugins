@@ -20,7 +20,7 @@ namespace LoveJuice {
     public sealed class LoveJuicePlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.LoveJuice";
         public const string Name = "LoveJuice";
-        public const string Version = "0.3.5";
+        public const string Version = "0.3.6";
 
         private static readonly FieldInfo FemaleField = typeof(HSceneProc).GetField("lstFemale",
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -30,7 +30,7 @@ namespace LoveJuice {
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private static LoveJuicePlugin instance;
 
-        private ConfigEntry<bool> masterEnabled, face, body, intimate, malePre, milk, shower, special, collision;
+        private ConfigEntry<bool> masterEnabled, face, salivaAnytime, body, intimate, malePre, milk, shower, special, collision;
         private ConfigEntry<int> maxActive, previewChannel;
         private ConfigEntry<float> interval, gravity, drag, lifetime, scale, launchSpeed, milkThreshold, malePreThreshold;
         private ConfigEntry<KeyboardShortcut> preview, panelShortcut;
@@ -52,6 +52,7 @@ namespace LoveJuice {
         private PropertyInfo cyuIsKiss;
         private FieldInfo cyuKissing;
         private float nextCyuProbe;
+        private float manualSalivaUntil;
         private bool cachedCyuKiss;
         private FieldInfo cyuFemaleField, cyuMouthField;
         private ChaControl cachedCyuFemale;
@@ -125,8 +126,10 @@ namespace LoveJuice {
                 "Ctrl+F9 toggles the LoveJuice window; F9 emits the selected preview.");
             previewChannel = Config.Bind("General", "Preview channel", 0,
                 "Select the F9 native Studio preview channel: 0 water, 1 saliva, 2 body, 3 shower, 4 milk, 5 special, 6 intimate, 7 male pre-fluid.");
-            face = Config.Bind("Sources", "Face drips", true,
-                "Show native CyuNoVR kissing saliva strings, or a lightweight matching filament when the native effect is absent. No face-level shower particles.");
+            face = Config.Bind("Sources", "Saliva strings", true,
+                "Enable authentic-style saliva strings. Kisses are not the sole trigger.");
+            salivaAnytime = Config.Bind("Sources", "Saliva strings outside kissing", true,
+                "Allow mouth strings during oral actions or while native face-drool/SkinEffects levels are present. F9 saliva preview works regardless.");
             body = Config.Bind("Sources", "Body drips", true,
                 "Read current body overlay / optional SkinEffects levels, including JuiceControl changes.");
             intimate = Config.Bind("Sources", "Intimate fluid drips", true,
@@ -300,6 +303,7 @@ namespace LoveJuice {
             cachedCyuKiss = false;
             cachedCyuFemale = null;
             cachedCyuMouth = null;
+            manualSalivaUntil = 0f;
             nextCyuProbe = 0f;
             actors.Clear();
             roster.Replace(null);
@@ -460,55 +464,77 @@ namespace LoveJuice {
 
         private void TickSaliva(float delta)
         {
-            if (scene == null || scene.flags == null || !face.Value) {
-                saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
-                return;
-            }
-            bool moddedKiss = IsModdedKissActive();
-            Actor nearestFemale = null, nearestMale = null;
-            float closest = float.MaxValue;
-            foreach (Actor femaleActor in actors.Values) {
-                if (femaleActor.Character == null || femaleActor.Character.sex != 1 ||
-                    femaleActor.Mouth == null) continue;
-                foreach (Actor maleActor in actors.Values) {
-                    if (maleActor.Character == null || maleActor.Character.sex != 0 ||
-                        maleActor.Mouth == null) continue;
-                    float distance = Vector3.Distance(
-                        femaleActor.Mouth.position, maleActor.Mouth.position);
-                    if (distance < closest) {
-                        closest = distance;
-                        nearestFemale = femaleActor;
-                        nearestMale = maleActor;
-                    }
-                }
-            }
-            // CyuNoVR knows which heroine is actually kissing; use its
-            // heroine and VR/non-VR mouth target when exposed. Otherwise
-            // native H scenes use the nearest real mouth pair.
-            if (moddedKiss && cachedCyuFemale != null) {
-                Actor cyuActor;
-                if (actors.TryGetValue(cachedCyuFemale, out cyuActor) &&
-                    cyuActor.Mouth != null)
-                    nearestFemale = cyuActor;
-            }
-            if (nearestFemale == null && moddedKiss)
-                foreach (Actor actor in actors.Values)
-                    if (actor.Character != null && actor.Character.sex == 1 &&
-                        actor.Mouth != null) { nearestFemale = actor; break; }
-            Transform targetMouth = moddedKiss && cachedCyuMouth != null
-                ? cachedCyuMouth
-                : nearestMale == null ? null : nearestMale.Mouth;
-            if (nearestFemale == null || targetMouth == null) {
-                saliva.Tick(false, false, Vector3.zero, Vector3.zero, delta);
+            bool explicitPreview = Time.unscaledTime < manualSalivaUntil;
+            bool enabled = face.Value || explicitPreview;
+            if (scene == null || scene.flags == null || !enabled)
+            {
+                saliva.Tick(false, false, false, Vector3.zero, Vector3.zero, delta);
                 return;
             }
 
-            bool kiss = moddedKiss ||
+            bool cyuKiss = IsModdedKissActive();
+            bool nativeKiss = cyuKiss ||
                 LiquidSourceTriggers.KissAnimationSignal(
                     scene.flags.nowAnimStateName,
                     scene.flags.click == HFlag.ClickKind.mouth);
-            saliva.Tick(true, kiss,
-                nearestFemale.Mouth.position, targetMouth.position, delta);
+            int mode = (int)scene.flags.mode;
+            bool oralScene = mode == 1 || mode == 6 || mode == 8;
+
+            // Prefer the heroine explicitly involved in CyuNoVR, then the
+            // UI-selected actor, then a live heroine with a resolved mouth.
+            Actor source = null;
+            if (cyuKiss && cachedCyuFemale != null)
+                actors.TryGetValue(cachedCyuFemale, out source);
+            if (source == null && roster.Selected != null)
+                actors.TryGetValue(roster.Selected, out source);
+            if (source == null || source.Mouth == null)
+                foreach (Actor candidate in actors.Values)
+                    if (candidate.Character != null &&
+                        candidate.Character.sex == 1 &&
+                        candidate.Mouth != null)
+                    { source = candidate; break; }
+
+            if (source == null || source.Mouth == null) {
+                saliva.Tick(false, false, nativeKiss,
+                    Vector3.zero, Vector3.zero, delta);
+                return;
+            }
+            bool wetMouth = source.FaceLevel > 0;
+            bool active = LiquidSourceTriggers.SalivaActive(
+                nativeKiss, oralScene, wetMouth, explicitPreview,
+                salivaAnytime.Value);
+            if (!active) {
+                saliva.Tick(false, false, nativeKiss,
+                    Vector3.zero, Vector3.zero, delta);
+                return;
+            }
+
+            Vector3 start = source.Mouth.TransformPoint(
+                new Vector3(0f, -.012f, .025f));
+            Transform contact = cyuKiss && cachedCyuMouth != null
+                ? cachedCyuMouth : null;
+            if (contact == null && nativeKiss) {
+                float best = .15f * .15f;
+                foreach (Actor candidate in actors.Values) {
+                    if (ReferenceEquals(candidate, source) ||
+                        candidate.Mouth == null) continue;
+                    float distance = (candidate.Mouth.position - start).sqrMagnitude;
+                    if (distance > .000001f && distance < best) {
+                        best = distance;
+                        contact = candidate.Mouth;
+                    }
+                }
+            }
+
+            // Outside a kiss, use a short hanging saliva string attached
+            // to the actor's animated mouth, not an invented second mouth
+            // or a shower / droplet ParticleSystem.
+            Vector3 end = contact != null
+                ? contact.position
+                : start - source.Character.transform.up * .09f +
+                    source.Character.transform.forward * .01f;
+            saliva.Tick(true, active, nativeKiss && contact != null,
+                start, end, delta);
         }
 
         private void Update() {
@@ -601,7 +627,8 @@ namespace LoveJuice {
             }
             LoveJuiceChannel channel = (LoveJuiceChannel)previewChannel.Value;
             if (channel == LoveJuiceChannel.Saliva) {
-                panelStatus = "口水拉丝只在游戏原生亲吻动作中出现；不支持喷射式预览。";
+                manualSalivaUntil = Time.unscaledTime + 3f;
+                panelStatus = "已触发 3 秒口水拉丝预览；不要求亲吻动作。";
                 return;
             }
             int emitted = 0;
@@ -626,7 +653,8 @@ namespace LoveJuice {
                 Status = panelStatus, Integration = integrations.HasSkinEffects
                     ? "SkinEffects：已连接（仅读取状态）。"
                     : "SkinEffects：未连接，使用游戏自身状态。",
-                Face = face.Value, Body = body.Value, Intimate = intimate.Value, MalePre = malePre.Value, Milk = milk.Value,
+                Face = face.Value, SalivaAnytime = salivaAnytime.Value,
+                Body = body.Value, Intimate = intimate.Value, MalePre = malePre.Value, Milk = milk.Value,
                 Shower = shower.Value, Special = special.Value, Collision = collision.Value,
                 MaximumParticles = maxActive.Value, PreviewChannel = previewChannel.Value,
                 Interval = interval.Value, Gravity = gravity.Value, Damping = drag.Value,
@@ -636,6 +664,9 @@ namespace LoveJuice {
             };
             m.ChangeEnabled = value => { if (live()) { masterEnabled.Value = value; RefreshPanel(); } };
             m.ChangeFace = value => { if (live()) { face.Value = value; RefreshPanel(); } };
+            m.ChangeSalivaAnytime = value => { if (live()) {
+                salivaAnytime.Value = value; RefreshPanel();
+            } };
             m.ChangeBody = value => { if (live()) { body.Value = value; RefreshPanel(); } };
             m.ChangeIntimate = value => { if (live()) { intimate.Value = value; RefreshPanel(); } };
             m.ChangeMalePre = value => { if (live()) { malePre.Value = value; RefreshPanel(); } };
