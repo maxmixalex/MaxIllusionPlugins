@@ -20,9 +20,12 @@ namespace HSControl
         // Gauge staging is a manual action: it must not depend on the automatic
         // climax policy or on whether the current animation is a loop.
         internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
-            return hasAnimation && !nativeClickPending &&
-                (mode == 1 || mode == 2 || mode == 6 || mode == 7 ||
-                 mode == 8 || mode == 9);
+            // Gauge staging only adjusts the actual native gauge. It doesn't
+            // call SetPlay, alter the current click or need a loop's metadata.
+            // Thus it must remain available during Aibu (mode 0), while an
+            // animation is loading, and when a hand already owns an input.
+            return mode == 0 || mode == 1 || mode == 2 ||
+                   mode == 6 || mode == 7 || mode == 8 || mode == 9;
         }
 
         internal static bool IsLoop(string state) {
