@@ -54,6 +54,7 @@ namespace MaximumUI.Tests {
                 !Find<SliderFloat>(widget, "hscontrol-gauge-male").Enabled,
                 "The manual speed widget is hidden until enabled; unavailable gauges are inert");
             view.Model.Available = true;
+            view.Model.Enabled = true;
             view.Model.ManualOverride = true;
             view.Model.Mode = 0;
             widget = view.Build(null);
