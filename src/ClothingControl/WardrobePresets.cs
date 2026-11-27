@@ -159,6 +159,51 @@ namespace ClothingControl {
     // This logic mirrors ChaControl.AddClothesStateKind and
     // SetClothesState's notBot handling. It is NOT a synthetic garment.
     internal static class WardrobeGarmentIdentity {
+        internal struct Binding {
+            internal int Item;
+            internal int StateSlot;
+            internal bool Linked;
+        }
+
+        // A single garment can own multiple native state channels:
+        // notBot: top(0) -> bot(1);
+        // notBra: top(0) -> bra(2);
+        // notShorts: bra(2) -> shorts(3).
+        // When the child state channel is absent, only the real owner's
+        // state may be cycled, never a fake state on an empty slot.
+        internal static Binding Resolve(int slot, int ownItem, int topItem,
+            int braItem, bool notBot, bool notBra, bool notShorts,
+            bool hasOwnState, bool hasTopState, bool hasBraState) {
+            Binding result = new Binding {
+                Item = ownItem > 0 ? ownItem : 0,
+                StateSlot = slot,
+                Linked = false
+            };
+            if (slot == 1 && notBot && topItem > 0) {
+                result.Linked = true;
+                result.Item = topItem;
+                result.StateSlot = hasOwnState ? 1 :
+                    hasTopState ? 0 : -1;
+            } else if (slot == 2 && notBra && topItem > 0) {
+                result.Linked = true;
+                result.Item = topItem;
+                result.StateSlot = hasOwnState ? 2 :
+                    hasTopState ? 0 : -1;
+            } else if (slot == 3 && notShorts) {
+                int ownerItem = notBra ? topItem : braItem;
+                if (ownerItem > 0) {
+                    result.Linked = true;
+                    result.Item = ownerItem;
+                    result.StateSlot = hasOwnState ? 3 :
+                        !notBra && hasBraState ? 2 :
+                        notBra && hasTopState ? 0 : -1;
+                }
+            }
+            // Preserve the identity for display, but never write to a
+            // nonexistent native channel: the caller checks StateSlot.
+            return result;
+        }
+
         internal static bool IsLinkedBottom(string kind, bool topOwnsBottom,
             int topItem, bool bottomStateChannelExists) {
             return kind == "bot" && topOwnsBottom && topItem > 0 &&
