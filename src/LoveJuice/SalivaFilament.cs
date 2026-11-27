@@ -49,22 +49,36 @@ namespace LoveJuice
 
         private Material CloneNativeSalivaMaterial()
         {
-            ParticleSystem[] particles =
-                UnityEngine.Object.FindObjectsOfType<ParticleSystem>();
-            for (int i = 0; i < particles.Length; i++)
-            {
-                ParticleSystem system = particles[i];
-                if (system == null ||
-                    system.gameObject.name.IndexOf("LiquidSio",
-                        StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-                ParticleSystemRenderer renderer =
-                    system.GetComponent<ParticleSystemRenderer>();
-                if (renderer != null && renderer.sharedMaterial != null)
-                    return new Material(renderer.sharedMaterial);
-            }
-            // Neutral fallbacks are used only if no native Studio or
-            // kissing effect material has been loaded in this scene.
+            // Prefer the exact installed CyuNoVR BeroIto ribbon material.
+            foreach (LineRenderer original in
+                UnityEngine.Object.FindObjectsOfType<LineRenderer>())
+                if (original != null && original != line &&
+                    original.name == "BeroIto" &&
+                    original.sharedMaterial != null)
+                    return new Material(original.sharedMaterial);
+
+            // Fallback to the installed game's viscous LiquidSiru item;
+            // never substitute a shower stream for saliva.
+            try {
+                GameObject studio = CommonLib.LoadAsset<GameObject>(
+                    StudioLiquidCatalog.Bundle,
+                    StudioLiquidCatalog.Prefab(LoveJuiceChannel.Body),
+                    true, StudioLiquidCatalog.Manifest);
+                if (studio == null)
+                    studio = CommonLib.LoadAsset<GameObject>(
+                        StudioLiquidCatalog.Bundle,
+                        StudioLiquidCatalog.Prefab(LoveJuiceChannel.Body),
+                        true, string.Empty);
+                if (studio != null) {
+                    foreach (ParticleSystemRenderer renderer in
+                        studio.GetComponentsInChildren<ParticleSystemRenderer>(true))
+                        if (renderer != null && renderer.sharedMaterial != null)
+                            return new Material(renderer.sharedMaterial);
+                }
+            } catch { }
+
+            // Last resort is a transparent thread, never the native water
+            // or shower ParticleSystem effect.
             Shader shader = Shader.Find("Particles/Alpha Blended") ??
                             Shader.Find("Unlit/Transparent") ??
                             Shader.Find("Sprites/Default");
