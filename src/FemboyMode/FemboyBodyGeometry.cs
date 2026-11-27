@@ -53,10 +53,11 @@ namespace FemboyMode
         protected override void Update()
         {
             base.Update();
-            if (Time.frameCount % 20 == 0) {
+            if (Time.frameCount % 20 == 0)
                 ApplyMaleGeometry();
-                SyncUnderwearMeshFit();
-            }
+            // Check garment On/Shift/Hang/Off transitions every frame,
+            // while the expensive mesh probe remains internally throttled.
+            SyncUnderwearMeshFit();
         }
 
         private void LateUpdate()
