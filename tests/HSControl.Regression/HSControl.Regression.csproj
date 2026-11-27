@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/HSControl/HSControlMotionEngine.cs" Link="Production/HSControlMotionEngine.cs" />
+    <Compile Include="../../src/HSControl/HSControlAibuDriver.cs" Link="Production/HSControlAibuDriver.cs" />
     <Compile Include="../../src/HSControl/HSLegacyIni.cs" Link="Production/HSLegacyIni.cs" />
     <Compile Include="../../src/HSControl/HSControlActionRules.cs" Link="Production/HSControlActionRules.cs" />
     <Compile Include="../../src/HSControl/HSControlReplayGate.cs" Link="Production/HSControlReplayGate.cs" />
