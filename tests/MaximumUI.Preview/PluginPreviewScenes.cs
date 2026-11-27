@@ -46,7 +46,7 @@ internal static class PluginPreviewScenes {
             SceneMode = scenario == 2 ? 1 : 0, AnimationState = scenario == 2 ? "WLoop" : "M_Idle",
             Status = "已连接当前 H 场景",
             Mode = speedMode, ManualOverride = scenario == 1,
-            AutoCaress = false, AutoStrength = scenario == 2,
+            AutoStrength = scenario == 2,
             Band = 1, ManualSpeed = .35f,
             RangeMin = .2f, RangeMax = .8f,
             CurrentSpeed = .45f, TargetSpeed = .65f,
@@ -57,7 +57,7 @@ internal static class PluginPreviewScenes {
             CanFinishMale = true, CanFemaleFinish = true,
             CanFinishBoth = true, AutoFemaleFinish = true,
             ChangeEnabled = delegate { }, ChangeManualOverride = delegate { },
-            ChangeManualSpeed = delegate { }, ChangeAutoCaress = delegate { },
+            ChangeManualSpeed = delegate { },
             ChangeMode = delegate { }, ChangeRangeMin = delegate { },
             ChangeRangeMax = delegate { }, ChangeBand = delegate { },
             ChangeLinkage = delegate { }, ChangeGaugeMale = delegate { },
@@ -85,7 +85,7 @@ internal static class PluginPreviewScenes {
             RequiredKeys = scenario == 0
                 ? new[] { "hscontrol-enabled", "hscontrol-female-lock",
                     "hscontrol-male-lock", "hscontrol-mode-range",
-                    "hscontrol-min", "hscontrol-max", "hscontrol-aibu",
+                    "hscontrol-min", "hscontrol-max", "hscontrol-aibu-explain",
                     "hscontrol-play-loop", "hscontrol-finish-female" }
                 : scenario == 1
                     ? new[] { "hscontrol-enabled", "hscontrol-manual-speed",
