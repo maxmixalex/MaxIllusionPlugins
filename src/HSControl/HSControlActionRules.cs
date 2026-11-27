@@ -26,7 +26,7 @@ namespace HSControl
             // HandCtrl.useAreaItems entry (validated by HSControlAibuDriver).
             return nativeMode == 0 &&
                    (state == "M_Idle" || state == "A_Idle" ||
-                    state == "S_Idle" || state == "Idle");
+                    state == "S_Idle");
         }
 
         internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
