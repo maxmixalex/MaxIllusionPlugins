@@ -123,7 +123,8 @@ internal static class Program {
             Check(LiquidSourceTriggers.SalivaActive(false, true, false, false, true) &&
                 LiquidSourceTriggers.SalivaActive(false, false, true, false, true) &&
                 LiquidSourceTriggers.SalivaActive(false, false, false, true, true) &&
-                !LiquidSourceTriggers.SalivaActive(false, true, true, true, false) &&
+                !LiquidSourceTriggers.SalivaActive(false, true, true, false, false) &&
+                LiquidSourceTriggers.SalivaActive(false, false, false, true, false) &&
                 LiquidSourceTriggers.SalivaActive(true, false, false, false, false),
                 "saliva can be triggered by oral, wet face or preview, not just kisses");
             Check(LiquidSourceTriggers.DrawSalivaFilament(true, true, .035f, false) &&
