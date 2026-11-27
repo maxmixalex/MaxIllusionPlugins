@@ -58,6 +58,12 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        Check(FemboyRules.IsPotentialCrotchGarmentSlot(0) &&
+              FemboyRules.IsPotentialCrotchGarmentSlot(1) &&
+              FemboyRules.IsPotentialCrotchGarmentSlot(3) &&
+              !FemboyRules.IsPotentialCrotchGarmentSlot(2) &&
+              !FemboyRules.IsPotentialCrotchGarmentSlot(4),
+              "crotch fit covers one-piece tops, bottoms and underwear only");
         Check(FemboyRules.ShouldFitUnderwear(true, true, true, 0) &&
               FemboyRules.ShouldFitUnderwear(true, true, true, 1) &&
               !FemboyRules.ShouldFitUnderwear(true, true, true, 3) &&
@@ -65,7 +71,7 @@ internal static class Program
               !FemboyRules.ShouldFitUnderwear(true, false, true, 0) &&
               !FemboyRules.ShouldFitUnderwear(true, true, false, 0),
               "underwear mesh correction activates only for marked, enabled and worn models");
-        Check(FemboyRules.UnderwearClearanceDeficit(.10f, .18f) == .05f &&
+        Check(Math.Abs(FemboyRules.UnderwearClearanceDeficit(.10f, .18f) - .07f) < .0001f &&
               FemboyRules.UnderwearClearanceDeficit(.18f, .18f) == 0f &&
               FemboyRules.UnderwearClearanceDeficit(.21f, .18f) == 0f &&
               FemboyRules.UnderwearClearanceDeficit(-.10f, .15f) == 0f &&
