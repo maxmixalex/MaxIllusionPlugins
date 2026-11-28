@@ -750,6 +750,45 @@ namespace FemboyMode
             return value;
         }
 
+        private bool ActiveAccessoryUnderwearCovers()
+        {
+            if (character == null || character.objAccessory == null ||
+                character.fileStatus == null)
+                return false;
+            Vector3 surface = axis != null ? axis.transform.position :
+                character.transform.position;
+            GameObject[] accessories = character.objAccessory;
+            bool[] shown = character.fileStatus.showAccessory;
+            for (int i = 0; i < accessories.Length; i++)
+            {
+                GameObject obj = accessories[i];
+                if (obj == null || !obj.activeInHierarchy ||
+                    (shown != null && i < shown.Length && !shown[i]))
+                    continue;
+                bool recognized = FemboyRules.IsUnderwearAccessoryName(obj.name);
+                Renderer[] renderers = obj.GetComponentsInChildren<Renderer>(true);
+                foreach (Renderer renderer in renderers)
+                {
+                    if (renderer == null || !renderer.enabled ||
+                        (!(renderer is MeshRenderer) &&
+                         !(renderer is SkinnedMeshRenderer)))
+                        continue;
+                    if (!recognized &&
+                        !FemboyRules.IsUnderwearAccessoryName(renderer.name))
+                        continue;
+                    // Only an actual visible panty/bodysuit close to the
+                    // emission surface counts as covering fabric. Hair,
+                    // jewelry and moved-away accessories cannot suppress
+                    // the exposed trajectory just because their name is
+                    // suggestive.
+                    Vector3 nearest = renderer.bounds.ClosestPoint(surface);
+                    if ((nearest - surface).sqrMagnitude < .065f * .065f)
+                        return true;
+                }
+            }
+            return false;
+        }
+
         private bool IsAnatomyVisible()
         {
             if (character == null || character.fileStatus == null ||
@@ -781,7 +820,8 @@ namespace FemboyMode
 
             return FemboyRules.IsGenitalExposureEnabled(
                 character.fileStatus.visibleSon,
-                onePiece, bottom, underwear);
+                onePiece, bottom, underwear,
+                ActiveAccessoryUnderwearCovers());
         }
 
         private void ApplyLaunchPhysics()
@@ -850,7 +890,8 @@ namespace FemboyMode
                 // The player may move/remove underwear while an emission is
                 // in progress. Subsequent native droplets use the new pose.
                 if (character != null &&
-                    appliedExposureSignature != ExposureSignature())
+                    (appliedExposureSignature != ExposureSignature() ||
+                     appliedVisibleSon != IsAnatomyVisible()))
                 {
                     bool oldExposed = appliedVisibleSon;
                     ApplyLaunchPhysics();
