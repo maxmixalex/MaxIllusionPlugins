@@ -162,8 +162,8 @@ namespace HSControl
         {
             float delta = Mathf.Clamp(dt, 0f, .1f);
             if (scene == null || flags == null || scene.hand == null ||
-                !HSControlActionRules.IsAutoCaressState((int)flags.mode,
-                    flags.nowAnimStateName, flags.rely)) {
+                !HSControlActionRules.IsAutoCaressContinuationState(
+                    (int)flags.mode, flags.nowAnimStateName)) {
                 Clear(scene);
                 return false;
             }
@@ -187,6 +187,11 @@ namespace HSControl
             }
 
             if (!Running) {
+                // Acquire only from native Idle. An owned segment may pass
+                // into M_Loop/A_Loop/etc without being restarted.
+                if (!HSControlActionRules.IsAutoCaressState(
+                    (int)flags.mode, flags.nowAnimStateName, flags.rely))
+                    return false;
                 if (manualCooldown > 0f || Action(scene.hand) != 0 ||
                     flags.gaugeFemale >= 99.5f) return false;
                 int id = NativeUseArea(scene.hand);

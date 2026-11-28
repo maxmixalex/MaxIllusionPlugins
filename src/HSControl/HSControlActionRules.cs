@@ -34,6 +34,22 @@ namespace HSControl
                     state == "S_Idle");
         }
 
+        // A native Aibu drag leaves Idle as soon as animation starts.
+        // Only Idle can acquire; an already-owned drag may continue in
+        // Aibu animations, but terminal/finish animations must release.
+        internal static bool IsAutoCaressContinuationState(int nativeMode, string state) {
+            return nativeMode == 0 && !string.IsNullOrEmpty(state) &&
+                state.IndexOf("Orgasm", StringComparison.OrdinalIgnoreCase) < 0 &&
+                state.IndexOf("Finish", StringComparison.OrdinalIgnoreCase) < 0 &&
+                state.IndexOf("End", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        internal static bool ShouldTickAutoCaress(bool armed, bool speedDriving,
+            bool ownsInteraction, int nativeMode, string state) {
+            return armed && (speedDriving || ownsInteraction) &&
+                IsAutoCaressContinuationState(nativeMode, state);
+        }
+
         internal static bool CanStageGauge(int mode, bool hasAnimation, bool nativeClickPending) {
             // Gauge staging only adjusts the actual native gauge. It doesn't
             // call SetPlay, alter the current click or need a loop's metadata.

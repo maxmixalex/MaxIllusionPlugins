@@ -121,11 +121,12 @@ namespace HSControl
             // HFlag.FemaleGaugeUp. Previously we only updated speed (and only
             // for manual override), so the visible gauge stayed frozen.
             // The scene-local driver yields to either active manual hand.
-            if (canDrive && hmode == 0 &&
+            if (HSControlActionRules.ShouldTickAutoCaress(
+                    autoAllowed, canDrive, aibu.Running, hmode, state) &&
                 (config.Mode != 0 || config.ManualOverride)) {
-                // Exactly as original HCtrl: turning on an automatic speed
-                // mode also enables Aibu pulses. No independent opt-in.
-                // Pulses last ONE update, never a multi-second input lock.
+                // Motion.Step starts from Idle; the real Aibu animation
+                // leaves Idle immediately. Continue the owned segment
+                // rather than calling FinishDrag and DragStart each frame.
                 aibu.Tick(scene, flags, motion.Current, Time.deltaTime);
                 if (aibu.TakeCompleted() && autoFemaleFinish.Value) {
                     bool entered = HSControlNativeActions.TryStartAibuFemaleFinish(scene);

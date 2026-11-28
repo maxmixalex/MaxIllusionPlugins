@@ -32,6 +32,12 @@ internal static class AibuDriverRegression
               scene.hand.actionUseItem == 2 && flags.dragStarts == 1,
             "bind correct native item before first drag");
         int initialCalls = flags.femaleGaugeCalls;
+        flags.nowAnimStateName = "M_Loop";
+        Check(HSControlActionRules.ShouldTickAutoCaress(true, false, true, 0,
+                flags.nowAnimStateName) &&
+              !HSControlActionRules.ShouldTickAutoCaress(true, false, false, 0,
+                flags.nowAnimStateName),
+            "owned native Aibu continues but no fresh drag starts during motion");
         for (int i = 0; i < 115; i++)
             Check(driver.Tick(scene, flags, .4f, .016f),
                 "Aibu remains active rather than restarting its animation");
@@ -43,6 +49,7 @@ internal static class AibuDriverRegression
               flags.gaugeFemale > 0f && flags.gaugeFemale < 25f,
             "bounded gauge fallback never fills bar in a few seconds");
 
+        flags.nowAnimStateName = "M_Idle";
         UnityEngine.Input.PrimaryDown = true;
         int beforeManual = flags.femaleGaugeCalls;
         Check(!driver.Tick(scene, flags, .4f, .016f) &&
@@ -77,6 +84,9 @@ internal static class AibuDriverRegression
         Check(restarted && flags.dragStarts == 2,
             "new stable segment may begin only after manual cooldown");
         flags.nowAnimStateName = "Orgasm_Loop";
+        Check(!HSControlActionRules.ShouldTickAutoCaress(true, true, true, 0,
+                flags.nowAnimStateName),
+            "terminal animations cannot keep the synthetic drag");
         Check(!driver.Tick(scene, flags, .3f, .016f) &&
               !driver.Running && flags.dragFinishes == 2,
             "native action transition cleanly releases previous segment");

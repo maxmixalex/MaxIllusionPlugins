@@ -85,7 +85,9 @@ namespace FemboyMode
 
         internal static bool MaleMarkerGlyphPixel(int x, int y)
         {
-            double px = x + .5d, py = y + .5d;
+            // Center the complete glyph, including its arrow tip, within
+            // the 64-pixel circular chip (previous center ~30.9, 30.5).
+            double px = x + .5d - 1.25d, py = y + .5d - 1.75d;
             double dx = px - 28.5d, dy = py - 28d;
             double radius = Math.Sqrt(dx*dx + dy*dy);
             if (Math.Abs(radius - 9.7d) <= 2.25d) return true;

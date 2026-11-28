@@ -111,8 +111,8 @@ internal static class Program
                     maxY = Math.Max(maxY, y);
                 }
         Check(markerCount > 65 &&
-              Math.Abs((minX + maxX) * .5f - 31.5f) <= 2f &&
-              Math.Abs((minY + maxY) * .5f - 31.5f) <= 2f,
+              Math.Abs((minX + maxX) * .5f - 31.5f) <= 1f &&
+              Math.Abs((minY + maxY) * .5f - 31.5f) <= 1f,
               "full male glyph (ring and diagonal arrow) optically centered in 64px HUD circle");
         var hiddenAnatomy = FemboyRules.FluidProfileForVisibility(false);
         var shownAnatomy = FemboyRules.FluidProfileForVisibility(true);

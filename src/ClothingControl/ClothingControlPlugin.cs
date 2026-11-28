@@ -886,8 +886,7 @@ namespace ClothingControl {
             if (character == null || character.objClothes == null ||
                 character.objClothes.Length < 2 ||
                 character.objClothes[0] == null ||
-                character.objClothes[1] != null ||
-                !character.IsClothesStateKind(1))
+                character.objClothes[1] != null)
                 return false;
             try {
                 MethodInfo getter = null;
@@ -905,8 +904,12 @@ namespace ClothingControl {
                 if (getter == null) return false;
                 Type keyType = getter.GetParameters()[0].ParameterType;
                 object referenceKey = Enum.Parse(keyType, "S_CTOP_B_DEF");
-                return getter.Invoke(character, new[] { referenceKey })
-                    is GameObject;
+                object reference = getter.Invoke(character,
+                    new[] { referenceKey });
+                // Modded tops can publish GameObject or Component references.
+                // ResolveGarmentBinding checks the actual native channel
+                // separately, so detecting an absent child state is safe.
+                return reference is GameObject || reference is Component;
             } catch (Exception) {
                 // Some releases/mods do not expose this reference; never
                 // guess at the model's geometry from its display name.
