@@ -92,6 +92,26 @@ internal static class Program
               FemboyRules.UnderwearClearanceDeficit(-.10f, .15f) == 0f &&
               FemboyRules.UnderwearClearanceDeficit(float.NaN, .15f) == 0f,
               "pre-adapted underwear and invalid geometry must not be warped");
+        Check(FemboyRules.IsGenitalExposureEnabled(true, false, false, false) &&
+              !FemboyRules.IsGenitalExposureEnabled(false, false, false, false) &&
+              !FemboyRules.IsGenitalExposureEnabled(true, true, false, false) &&
+              !FemboyRules.IsGenitalExposureEnabled(true, false, true, false) &&
+              !FemboyRules.IsGenitalExposureEnabled(true, false, false, true),
+              "visibleSon cannot bypass covering one-piece, bottom or underwear fabric");
+        int markerCount = 0, minX = 64, maxX = -1, minY = 64, maxY = -1;
+        for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 64; x++)
+                if (FemboyRules.MaleMarkerGlyphPixel(x, y)) {
+                    markerCount++;
+                    minX = Math.Min(minX, x);
+                    maxX = Math.Max(maxX, x);
+                    minY = Math.Min(minY, y);
+                    maxY = Math.Max(maxY, y);
+                }
+        Check(markerCount > 65 &&
+              Math.Abs((minX + maxX) * .5f - 31.5f) <= 2f &&
+              Math.Abs((minY + maxY) * .5f - 31.5f) <= 2f,
+              "full male glyph (ring and diagonal arrow) optically centered in 64px HUD circle");
         var hiddenAnatomy = FemboyRules.FluidProfileForVisibility(false);
         var shownAnatomy = FemboyRules.FluidProfileForVisibility(true);
         Check(hiddenAnatomy.SpeedMultiplier > 0f &&
