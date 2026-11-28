@@ -1019,10 +1019,31 @@ namespace MaximumUI {
             DrawStyle(GUI.enabled ? context.Theme.Label : disabledLabel, label, GetContent(widget.Text), false, false, false, false);
         }
 
+        private sealed class CheckboxHoverState {
+            internal bool Over;
+        }
+
         private void RenderCheckboxAt(LayoutNode node, Checkbox widget, RenderContext context, Vector2 offset) {
             Rect rect = OffsetRect(node.Rect, offset);
             bool inputEnabled = GUI.enabled && !IsInputBlockedByDialog();
             Event current = Event.current;
+            if (widget.OnHoverChanged != null && current != null &&
+                (current.type == EventType.Repaint ||
+                 current.type == EventType.MouseMove ||
+                 current.type == EventType.MouseDrag ||
+                 current.type == EventType.ScrollWheel)) {
+                // Store hover by retained widget identity. VirtualList can
+                // recreate row widgets; a local bool would repeatedly
+                // re-apply or fail to remove the material overlay.
+                CheckboxHoverState state = context.StateStore.GetOrCreate<CheckboxHoverState>(
+                    context.StateId(widget, "checkbox-hover"));
+                bool over = inputEnabled && MouseOverVisibleRect(rect);
+                if (state.Over != over) {
+                    state.Over = over;
+                    Action<bool> changed = widget.OnHoverChanged;
+                    EnqueueCallback(delegate { changed(over); });
+                }
+            }
             if ((inputEnabled && current != null && current.type == EventType.MouseDown && current.button == 0 && MouseOverVisibleRect(rect)) || ConsumeActivation(widget, context)) {
                 bool captured = !widget.Value;
                 if (widget.OnChange != null) EnqueueCallback(delegate { widget.OnChange(captured); });
