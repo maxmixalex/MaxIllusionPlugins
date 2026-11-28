@@ -235,10 +235,16 @@ namespace FemboyMode
         private Transform shaftRoot;
         private Transform shaftTip;
         private float clothingPitchOffset;
+        private bool clothingConcealsTip;
+        private Vector3 initialLocalOffset;
 
         public void SetClothingPitchOffset(float degrees)
         {
             clothingPitchOffset = FemboyRules.SafeLocalFluidPitch(degrees);
+        }
+
+        public void SetConcealed(bool concealed) {
+            clothingConcealsTip = concealed;
         }
 
         public void Configure(ChaControl target, Transform root, Transform tip)
@@ -246,6 +252,7 @@ namespace FemboyMode
             actor = target;
             shaftRoot = root;
             shaftTip = tip;
+            initialLocalOffset = transform.localPosition;
             AlignToModel();
         }
 
@@ -272,6 +279,17 @@ namespace FemboyMode
             if (direction.sqrMagnitude < 0.000001f)
                 return;
             direction.Normalize();
+            // An exposed penis emits at the actual shaft end. Under a
+            // covering garment, move the source to the visible fabric
+            // edge instead of launching through the underlying mesh.
+            // This offset follows the character pose, not world space.
+            if (transform.parent != null) {
+                Vector3 surface = clothingConcealsTip
+                    ? (-actor.transform.up * .012f + direction * .007f)
+                    : Vector3.zero;
+                transform.localPosition = initialLocalOffset +
+                    transform.parent.InverseTransformVector(surface);
+            }
 
             // Use the root bone's rotated anatomical up to construct a
             // stable frame around the shaft. The pitch therefore follows
@@ -320,6 +338,7 @@ namespace FemboyMode
         private float lastFired = -999f;
         private float activeUntil;
         private bool appliedVisibleSon;
+        private int appliedExposureSignature = int.MinValue;
         private float[] nativeIntervals;
         private bool warnedUnavailable;
         private bool waitingForFirstDroplet;
@@ -716,10 +735,53 @@ namespace FemboyMode
                         owner.flags != null && owner.flags.isAnalPlay));
         }
 
+        private int ExposureSignature()
+        {
+            if (character == null || character.fileStatus == null)
+                return -1;
+            int value = character.fileStatus.visibleSon ? 1 : 0;
+            value |= character.notBot ? 2 : 0;
+            value |= character.notShorts ? 4 : 0;
+            value |= character.notBra ? 8 : 0;
+            byte[] states = character.fileStatus.clothesState;
+            if (states != null)
+                for (int i = 0; i <= 3 && i < states.Length; i++)
+                    value |= (states[i] & 3) << (4 + i * 2);
+            return value;
+        }
+
         private bool IsAnatomyVisible()
         {
-            return character != null && character.fileStatus != null &&
-                   character.fileStatus.visibleSon;
+            if (character == null || character.fileStatus == null ||
+                character.fileStatus.clothesState == null)
+                return false;
+
+            byte[] state = character.fileStatus.clothesState;
+            GameObject[] clothes = character.objClothes;
+            bool onePiece = character.notBot && state.Length > 0 &&
+                state[0] != 3 && clothes != null && clothes.Length > 0 &&
+                clothes[0] != null;
+            bool bottom = state.Length > 1 && state[1] == 0 &&
+                clothes != null && clothes.Length > 1 &&
+                clothes[1] != null;
+            bool underwear = state.Length > 3 &&
+                clothes != null && clothes.Length > 3 &&
+                clothes[3] != null && state[3] == 0;
+            // Bra-based integrated underwear has no separate shorts
+            // GameObject. Treat its native worn state as covering fabric.
+            if (!underwear && character.notShorts && state.Length > 2 &&
+                state[2] == 0 && clothes != null &&
+                clothes.Length > 2 && clothes[2] != null)
+                underwear = true;
+            // Full-body outfit can also include the bra/shorts surfaces.
+            if (!underwear && character.notBra && character.notShorts &&
+                clothes != null && clothes.Length > 0 &&
+                clothes[0] != null && state[0] == 0)
+                underwear = true;
+
+            return FemboyRules.IsGenitalExposureEnabled(
+                character.fileStatus.visibleSon,
+                onePiece, bottom, underwear);
         }
 
         private void ApplyLaunchPhysics()
@@ -739,9 +801,12 @@ namespace FemboyMode
                 profile.SpeedMultiplier, 0.1f, 4f);
             float spread = Mathf.Clamp(FemboyModePlugin.FluidSpread.Value *
                 profile.SpreadMultiplier, 0f, 30f);
-            if (trajectory != null)
+            if (trajectory != null) {
                 trajectory.SetClothingPitchOffset(profile.LocalPitchOffset);
+                trajectory.SetConcealed(!visible);
+            }
             appliedVisibleSon = visible;
+            appliedExposureSignature = ExposureSignature();
             // Native MetaballShoot.SetRigidForce uses ShootAxis.forward,
             // then applies a relative force. Its original ForceMode.Force
             // is too weak with some modded Rigidbody masses. VelocityChange
@@ -784,10 +849,20 @@ namespace FemboyMode
             {
                 // The player may move/remove underwear while an emission is
                 // in progress. Subsequent native droplets use the new pose.
-                if (character != null && appliedVisibleSon != IsAnatomyVisible())
+                if (character != null &&
+                    appliedExposureSignature != ExposureSignature())
                 {
+                    bool oldExposed = appliedVisibleSon;
                     ApplyLaunchPhysics();
                     if (trajectory != null) trajectory.AlignToModel();
+                    if (oldExposed != appliedVisibleSon)
+                        FemboyModePlugin.LogOptionalIntegrationProblem(
+                            "Fluid trajectory exposure changed " +
+                            oldExposed + " -> " + appliedVisibleSon +
+                            " / visibleSon=" + character.fileStatus.visibleSon +
+                            " / notBot=" + character.notBot +
+                            " / notShorts=" + character.notShorts +
+                            " / cloth state=" + appliedExposureSignature);
                 }
                 int before = privateSourceRoot == null ? -1 :
                     privateSourceRoot.transform.childCount;
@@ -838,6 +913,7 @@ namespace FemboyMode
             axis = null;
             trajectory = null;
             appliedVisibleSon = false;
+            appliedExposureSignature = int.MinValue;
             privateSourceRoot = null;
             boundMode = HFlag.EMode.none;
             boundPoseId = -1;
