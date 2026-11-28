@@ -1020,6 +1020,7 @@ namespace MaximumUI {
         }
 
         private sealed class CheckboxHoverState {
+            public CheckboxHoverState() { }
             internal bool Over;
         }
 
