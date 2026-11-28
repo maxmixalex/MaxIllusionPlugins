@@ -173,13 +173,19 @@ namespace ClothingControl {
         // state may be cycled, never a fake state on an empty slot.
         internal static Binding Resolve(int slot, int ownItem, int topItem,
             int braItem, bool notBot, bool notBra, bool notShorts,
-            bool hasOwnState, bool hasTopState, bool hasBraState) {
+            bool hasOwnState, bool hasTopState, bool hasBraState,
+            bool topOwnsBottomReference = false) {
             Binding result = new Binding {
                 Item = ownItem > 0 ? ownItem : 0,
                 StateSlot = slot,
                 Linked = false
             };
-            if (slot == 1 && notBot && topItem > 0) {
+            // Some imported one-piece tops expose S_CTOP_B_DEF and the
+            // actual bottom state dictionary, even when their "Coordinate"
+            // flag does not set notBot. Keep the real native half-control
+            // rather than treating Slut Latex Top-like assets as absent.
+            if (slot == 1 && (notBot || topOwnsBottomReference) &&
+                topItem > 0) {
                 result.Linked = true;
                 result.Item = topItem;
                 result.StateSlot = hasOwnState ? 1 :
