@@ -181,13 +181,17 @@ namespace LoveJuice {
                     primary.ExpandWidth(),
                     advanced.ExpandWidth()
                 }.ExpandWidth().ExpandHeight(),
-                new HStack(5f) {
-                    new ComboBox<int>("测试角色", m.SelectedActorIndex,
+                // Two compact rows keep both selector labels and selected
+                // character names readable even at the 410px minimum width.
+                // Three controls in one row left only 47px for actor text.
+                new ComboBox<int>("测试角色", m.SelectedActorIndex,
                         ActorChoices(m.ActorNames),
                         i => i >= 0 && i < m.ActorNames.Length
                             ? m.ActorNames[i] : "无",
                         m.SelectActor, "lovejuice-target")
-                        .Enabled(m.HasScene && m.ActorNames.Length > 0).ExpandWidth(),
+                        .Enabled(m.HasScene && m.ActorNames.Length > 0)
+                        .ExpandWidth().Height(36f),
+                new HStack(5f) {
                     new ComboBox<int>("来源", m.PreviewChannel,
                         new[] {0, 1, 2, 3, 4, 5, 6, 7},
                         i => i == 0 ? "水" : i == 1 ? "口水" :
@@ -195,7 +199,7 @@ namespace LoveJuice {
                             i == 4 ? "乳液" : i == 5 ? "附加" :
                             i == 6 ? "爱液" : "前液",
                         m.ChangePreviewChannel, "lovejuice-preview-channel")
-                        .Enabled(m.Enabled).Width(155f),
+                        .Enabled(m.Enabled).ExpandWidth(),
                     new Button("测试", m.Preview, "lovejuice-emit")
                         .Enabled(m.Enabled && m.HasScene && m.ActorCount > 0)
                         .Width(58f)

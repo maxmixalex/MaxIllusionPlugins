@@ -4,12 +4,13 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class LoveJuiceViewTests {
-        internal const int TestCount = 5;
+        internal const int TestCount = 6;
         internal static void RunAll() {
             PreviewRequiresLiveActor();
             SettingsActionsUseRealWidgets();
             RetainedViewTracksNativeFeedback();
             ActorSelectionUsesDedicatedNativeControls();
+            MinimumWidthKeepsActorAndSourceLabelsReadable();
             AutomaticTriggerExplanationsAndAdvancedIsolation();
         }
 
@@ -85,6 +86,32 @@ namespace MaximumUI.Tests {
             Check(!Find<ComboBox<int>>(ui, "lovejuice-target").Enabled &&
                 !Find<Button>(ui, "lovejuice-emit").Enabled,
                 "No old actor survives an empty scene.");
+        }
+
+        private static void MinimumWidthKeepsActorAndSourceLabelsReadable() {
+            LoveJuiceView v = new LoveJuiceView { Model = Create() };
+            Window window = (Window)v.Build(null);
+            var layout = new LayoutEngine(
+                ThemeTypography.CreateLayoutMetrics(ThemePalettes.MetroLight()))
+                .Layout(window, new MuiRect(0f, 0f, 410f, 490f));
+            LayoutNode actor = FindLayout(layout, "lovejuice-target");
+            LayoutNode source = FindLayout(layout, "lovejuice-preview-channel");
+            LayoutNode emit = FindLayout(layout, "lovejuice-emit");
+            Check(actor != null && source != null && emit != null &&
+                  actor.Rect.Width >= 180f && source.Rect.Width >= 150f,
+                "At minimum width the character and source dropdowns retain room for text");
+            Check(source.Rect.Y > actor.Rect.Y && emit.Rect.Y == source.Rect.Y,
+                "Source and test button follow the full-width character selector");
+        }
+
+        private static LayoutNode FindLayout(LayoutNode node, string key) {
+            if (node == null) return null;
+            if (node.Widget != null && Equals(node.Widget.Key, key)) return node;
+            for (int i = 0; i < node.Children.Count; i++) {
+                LayoutNode found = FindLayout(node.Children[i], key);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static void AutomaticTriggerExplanationsAndAdvancedIsolation() {

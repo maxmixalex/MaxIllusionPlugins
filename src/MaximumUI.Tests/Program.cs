@@ -362,6 +362,7 @@ namespace MaximumUI.Tests {
             PrintBenchmark("retained-idle", retained);
             Console.WriteLine("Benchmark: same fixed engine, 1000 labels, 150 frames, 2 GUI events/frame; build/layout only, not a baseline DLL comparison or Unity frame rate.");
             MeasureDenseQueryPerformance(allocated);
+            MeasureDrawCommandPerformance(allocated);
         }
 
         private static void MeasureDenseQueryPerformance(Func<long> allocated) {
@@ -422,6 +423,49 @@ namespace MaximumUI.Tests {
                     ", median_ms=" + median.Milliseconds.ToString("F3",
                         System.Globalization.CultureInfo.InvariantCulture) +
                     ", allocated_bytes=" + median.AllocatedBytes);
+            }
+        }
+
+        private static void MeasureDrawCommandPerformance(Func<long> allocated) {
+            const int controls = 1024, frames = 60;
+            var rect = new MuiRect(0f, 0f, 120f, 24f);
+            var fill = MuiColor.FromRgb(0.5f, 0.5f, 0.5f);
+            foreach (int windows in new[] { 1, 8, 16 }) {
+                for (int mode = 0; mode < 2; mode++) {
+                    bool pooled = mode == 1;
+                    DrawList[] lists = new DrawList[windows];
+                    for (int i = 0; i < lists.Length; i++) {
+                        lists[i] = new DrawList(pooled);
+                        // Warm every list and its recycled-command cache
+                        // outside the measured region.
+                        for (int c = 0; c < controls; c++)
+                            lists[i].FillRect(rect, fill);
+                        lists[i].Clear();
+                    }
+                    GC.Collect();
+                    long before = allocated == null ? 0L : allocated();
+                    var timer = System.Diagnostics.Stopwatch.StartNew();
+                    for (int frame = 0; frame < frames; frame++) {
+                        for (int guiEvent = 0; guiEvent < 2; guiEvent++) {
+                            for (int w = 0; w < windows; w++) {
+                                DrawList list = lists[w];
+                                for (int c = 0; c < controls; c++)
+                                    list.FillRect(rect, fill);
+                                if (list.Commands.Count != controls)
+                                    throw new InvalidOperationException("DrawList benchmark lost graphics");
+                                list.Clear();
+                            }
+                        }
+                    }
+                    timer.Stop();
+                    long bytes = allocated == null ? -1L : allocated() - before;
+                    Console.WriteLine("BENCH draw-list: windows=" + windows +
+                        ", controlsPerWindow=1024, frames=60, eventsPerFrame=2" +
+                        ", pooled=" + pooled +
+                        ", elapsed_ms=" + timer.Elapsed.TotalMilliseconds.ToString("F3",
+                            System.Globalization.CultureInfo.InvariantCulture) +
+                        ", allocated_bytes=" + bytes);
+                }
             }
         }
 
