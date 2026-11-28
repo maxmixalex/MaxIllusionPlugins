@@ -482,7 +482,7 @@ namespace LoveJuice {
                 ? from + Vector3.down * .085f
                 : contact.position;
             saliva.Tick(true, true, nativeKiss,
-                from, to, delta);
+                from, to, delta, contact == null);
         }
 
         private void Update() {

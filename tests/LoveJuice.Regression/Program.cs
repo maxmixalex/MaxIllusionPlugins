@@ -151,6 +151,14 @@ internal static class Program {
                 !float.IsNaN(LiquidSourceTriggers.SalivaSag(
                     float.NaN, 0f, 0f)),
                 "saliva filament visibly sags, stretches and oscillates even when anchors are still");
+            Check(LiquidSourceTriggers.SalivaHangLength(0f) >= .01f &&
+                  LiquidSourceTriggers.SalivaHangLength(.5f) >
+                      LiquidSourceTriggers.SalivaHangLength(0f) &&
+                  LiquidSourceTriggers.SalivaHangLength(1f) >
+                      LiquidSourceTriggers.SalivaHangLength(.5f) &&
+                  LiquidSourceTriggers.SalivaHangLength(1f) <= .057f &&
+                  LiquidSourceTriggers.SalivaHangLength(float.NaN) == .012f,
+                "free-hanging saliva grows and detaches instead of maintaining a static endpoint");
             Check(LiquidSourceTriggers.MalePreLevel(0, true, true, 65f, 45f) == 2,
                 "Active primary male with sufficient gauge emits at a bounded level");
             Check(LiquidSourceTriggers.MalePreLevel(1, true, true, 100f, 0f) == 0 &&

@@ -19,6 +19,8 @@ namespace LoveJuice
         private readonly Vector3[] centres = new Vector3[Rows];
         private readonly List<Tear> tears = new List<Tear>();
         private float time, phase, opacity;
+        private Vector3 previousTip;
+        private bool hasPreviousTip, wasHanging;
 
         private sealed class Tear {
             internal GameObject Object;
@@ -164,7 +166,7 @@ namespace LoveJuice
         }
 
         internal void Tick(bool enabled, bool activity, bool nativeKiss,
-            Vector3 from, Vector3 to, float dt)
+            Vector3 from, Vector3 to, float dt, bool hanging = false)
         {
             if (root == null) return;
             float delta = Mathf.Clamp(dt, 0f, .05f);
@@ -180,13 +182,30 @@ namespace LoveJuice
             if (!active || opacity < .02f) {
                 renderer.enabled = false;
                 phase = 0f;
+                hasPreviousTip = false;
                 return;
             }
-            float cycle = LiquidSourceTriggers.SalivaTearPeriod(distance);
+            // Do not interpolate between an old fixed contact and a newly
+            // free-hanging thread. A new attachment starts its own cycle.
+            if (hanging != wasHanging) {
+                phase = 0f;
+                hasPreviousTip = false;
+                wasHanging = hanging;
+            }
+            float cycle = LiquidSourceTriggers.SalivaTearPeriod(
+                hanging ? .055f : distance);
             phase += delta;
             bool tear = phase >= cycle;
+            Vector3 detachedTip = previousTip;
+            bool canDetach = hasPreviousTip;
             if (tear) phase %= cycle;
             float tCycle = Mathf.Clamp01(phase / cycle);
+            if (hanging) {
+                // Growing, gravity-oriented free drool; no fixed 8.5cm
+                // second anchor. On tear, the old tip becomes a real drop.
+                distance = LiquidSourceTriggers.SalivaHangLength(tCycle);
+                to = from + Vector3.down * distance;
+            }
             float sag = LiquidSourceTriggers.SalivaSag(distance, time, tCycle);
             Vector3 axis = (to - from).normalized;
             Vector3 side = Vector3.Cross(axis, Vector3.up);
@@ -215,7 +234,10 @@ namespace LoveJuice
             strandMesh.RecalculateNormals();
             strandMesh.RecalculateBounds();
             renderer.enabled = true;
-            if (tear) BreakOff(centres[Rows - 2], axis);
+            if (tear && canDetach)
+                BreakOff(detachedTip, hanging ? Vector3.down : axis);
+            previousTip = centres[Rows - 2];
+            hasPreviousTip = true;
         }
 
         internal void Dispose() {
@@ -230,6 +252,7 @@ namespace LoveJuice
             strandMesh = tearMesh = null;
             renderer = null; material = null;
             root = null; time = phase = opacity = 0f;
+            hasPreviousTip = wasHanging = false;
         }
     }
 }

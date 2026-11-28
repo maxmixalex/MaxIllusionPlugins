@@ -52,6 +52,16 @@ namespace LoveJuice {
             return Math.Max(.55f, Math.Min(.95f, .55f + mouthDistance * 2.4f));
         }
 
+        // A single-ended mouth filament is NOT tied to a stationary point
+        // below the face. It grows under gravity, necks down, then separates.
+        // The detached drop is integrated independently by SalivaFilament.
+        internal static float SalivaHangLength(float phase) {
+            if (float.IsNaN(phase) || float.IsInfinity(phase))
+                return .012f;
+            phase = Math.Max(0f, Math.Min(1f, phase));
+            return .012f + .044f * (float)Math.Pow(phase, 1.4f);
+        }
+
         internal static float SalivaSag(float distance, float seconds, float phase) {
             if (float.IsNaN(distance) || float.IsInfinity(distance) ||
                 float.IsNaN(seconds) || float.IsInfinity(seconds) ||
