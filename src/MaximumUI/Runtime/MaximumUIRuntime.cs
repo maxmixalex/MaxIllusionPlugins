@@ -25,7 +25,6 @@ namespace MaximumUI {
             public long Order;
             public long WindowActivation;
             public bool PendingWindowPromotion;
-            public bool MayContainInlineDialog;
             public long ViewBuilds;
             public long RenderEvents;
         }
@@ -324,8 +323,6 @@ namespace MaximumUI {
                     mount.Shortcuts.BeginBuild();
                     bool wasWindow = mount.CachedRoot is Window;
                     mount.CachedRoot = mount.View.Build(mount.BuildContext) ?? EmptyWidget.Instance;
-                    mount.MayContainInlineDialog =
-                        WidgetVisibility.MayContainDialog(mount.CachedRoot);
                     Window rootWindow = mount.CachedRoot as Window;
                     rootKindChanged |= wasWindow != (rootWindow != null);
                     mount.RootWindowStateId = rootWindow == null ? null : mount.RenderContext.StateId(rootWindow, "window", "0");
@@ -449,9 +446,15 @@ namespace MaximumUI {
             for (int i = snapshot.Length - 1; i >= 0; i--) {
                 MountRecord mount = snapshot[i];
                 if (!mount.Active || !mount.Options.Visible) continue;
+                // Retained trees may be mutated without rebuilding the root,
+                // e.g. an inline Dialog added to an existing Window by a
+                // plugin. The old structural prefilter was stale in this case
+                // and silently let other windows steal modal input.
+                // Always consult the live tree; the renderer separately
+                // memoizes subtree visibility for its hot input path.
                 if (mount.Dialogs.HasOpenDialogs ||
-                    (mount.MayContainInlineDialog && WidgetVisibility.ContainsRootDialog(
-                        mount.CachedRoot, mount.RenderContext, "0"))) return i;
+                    WidgetVisibility.ContainsRootDialog(
+                        mount.CachedRoot, mount.RenderContext, "0")) return i;
             }
             return -1;
         }
