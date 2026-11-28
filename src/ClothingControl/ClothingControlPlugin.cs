@@ -26,7 +26,7 @@ namespace ClothingControl {
     [BepInPlugin(GUID, "ClothingControl", Version)]
     public sealed class ClothingControlPlugin : BaseUnityPlugin {
         public const string GUID = "MaxMixAlex.ClothingControl";
-        public const string Version = "0.5.8";
+        public const string Version = "0.5.9";
         private const string MountId = GUID + ".window";
         private static readonly string[] CoordinateNames = {
             "学生服（校内）", "学生服（放学）", "体操服", "泳装", "社团", "私服", "睡衣"
@@ -42,7 +42,14 @@ namespace ClothingControl {
         private static readonly FieldInfo HSceneMale1 = typeof(HSceneProc).GetField(
             "male1", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         private int page, accessoryGroup;
+        // TextField updates immediately, but the expensive filtered list
+        // changes only after 300ms without typing (true trailing debounce).
         private string accessoryQuery = string.Empty;
+        private string accessoryDraft = string.Empty;
+        private float accessoryFilterDue = -1f;
+        private ConfigEntry<bool> highlightOnHover;
+        private WardrobeAccessoryHighlighter accessoryHighlighter;
+        private int hoveredAccessorySlot = -1;
         private ConfigEntry<KeyboardShortcut> shortcut;
         private int lastHotkeyFrame = -1;
         private float lastHotkeyTime = -1f;
@@ -109,7 +116,12 @@ namespace ClothingControl {
                 Logger.LogInfo("Restored ClothingControl shortcut to the original LeftShift+Tab.");
             }
             Logger.LogInfo("ClothingControl v" + Version + " initialized; Show menu=" + shortcut.Value + ".");
-            showInMaker = Config.Bind("General", "Show in Maker", false, "Remember the wardrobe panel visibility in character Maker.");
+            showInMaker = Config.Bind("General", "Show in Maker", false,
+                "Remember the wardrobe panel visibility in character Maker.");
+            highlightOnHover = Config.Bind("Accessories", "Highlight on hover", false,
+                "Show a temporary private material overlay when the pointer hovers a visible accessory row. Uses the same approach as AccessoriesBatchManager.");
+            accessoryHighlighter = new WardrobeAccessoryHighlighter(
+                message => Logger.LogWarning(message));
             store = new WardrobePresetStore(Path.Combine(Paths.ConfigPath, GUID + ".presets.xml"));
             store.Reload();
             // The stable AccessoryBatchManager and ClothingCompression plugins
@@ -318,6 +330,9 @@ namespace ClothingControl {
             view = null;
             target = null;
             previousCharacters.Clear();
+            if (accessoryHighlighter != null)
+                accessoryHighlighter.Clear();
+            hoveredAccessorySlot = -1;
         }
 
         private void OnDestroy() {
@@ -514,12 +529,25 @@ namespace ClothingControl {
                 HandleHotkey(configuredKey ? "BepInEx KeyboardShortcut" :
                     "Unity Input.GetKeyDown");
             if (!visible) return;
+            if (accessoryFilterDue >= 0f &&
+                Time.unscaledTime >= accessoryFilterDue) {
+                accessoryFilterDue = -1f;
+                if (accessoryQuery != accessoryDraft) {
+                    accessoryQuery = accessoryDraft;
+                    ClearAccessoryHover();
+                    Refresh();
+                }
+            }
             if (batch != null && (!IsStudio() || SceneManager.GetActiveScene().handle != batch.SceneHandle))
                 CancelOperations("场景已变更，停止预设应用。");
             if (pending != null) AdvancePending();
             else if (batch != null) AdvanceSceneBatch();
             if (Time.unscaledTime < nextPoll) return;
             nextPoll = Time.unscaledTime + .25f;
+            if (hoveredAccessorySlot >= 0 && page == 1 &&
+                highlightOnHover != null && highlightOnHover.Value &&
+                accessoryHighlighter != null)
+                accessoryHighlighter.Update(target, hoveredAccessorySlot);
             if (!SupportedScene()) { Close(false); return; }
             Refresh();
         }
@@ -549,6 +577,7 @@ namespace ClothingControl {
         }
 
         private void Close(bool remember = true) {
+            ClearAccessoryHover();
             Logger.LogInfo("ClothingControl closing; rememberMakerVisibility=" + remember + ".");
             visible = false;
             makerPresentationSuppressed = false;
@@ -566,8 +595,16 @@ namespace ClothingControl {
             return SessionCurrent(token, character) && !Busy && HasCharacter(Characters(), character);
         }
 
+        private void ClearAccessoryHover() {
+            hoveredAccessorySlot = -1;
+            if (accessoryHighlighter != null)
+                accessoryHighlighter.Clear();
+        }
+
         private void Refresh() {
             if (!visible || view == null) return;
+            if (page != 1 || highlightOnHover == null || !highlightOnHover.Value)
+                ClearAccessoryHover();
             bool sceneSupported = IsStudio() && !MakerAPI.InsideAndLoaded;
             if (!sceneSupported && presetScope != 0) { presetScope = 0; generation++; }
             List<ChaControl> characters = Characters();
@@ -575,11 +612,16 @@ namespace ClothingControl {
             if (!rosterChanged)
                 for (int i = 0; i < characters.Count; i++)
                     if (!ReferenceEquals(previousCharacters[i], characters[i])) { rosterChanged = true; break; }
-            if (rosterChanged) { previousCharacters = characters; generation++; }
+            if (rosterChanged) {
+                previousCharacters = characters;
+                ClearAccessoryHover();
+                generation++;
+            }
             if (!HasCharacter(characters, target)) {
                 ChaControl next = characters.Count > 0 ? characters[0] : null;
                 if (!ReferenceEquals(next, target)) {
                     target = next;
+                    ClearAccessoryHover();
                     generation++;
                     if (batch == null) pending = null;
                 }
@@ -608,7 +650,9 @@ namespace ClothingControl {
                 Busy = Busy, HasTarget = character != null && coordinateCount > 0,
                 CanChangeCoordinate = !IsHScene() && (MakerAPI.InsideAndLoaded || IsStudio()),
                 Scope = presetScope, CanScenePresets = sceneSupported, HasSceneTargets = characters.Count > 0,
-                Page = page, AccessoryGroup = accessoryGroup, AccessoryQuery = accessoryQuery,
+                Page = page, AccessoryGroup = accessoryGroup,
+                AccessoryQuery = accessoryDraft, AccessoryFilter = accessoryQuery,
+                HighlightOnHover = highlightOnHover != null && highlightOnHover.Value,
                 Close = delegate { if (visible && token == generation) Close(); },
                 Cancel = delegate {
                     if (visible && token == generation && Busy) { CancelOperations("已取消剩余操作。"); Refresh(); }
@@ -617,7 +661,11 @@ namespace ClothingControl {
             model.SelectTarget = index => {
                 if (!SessionCurrent(token, character) || Busy || index < 0 || index >= characters.Count ||
                     !HasCharacter(Characters(), characters[index])) return;
-                if (!ReferenceEquals(target, characters[index])) { target = characters[index]; generation++; }
+                if (!ReferenceEquals(target, characters[index])) {
+                    target = characters[index];
+                    ClearAccessoryHover();
+                    generation++;
+                }
                 Refresh();
             };
             model.SelectCoordinate = index => {
@@ -641,15 +689,41 @@ namespace ClothingControl {
             };
             model.ChangePage = value => {
                 if (!SessionCurrent(token, character) || Busy || value < 0 || value > 1) return;
-                page = value; Refresh();
+                page = value;
+                ClearAccessoryHover();
+                Refresh();
             };
             model.ChangeAccessoryGroup = value => {
                 if (!SessionCurrent(token, character) || Busy || value < 0 || value > 3) return;
-                accessoryGroup = value; Refresh();
+                accessoryGroup = value;
+                ClearAccessoryHover();
+                Refresh();
             };
             model.ChangeAccessoryQuery = value => {
                 if (!SessionCurrent(token, character) || Busy) return;
-                accessoryQuery = value ?? string.Empty; Refresh();
+                accessoryDraft = value ?? string.Empty;
+                accessoryFilterDue = Time.unscaledTime + .30f;
+                // Do NOT rebuild the virtual list on every keystroke:
+                // the pending edit remains in the retained text field.
+                view.Model.AccessoryQuery = accessoryDraft;
+            };
+            model.ChangeHighlightOnHover = value => {
+                if (!SessionCurrent(token, character)) return;
+                highlightOnHover.Value = value;
+                if (!value) ClearAccessoryHover();
+                Refresh();
+            };
+            model.ChangeAccessoryHover = (slot, hovered) => {
+                if (!TargetCurrent(token, character) || page != 1 ||
+                    highlightOnHover == null || !highlightOnHover.Value)
+                    return;
+                if (hovered) {
+                    if (hoveredAccessorySlot == slot) return;
+                    hoveredAccessorySlot = slot;
+                    accessoryHighlighter.Update(character, slot);
+                } else if (hoveredAccessorySlot == slot) {
+                    ClearAccessoryHover();
+                }
             };
             model.ChangeName = value => {
                 if (!SessionCurrent(token, character) || Busy) return;
@@ -694,9 +768,16 @@ namespace ClothingControl {
                     if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
                     TryEdit(() => SetShoeMode(character, value), "已切换鞋型。");
                 };
-                model.RestoreClothing = () => {
-                    if (!TargetCurrent(token, character) || Coordinate(character) != capturedCoordinate) return;
-                    TryEdit(() => { character.SetClothesStateAll(0); return true; }, "已恢复完整穿着。");
+                model.SetAllGarments = wear => {
+                    if (!TargetCurrent(token, character) ||
+                        Coordinate(character) != capturedCoordinate) return;
+                    ClearAccessoryHover();
+                    TryEdit(() => {
+                        // Native set-all preserves notBot/notBra/notShorts
+                        // state linkage. Do not directly rewrite slots.
+                        character.SetClothesStateAll((byte)(wear ? 0 : 3));
+                        return true;
+                    }, wear ? "已全部穿着。" : "已全部隐藏。");
                 };
                 for (int i = 0; i < GarmentKinds.Length; i++) {
                     string kind = GarmentKinds[i];
