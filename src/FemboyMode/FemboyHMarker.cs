@@ -35,7 +35,6 @@ namespace FemboyMode
         private RectTransform portrait;
         private RectTransform markerRect;
         private GameObject marker;
-        private Text glyph;
         private bool? lastVisible;
         private bool positionLogged;
         private float nextRetry;
@@ -107,7 +106,8 @@ namespace FemboyMode
                 positionLogged = true;
                 FemboyModePlugin.LogOptionalIntegrationProblem(
                     "Femboy HUD circle positioned near portrait status: " +
-                    markerRect.anchoredPosition + " size=22 icon=" + glyph.text);
+                    markerRect.anchoredPosition +
+                    " size=22 icon=centred procedural male glyph");
             }
         }
 
@@ -131,25 +131,6 @@ namespace FemboyMode
             return false;
         }
 
-        private static Font FindFont(Canvas owner)
-        {
-            Text[] native = owner.GetComponentsInChildren<Text>(true);
-            for (int i = 0; i < native.Length; i++)
-            {
-                if (native[i] != null && native[i].font != null &&
-                    native[i].font.HasCharacter('♂'))
-                    return native[i].font;
-            }
-            try
-            {
-                return Font.CreateDynamicFontFromOSFont(
-                    new[] { "Segoe UI Symbol", "Microsoft YaHei UI",
-                        "Arial Unicode MS", "Arial" }, 19);
-            }
-            catch (Exception) { }
-            return Resources.GetBuiltinResource<Font>("Arial.ttf");
-        }
-
         // Crisp circular medallion, same teal/cream/ink palette as the
         // game's original top-left status chips. Generated once in memory;
         // no png or external fonts need to ship in the plugin.
@@ -164,6 +145,7 @@ namespace FemboyMode
             Color32 inner = new Color32(18, 119, 148, 255);
             Color32 rim = new Color32(237, 246, 239, 255);
             Color32 outer = new Color32(21, 43, 64, 255);
+            Color32 maleGlyph = new Color32(246, 251, 251, 255);
             for (int y = 0; y < side; y++)
                 for (int x = 0; x < side; x++)
                 {
@@ -174,6 +156,13 @@ namespace FemboyMode
                         radius <= 28.0f ? rim :
                         radius <= 30.0f ? outer :
                         new Color32(0, 0, 0, 0);
+                    // Draw the complete male symbol inside the *same*
+                    // centered sprite. Fonts have unequal glyph bearings
+                    // and baselines, so TextAnchor.MiddleCenter was never
+                    // true optical centering on 22px HUD chips.
+                    if (radius <= 25f &&
+                        FemboyRules.MaleMarkerGlyphPixel(x, y))
+                        color = maleGlyph;
                     pixels[y * side + x] = color;
                 }
             texture.SetPixels32(pixels);
@@ -196,8 +185,6 @@ namespace FemboyMode
             canvasRect = canvas.transform as RectTransform;
             if (canvasRect == null) return;
 
-            Font font = FindFont(canvas);
-            if (font == null) return;
             marker = new GameObject("FemboyMode_StatusSexIcon",
                 typeof(RectTransform), typeof(Image));
             marker.transform.SetParent(canvasRect, false);
@@ -211,24 +198,6 @@ namespace FemboyMode
             image.sprite = Circle();
             image.color = Color.white;
             image.raycastTarget = false;
-            var textObject = new GameObject("SexSymbol",
-                typeof(RectTransform), typeof(Text));
-            textObject.transform.SetParent(markerRect, false);
-            RectTransform glyphRect = textObject.GetComponent<RectTransform>();
-            glyphRect.anchorMin = Vector2.zero;
-            glyphRect.anchorMax = Vector2.one;
-            glyphRect.offsetMin = glyphRect.offsetMax = Vector2.zero;
-            glyph = textObject.GetComponent<Text>();
-            glyph.font = font;
-            glyph.text = font.HasCharacter('♂') ? "♂" : "M";
-            glyph.fontSize = 17;
-            glyph.fontStyle = FontStyle.Bold;
-            glyph.alignment = TextAnchor.MiddleCenter;
-            glyph.color = Color.white;
-            glyph.raycastTarget = false;
-            Outline outline = textObject.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0.12f, 0.17f, 0.85f);
-            outline.effectDistance = new Vector2(0.65f, -0.65f);
             marker.SetActive(false);
         }
 
