@@ -99,7 +99,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene LoveJuicePanel() {
         var model = new LoveJuiceViewModel {
-            Version = "0.3.9", Enabled = true, HasScene = true,
+            Version = "0.4.0", Enabled = true, HasScene = true,
             ActorCount = 2, ActiveParticles = 8, MaximumParticles = 48,
             ActorNames = new[] { "示例角色 A", "示例角色 B" },
             SelectedActorIndex = 0, Face = true, SalivaAnytime = true,
@@ -131,13 +131,13 @@ internal static class PluginPreviewScenes {
             .Build(new BuildContext());
         return new PreviewScene {
             Slug = "lovejuice-control-preview",
-            Title = "LoveJuice 0.3.9",
+            Title = "LoveJuice 0.4.0",
             Source = "LoveJuice.LoveJuiceView.Build",
-            Detail = "Actual standalone material-droplet and kiss control panel",
+            Detail = "Production panel showing exact automatic triggers and collapsed advanced settings",
             Widget = window, StateId = "default",
             RequiredKeys = new[] { "lovejuice-enabled", "lovejuice-scroll",
-                "lovejuice-face", "lovejuice-saliva-anytime",
-                "lovejuice-inspect-studio", "lovejuice-experimental-spheres",
+                "lovejuice-how-to", "lovejuice-face", "lovejuice-saliva-anytime",
+                "lovejuice-intimate-condition", "lovejuice-advanced",
                 "lovejuice-body", "lovejuice-preview-channel" }
         };
     }
