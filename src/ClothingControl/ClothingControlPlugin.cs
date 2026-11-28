@@ -871,6 +871,42 @@ namespace ClothingControl {
             Refresh();
         }
 
+        // A top may publish a real lower-body reference even if its
+        // Coordinate metadata is not the built-in notBot flag. This is
+        // common among imported latex tops. The reference belongs to the
+        // loaded top and is only used if no standalone bot mesh exists.
+        private static bool LoadedTopOwnsBottomReference(ChaControl character) {
+            if (character == null || character.objClothes == null ||
+                character.objClothes.Length < 2 ||
+                character.objClothes[0] == null ||
+                character.objClothes[1] != null ||
+                !character.IsClothesStateKind(1))
+                return false;
+            try {
+                MethodInfo getter = null;
+                foreach (MethodInfo candidate in typeof(ChaControl).GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance)) {
+                    ParameterInfo[] parameters = candidate.GetParameters();
+                    if (candidate.Name == "GetReferenceInfo" &&
+                        parameters.Length == 1 &&
+                        parameters[0].ParameterType.IsEnum) {
+                        getter = candidate;
+                        break;
+                    }
+                }
+                if (getter == null) return false;
+                Type keyType = getter.GetParameters()[0].ParameterType;
+                object referenceKey = Enum.Parse(keyType, "S_CTOP_B_DEF");
+                return getter.Invoke(character, new[] { referenceKey })
+                    is GameObject;
+            } catch (Exception) {
+                // Some releases/mods do not expose this reference; never
+                // guess at the model's geometry from its display name.
+                return false;
+            }
+        }
+
         // Game-native one-piece ownership, as implemented in
         // ChaControl.AddClothesStateKind/SetClothesState:
         //   notBot    => top owns bottom state;
@@ -904,7 +940,8 @@ namespace ClothingControl {
                 character.notBot, character.notBra, character.notShorts,
                 character.IsClothesStateKind(slot),
                 character.IsClothesStateKind(0),
-                character.IsClothesStateKind(2));
+                character.IsClothesStateKind(2),
+                kind == "bot" && LoadedTopOwnsBottomReference(character));
         }
 
         private static bool TryReadGarment(ChaControl character, string kind,
