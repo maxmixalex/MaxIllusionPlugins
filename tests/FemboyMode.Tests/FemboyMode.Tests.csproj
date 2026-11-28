@@ -7,6 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/FemboyMode/FemboyRules.cs" Link="FemboyRules.cs" />
+    <!-- Compile the production Harmony hook against minimal fake game UI
+         types, so fallback dispatch is tested rather than only its rules. -->
+    <Compile Include="../../src/FemboyMode/FemboyHSceneHooks.cs" Link="FemboyHSceneHooks.cs" />
     <Compile Include="../../src/FemboyMode/MakerPageScrollMath.cs" Link="MakerPageScrollMath.cs" />
     <Compile Include="../../src/FemboyMode/FemboyMakerAxisMath.cs" Link="FemboyMakerAxisMath.cs" />
     <Compile Include="../../src/FemboyMode/FemboyNativeAxisMath.cs" Link="FemboyNativeAxisMath.cs" />

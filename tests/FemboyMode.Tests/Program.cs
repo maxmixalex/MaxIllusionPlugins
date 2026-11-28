@@ -58,6 +58,7 @@ internal static class Program
     private static int Main()
     {
         CheckPatchArgumentMetadata();
+        HSceneHooksRegression.Run();
         Check(FemboyRules.IsUnderwearAccessoryName("MyPantiesMod") &&
               FemboyRules.IsUnderwearAccessoryName("KK_ショーツ_A") &&
               FemboyRules.IsUnderwearAccessoryName("waist_bikini") &&

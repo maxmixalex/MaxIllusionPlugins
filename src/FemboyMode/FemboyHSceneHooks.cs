@@ -91,7 +91,8 @@ namespace FemboyMode
             // callbacks ONLY while this exact pose is the active fallback;
             // it then runs the corresponding regular-insertion method.
             // Never claim the front-only animation has become anal.
-            if (FemboyRules.ShouldOfferAnalFallback(normalOffered,
+            if (selectedPose != null &&
+                FemboyRules.ShouldOfferAnalFallback(normalOffered,
                     analOffered, hasAnalPair)) {
                 bool withVoice = IsOffered(buttons[baseIndex]);
                 bool withoutVoice = IsOffered(buttons[baseIndex + 1]);
