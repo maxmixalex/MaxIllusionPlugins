@@ -6,8 +6,8 @@
     <Company>MaxMixAlex</Company>
     <Product>HSControl</Product>
     <AssemblyTitle>HSControl</AssemblyTitle>
-    <Version>0.1.6</Version>
-    <AssemblyVersion>0.1.6.0</AssemblyVersion>
+    <Version>0.1.7</Version>
+    <AssemblyVersion>0.1.7.0</AssemblyVersion>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MaximumUI\MaximumUI.csproj" />
