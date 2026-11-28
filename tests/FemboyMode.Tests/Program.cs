@@ -227,6 +227,19 @@ internal static class Program
             "eight buttons cannot contain both actions");
         Check(!FemboyRules.HasBothFrontButtons(16, -1),
             "negative action index is rejected");
+        Check(FemboyRules.AnalInsertStartIndex(false) == 2 &&
+              FemboyRules.AnalInsertStartIndex(true) == 9,
+            "anal fallback uses the native 2/3 or 9/10 pair");
+        Check(FemboyRules.HasBothAnalButtons(4, 2) &&
+              !FemboyRules.HasBothAnalButtons(3, 2) &&
+              FemboyRules.HasBothAnalButtons(11, 9) &&
+              !FemboyRules.HasBothAnalButtons(10, 9),
+            "anal pair requires both actual native buttons");
+        Check(FemboyRules.ShouldOfferAnalFallback(true, false, true) &&
+              !FemboyRules.ShouldOfferAnalFallback(false, false, true) &&
+              !FemboyRules.ShouldOfferAnalFallback(true, true, true) &&
+              !FemboyRules.ShouldOfferAnalFallback(true, false, false),
+            "restore native anal bubbles only when normal is the sole available entry");
 
         Check(FemboyRules.SafeBoneScale(-2f) == .25f,
             "clamp small scales");

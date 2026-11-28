@@ -43,19 +43,48 @@ namespace FemboyMode
                 ? flags.selectAnimationListInfo.isFemaleInitiative
                 : flags.nowAnimationInfo != null && flags.nowAnimationInfo.isFemaleInitiative;
             int baseIndex = FemboyRules.FrontInsertStartIndex(femaleInitiative);
-            if (!FemboyRules.HasBothFrontButtons(buttons.Count, baseIndex) )
+            if (!FemboyRules.HasBothFrontButtons(buttons.Count, baseIndex))
                 return;
 
-            // The original game can reactivate this page in subsequent pose
-            // changes. Re-enforce the character restriction after both the
-            // initial SetSonyuStart and SetSonyuActionButtonActive. Vanilla
-            // rebuilds visibility, so no stale UI cache is retained.
+            // Capture availability BEFORE hiding the original insertion
+            // buttons. Some imported positions expose ONLY the normal pair;
+            // if we hide that pair without offering anal the user cannot
+            // start the selected action at all.
+            bool normalOffered = IsOffered(buttons[baseIndex]) ||
+                IsOffered(buttons[baseIndex + 1]);
+            int analIndex = FemboyRules.AnalInsertStartIndex(femaleInitiative);
+            bool hasAnalPair = FemboyRules.HasBothAnalButtons(
+                buttons.Count, analIndex);
+            bool analOffered = hasAnalPair &&
+                (IsOffered(buttons[analIndex]) ||
+                 IsOffered(buttons[analIndex + 1]));
+
+            // Reuse the two game-owned anal bubbles and their native onClick
+            // listeners; never generate a detached button or call SetPlay.
+            // Vanilla may hide them for positions that only list the front
+            // choice. Only restore those two bubbles in that case. Native
+            // OnInsertAnalClick/OnInsertAnalNoVoiceClick retain ownership of
+            // insertion, voice conditions and the subsequent scene state.
+            if (FemboyRules.ShouldOfferAnalFallback(normalOffered,
+                    analOffered, hasAnalPair)) {
+                for (int i = analIndex; i < analIndex + 2; i++) {
+                    if (buttons[i] == null) continue;
+                    buttons[i].gameObject.SetActive(true);
+                    buttons[i].interactable = true;
+                }
+            }
+
+            // Vanilla can reactivate front on a subsequent position change.
+            // Keep the restriction confined to the current marked heroine.
             if (buttons[baseIndex] != null)
                 buttons[baseIndex].gameObject.SetActive(false);
             if (buttons[baseIndex + 1] != null)
                 buttons[baseIndex + 1].gameObject.SetActive(false);
+        }
 
-            // Never force-enable the other actions; a pose may not support them.
+        private static bool IsOffered(UnityEngine.UI.Button button) {
+            return button != null && button.gameObject.activeSelf &&
+                button.interactable;
         }
 
         [HarmonyPrefix]

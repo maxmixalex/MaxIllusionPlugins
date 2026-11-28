@@ -411,6 +411,25 @@ namespace FemboyMode
             return startIndex >= 0 && buttonCount >= startIndex + 2;
         }
 
+        // Each seven-button Sonyu page places its native anal pair directly
+        // after the two regular-insertion actions. Never extrapolate beyond
+        // an actual native pair: no fake handlers or animation assets.
+        internal static int AnalInsertStartIndex(bool femaleInitiative)
+        {
+            return FrontInsertStartIndex(femaleInitiative) + 2;
+        }
+
+        internal static bool HasBothAnalButtons(int buttonCount, int startIndex)
+        {
+            return startIndex >= 0 && buttonCount >= startIndex + 2;
+        }
+
+        internal static bool ShouldOfferAnalFallback(bool normalOffered,
+            bool analOffered, bool hasNativeAnalPair)
+        {
+            return normalOffered && !analOffered && hasNativeAnalPair;
+        }
+
         internal static float SafeBoneScale(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value))
