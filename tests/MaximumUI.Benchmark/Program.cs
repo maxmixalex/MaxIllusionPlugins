@@ -30,6 +30,61 @@ internal static class Program {
             Console.WriteLine(version + " mode=" + mode + " median_ms=" + median.Ms.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) +
                 " bytes=" + median.Bytes + " builds=" + median.Builds + " layouts=" + median.Layouts);
         }
+        // The dense-query scenario exercises real retained query objects,
+        // not a duplicated mock implementation. Source is identical when
+        // benchmarking historical and optimized MaximumUI DLLs.
+        foreach (int windows in new[] { 1, 8, 16 }) {
+            for (int warm = 0; warm < 2; warm++) DenseQueries(windows, 4);
+            Sample[] samples = new Sample[3];
+            for (int i = 0; i < samples.Length; i++)
+                samples[i] = DenseQueries(windows, 240);
+            Array.Sort(samples, delegate(Sample a, Sample b) {
+                return a.Ms.CompareTo(b.Ms);
+            });
+            Sample m = samples[1];
+            Console.WriteLine(version + " dense-query windows=" + windows +
+                " frames=240 eventsPerFrame=2 controlsPerWindow=1024" +
+                " median_ms=" + m.Ms.ToString("F3",
+                    System.Globalization.CultureInfo.InvariantCulture) +
+                " bytes=" + m.Bytes);
+        }
+    }
+
+    private static Sample DenseQueries(int windows, int frames) {
+        const int controls = 1024;
+        UiQueryStore[] stores = new UiQueryStore[windows];
+        Button[] widgets = new Button[controls];
+        string[] paths = new string[controls];
+        for (int i = 0; i < controls; i++) {
+            widgets[i] = new Button("Row", null, "bench-row-" + i);
+            paths[i] = "0." + i;
+        }
+        for (int i = 0; i < windows; i++) stores[i] = new UiQueryStore();
+        MuiRect rect = new MuiRect(0f, 0f, 240f, 32f);
+        // Prime each store and all widget identity caches before measuring.
+        for (int w = 0; w < windows; w++) {
+            stores[w].BeginFrame();
+            for (int i = 0; i < controls; i++)
+                stores[w].RecordItem(widgets[i], paths[i], rect,
+                    false, false, false, false);
+        }
+        GC.Collect();
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        Stopwatch watch = Stopwatch.StartNew();
+        for (int f = 0; f < frames; f++)
+            for (int e = 0; e < 2; e++)
+                for (int w = 0; w < windows; w++) {
+                    UiQueryStore store = stores[w];
+                    store.BeginFrame();
+                    for (int i = 0; i < controls; i++)
+                        store.RecordItem(widgets[i], paths[i], rect,
+                            false, false, false, false);
+                    if (store.ItemCount != controls)
+                        throw new InvalidOperationException("Query items lost");
+                }
+        watch.Stop();
+        return new Sample { Ms = watch.Elapsed.TotalMilliseconds,
+            Bytes = GC.GetAllocatedBytesForCurrentThread() - before };
     }
 
     private static Sample Run(int frames, int mode) {

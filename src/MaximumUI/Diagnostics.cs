@@ -95,6 +95,14 @@ namespace MaximumUI {
         public int MountCount;
         public int VisibleMountCount;
         public int PendingCallbackCount;
+        // Sampled on demand: counters never allocate or format strings
+        // during the hot Update/OnGUI loops.
+        public long ViewBuildCount;
+        public long RenderEventCount;
+        public long LayoutPassCount;
+        public long LayoutCacheHitCount;
+        public int PooledQueryItems;
+        public int PooledNavigationItems;
         public bool IsMouseOverAnyWindow;
         public bool IsAnyTextFieldFocused;
         public bool IsModalOpen;

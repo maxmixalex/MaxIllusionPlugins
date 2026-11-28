@@ -135,7 +135,9 @@ namespace MaximumUI {
                 // Keep warm entries when custom drawing exceeds the cache budget.
                 // Clearing the whole dictionary here makes a stable 129-style
                 // frame recreate every GUIStyle on every repaint.
-                if (textStyles.Count < 128) textStyles.Add(key, style);
+                // Keep up to 512 distinct style/format combinations for
+                // multi-window UI themes without unbounded retention.
+                if (textStyles.Count < 512) textStyles.Add(key, style);
             }
 
             Color oldColor = GUI.contentColor;

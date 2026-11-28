@@ -65,6 +65,11 @@ namespace MaximumUI {
     public sealed class UiQueryStore {
         private readonly List<ItemQuery> items = new List<ItemQuery>();
         private readonly List<WindowQuery> windows = new List<WindowQuery>();
+        // Repainting a dense 1000+ item view twice per frame used to allocate
+        // a NEW ItemQuery for every item after #512. Retain all observed
+        // records up to a bounded cap; reused items are overwritten each GUI
+        // event and the pool is reclaimed when its mount is unmounted.
+        private const int MaximumPooledItems = 8192;
         private readonly List<ItemQuery> itemPool = new List<ItemQuery>();
         private readonly List<WindowQuery> windowPool = new List<WindowQuery>();
         private readonly List<MuiRect> inputRegions = new List<MuiRect>();
@@ -80,6 +85,8 @@ namespace MaximumUI {
         public int ItemCount {
             get { return items.Count; }
         }
+
+        internal int PooledItemCount { get { return itemPool.Count; } }
 
         public int WindowCount {
             get { return windows.Count; }
@@ -173,7 +180,7 @@ namespace MaximumUI {
             if (slot < itemPool.Count) query = itemPool[slot];
             else {
                 query = new ItemQuery();
-                if (slot < 512) itemPool.Add(query);
+                if (slot < MaximumPooledItems) itemPool.Add(query);
             }
             query.Id = widget.Identity(path);
             query.Key = widget.IdentityKeyText;

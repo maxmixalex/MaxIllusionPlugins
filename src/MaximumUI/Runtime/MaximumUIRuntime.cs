@@ -25,6 +25,8 @@ namespace MaximumUI {
             public long Order;
             public long WindowActivation;
             public bool PendingWindowPromotion;
+            public long ViewBuilds;
+            public long RenderEvents;
         }
 
         private sealed class BaseMountComparer : IComparer<MountRecord> {
@@ -326,6 +328,7 @@ namespace MaximumUI {
                     mount.RootWindowStateId = rootWindow == null ? null : mount.RenderContext.StateId(rootWindow, "window", "0");
                     mount.Renderer.InvalidateLayout();
                     mount.BuildSchedule.CompleteBuild(frameCount, revision);
+                    mount.ViewBuilds++;
                 }
             }
 
@@ -377,8 +380,14 @@ namespace MaximumUI {
             mount.BuildContext.IsModalOpen = modalOpen;
             MountRecord previous = renderingMount;
             renderingMount = mount;
-            try { mount.Renderer.Render(mount.CachedRoot ?? EmptyWidget.Instance, mount.RenderContext); }
-            finally { renderingMount = previous; }
+            mount.RenderContext.RootDialogCheckedByRuntime = true;
+            try {
+                mount.Renderer.Render(mount.CachedRoot ?? EmptyWidget.Instance, mount.RenderContext);
+                mount.RenderEvents++;
+            } finally {
+                mount.RenderContext.RootDialogCheckedByRuntime = false;
+                renderingMount = previous;
+            }
         }
 
         public static RuntimeMetrics GetMetrics() {
@@ -392,7 +401,15 @@ namespace MaximumUI {
             };
 
             for (int i = 0; i < mounts.Count; i++) {
-                if (mounts[i].Options != null && mounts[i].Options.Visible) metrics.VisibleMountCount++;
+                MountRecord mount = mounts[i];
+                if (mount.Options != null && mount.Options.Visible)
+                    metrics.VisibleMountCount++;
+                metrics.ViewBuildCount += mount.ViewBuilds;
+                metrics.RenderEventCount += mount.RenderEvents;
+                metrics.LayoutPassCount += mount.Renderer.LayoutPassCount;
+                metrics.LayoutCacheHitCount += mount.Renderer.LayoutCacheHitCount;
+                metrics.PooledQueryItems += mount.QueryStore.PooledItemCount;
+                metrics.PooledNavigationItems += mount.Navigation.PooledItemCount;
             }
 
             return metrics;

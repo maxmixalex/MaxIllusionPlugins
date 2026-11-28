@@ -73,6 +73,9 @@ namespace MaximumUI {
             tooltipTextHeightMeasure = MeasureTooltipTextHeight;
         }
 
+        public long LayoutPassCount { get { return layoutCache.LayoutPassCount; } }
+        public long LayoutCacheHitCount { get { return layoutCache.CacheHitCount; } }
+
         public void InvalidateLayout() {
             layoutCache.Invalidate();
             unchecked { contentRevision++; }
@@ -196,7 +199,13 @@ namespace MaximumUI {
                 context.InputDialog = null;
                 bool externalModalOpen = context.IsModalOpen;
                 string rootPath = string.IsNullOrEmpty(context.Path) ? "0" : context.Path + ".0";
-                context.IsModalOpen = externalModalOpen || WidgetVisibility.ContainsRootDialog(widget, context, rootPath) || (context.Dialogs != null && context.Dialogs.HasOpenDialogs);
+                // The runtime already calls FindModalMount on every GUI
+                // event. Avoid traversing the same potentially huge widget
+                // tree a second time in every visible mount.
+                context.IsModalOpen = externalModalOpen ||
+                    (!context.RootDialogCheckedByRuntime &&
+                     WidgetVisibility.ContainsRootDialog(widget, context, rootPath)) ||
+                    (context.Dialogs != null && context.Dialogs.HasOpenDialogs);
                 MaximumUIRuntime.IsModalOpen |= context.IsModalOpen;
                 RenderWidget(widget, context, "0");
 
@@ -3392,11 +3401,21 @@ namespace MaximumUI {
         }
 
         private static void DrawStrokeRect(Rect rect, Color color, float thickness) {
+            Event current = Event.current;
+            if (current == null || !GuiEventPolicy.ShouldPaint(current.type))
+                return;
+            // One tint transition for all four edges instead of four
+            // DrawFilledRect calls (each separately changed GUI.color).
             float t = thickness <= 0f ? 1f : thickness;
-            DrawFilledRect(new Rect(rect.x, rect.y, rect.width, t), color);
-            DrawFilledRect(new Rect(rect.x, rect.yMax - t, rect.width, t), color);
-            DrawFilledRect(new Rect(rect.x, rect.y, t, rect.height), color);
-            DrawFilledRect(new Rect(rect.xMax - t, rect.y, t, rect.height), color);
+            Color old = GUI.color;
+            try {
+                GUI.color = WindowTint(color);
+                Texture2D white = Texture2D.whiteTexture;
+                GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, t), white);
+                GUI.DrawTexture(new Rect(rect.x, rect.yMax - t, rect.width, t), white);
+                GUI.DrawTexture(new Rect(rect.x, rect.y, t, rect.height), white);
+                GUI.DrawTexture(new Rect(rect.xMax - t, rect.y, t, rect.height), white);
+            } finally { GUI.color = old; }
         }
 
         private float DoSlider(Rect controlRect, Rect trackRect, float value, float min, float max, RenderContext context) {

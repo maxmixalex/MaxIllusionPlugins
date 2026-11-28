@@ -16,7 +16,9 @@ dotnet build tests/MaximumUI.Benchmark/MaximumUI.Benchmark.csproj -c Release -p:
 dotnet bin/Release/MaximumUI.Benchmark/fixed/MaximumUI.Tests.dll
 ```
 
-场景：1000 个 Label、150 帧、每帧 2 个 GUI 事件；每种模式先预热 3 次（每次 25 帧），再测量 5 次并输出中位耗时。每次运行都断言控件数量、末行路径、树构建次数和布局次数。分配量来自 `GC.GetAllocatedBytesForCurrentThread()`，不含建立测量对象之前的分配。
+场景：1000 个 Label、150 帧、每帧 2 个 GUI 事件；每种模式先预热 3 次（每次 25 帧），再测量 5 次并输出中位耗时。
+
+另新增高刷新多窗口查询基准：1 / 8 / 16 个独立 `UiQueryStore`，每窗口 1024 项，240 帧且每帧模拟两个 IMGUI 事件；提前填充池和身份缓存，采样 3 次取中位耗时及线程分配字节。该微基准可对比 512 项上限时期的分配回归，但不代表 Unity 实际渲染或 GPU 帧率。每次运行都断言控件数量、末行路径、树构建次数和布局次数。分配量来自 `GC.GetAllocatedBytesForCurrentThread()`，不含建立测量对象之前的分配。
 
 | 模式 | 行为 |
 |---|---|

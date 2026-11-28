@@ -19,6 +19,10 @@ namespace MaximumUI {
         public bool CacheLayout;
         public bool SoftMouseCapture = true;
         public bool SoftKeyboardCapture;
+        // Runtime has already scanned mounted roots for the active modal.
+        // Outside MaximumUIRuntime (e.g. headless previews), fall back to
+        // the original full tree scan.
+        internal bool RootDialogCheckedByRuntime;
         internal bool SuppressDialogs;
         internal bool SuppressInput;
         internal bool OwnsKeyboardInput = true;

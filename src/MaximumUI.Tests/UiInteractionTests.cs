@@ -6,10 +6,11 @@ using UnityEngine;
 
 namespace MaximumUI.Tests {
     internal static class UiInteractionTests {
-        internal const int TestCount = 12;
+        internal const int TestCount = 13;
 
         public static void RunAll() {
             ChoiceListsRetainAndFilterWithoutRepeatedFormatting();
+            DenseMultiWindowQueryAndNavigationPoolsStayBounded();
             VirtualRowsReuseAndBoundWorkToTheViewport();
             WindowGeometryKeepsChromeReachable();
             PopupGeometryFitsEveryScreenEdge();
@@ -21,7 +22,51 @@ namespace MaximumUI.Tests {
             SliderKeysRespectRangeAndStep();
             TabsDistinguishClicksFromDragAndAlwaysRelease();
             PopupStateClosesEveryOwner();
-            Console.WriteLine("MaximumUI interaction/performance regressions: 12 groups passed.");
+            Console.WriteLine("MaximumUI interaction/performance regressions: 13 groups passed.");
+        }
+
+        private static void DenseMultiWindowQueryAndNavigationPoolsStayBounded() {
+            // Simulate 8 independent windows, 120 frames, and two IMGUI
+            // events per frame. A previously hard-coded 512-item ceiling
+            // allocated thousands of query/navigation objects per repaint.
+            const int windows = 8, controls = 1024, frames = 120;
+            UiQueryStore[] queries = new UiQueryStore[windows];
+            UiNavigationStore[] navigations = new UiNavigationStore[windows];
+            Button[] widgets = new Button[controls];
+            string[] paths = new string[controls];
+            for (int i = 0; i < controls; i++) {
+                widgets[i] = new Button("Row", null, "high-refresh-row-" + i);
+                paths[i] = "0." + i;
+            }
+            for (int w = 0; w < windows; w++) {
+                queries[w] = new UiQueryStore();
+                navigations[w] = new UiNavigationStore();
+            }
+            MuiRect item = new MuiRect(0f, 0f, 240f, 32f);
+            for (int f = 0; f < frames; f++)
+                for (int e = 0; e < 2; e++)
+                    for (int w = 0; w < windows; w++) {
+                        UiQueryStore query = queries[w];
+                        UiNavigationStore navigation = navigations[w];
+                        query.BeginFrame();
+                        navigation.BeginFrame();
+                        for (int i = 0; i < controls; i++) {
+                            query.RecordItem(widgets[i], paths[i], item,
+                                false, false, false, false);
+                            navigation.Register(widgets[i], paths[i], item, true);
+                        }
+                        navigation.EndFrame();
+                        if (f == frames - 1 && e == 1) {
+                            Require(query.ItemCount == controls &&
+                                    navigation.Count == controls,
+                                "dense multiwindow event preserves all controls");
+                            Require(query.PooledItemCount == controls &&
+                                    navigation.PooledItemCount == controls,
+                                "queries and focus records are retained past 512");
+                            Require(query.IsVisible("high-refresh-row-1023"),
+                                "high-index retained query remains addressable");
+                        }
+                    }
         }
 
         private static void ChoiceListsRetainAndFilterWithoutRepeatedFormatting() {

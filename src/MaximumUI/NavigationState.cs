@@ -17,6 +17,9 @@ namespace MaximumUI {
 
     public sealed class UiNavigationStore {
         private readonly List<NavigationItem> items = new List<NavigationItem>();
+        // Mirror query pooling for keyboard-heavy tables. Thousands of
+        // focusable rows must not allocate on every Layout/Repaint event.
+        private const int MaximumPooledItems = 8192;
         private readonly List<NavigationItem> itemPool = new List<NavigationItem>();
         private readonly Dictionary<string, NavigationItem> itemById = new Dictionary<string, NavigationItem>();
         private string focusedId;
@@ -34,6 +37,8 @@ namespace MaximumUI {
         public int Count {
             get { return items.Count; }
         }
+
+        internal int PooledItemCount { get { return itemPool.Count; } }
 
         public bool HasFocus {
             get { return !string.IsNullOrEmpty(focusedId); }
@@ -62,7 +67,7 @@ namespace MaximumUI {
             if (slot < itemPool.Count) item = itemPool[slot];
             else {
                 item = new NavigationItem();
-                if (slot < 512) itemPool.Add(item);
+                if (slot < MaximumPooledItems) itemPool.Add(item);
             }
             item.Id = id;
             item.Key = widget.IdentityKeyText;
