@@ -1038,8 +1038,12 @@ namespace MaximumUI {
                 CheckboxHoverState state = context.StateStore.GetOrCreate<CheckboxHoverState>(
                     context.StateId(widget, "checkbox-hover"));
                 bool over = inputEnabled && MouseOverVisibleRect(rect);
-                if (state.Over != over) {
+                if (state.Over != over ||
+                    (over && current.type == EventType.Repaint)) {
                     state.Over = over;
+                    // A hovered-row heartbeat avoids leaving a highlight
+                    // on a virtualized item that was scrolled out of the
+                    // list before a corresponding MouseExit was rendered.
                     Action<bool> changed = widget.OnHoverChanged;
                     EnqueueCallback(delegate { changed(over); });
                 }
