@@ -4,6 +4,11 @@ using MaximumUI;
 namespace LoveJuice {
     internal sealed class LoveJuiceViewModel {
         internal string Version = "0.4.0", Status = "就绪", Integration = "未连接";
+        internal string NativeSourceState = "原生物理源：未检查";
+        internal string CurrentAnimation = string.Empty;
+        internal int SelectedFaceLevel = -1, SelectedBodyLevel = -1,
+            SelectedIntimateLevel = -1;
+        internal bool SelectedMalePreReady;
         internal bool Enabled, HasScene, Face, SalivaAnytime, ExperimentalSpheres, Body, Intimate, MalePre, Milk, Shower, Special, Collision;
         internal int ActorCount, ActiveParticles, MaximumParticles, PreviewChannel;
         internal string[] ActorNames = new string[0];
@@ -18,7 +23,14 @@ namespace LoveJuice {
 
         internal bool SameDisplayAs(LoveJuiceViewModel other) {
             return other != null && Version == other.Version && Status == other.Status &&
-                Integration == other.Integration && Enabled == other.Enabled &&
+                Integration == other.Integration &&
+                NativeSourceState == other.NativeSourceState &&
+                CurrentAnimation == other.CurrentAnimation &&
+                SelectedFaceLevel == other.SelectedFaceLevel &&
+                SelectedBodyLevel == other.SelectedBodyLevel &&
+                SelectedIntimateLevel == other.SelectedIntimateLevel &&
+                SelectedMalePreReady == other.SelectedMalePreReady &&
+                Enabled == other.Enabled &&
                 HasScene == other.HasScene && ActorCount == other.ActorCount &&
                 ActiveParticles == other.ActiveParticles && MaximumParticles == other.MaximumParticles &&
                 PreviewChannel == other.PreviewChannel &&
@@ -68,6 +80,17 @@ namespace LoveJuice {
                     "lovejuice-how-to") { WordWrap = true }.MinHeight(38f),
                 new Label("实际条件（仅有事件/状态时产生效果）",
                     "lovejuice-triggers-title").Height(26f),
+                new Label("所选角色实际读数：面部 " +
+                    (m.SelectedFaceLevel < 0 ? "—" : m.SelectedFaceLevel.ToString()) +
+                    " / 身体 " +
+                    (m.SelectedBodyLevel < 0 ? "—" : m.SelectedBodyLevel.ToString()) +
+                    " / 爱液 " +
+                    (m.SelectedIntimateLevel < 0 ? "—" :
+                        m.SelectedIntimateLevel.ToString()),
+                    "lovejuice-live-readback") { WordWrap = true }.MinHeight(30f),
+                new Label(m.NativeSourceState, "lovejuice-native-host-state") {
+                    WordWrap = true
+                }.MinHeight(30f),
                 new Checkbox("口水拉丝", m.Face, m.ChangeFace, "lovejuice-face")
                     .Enabled(m.Enabled).Height(28f),
                 new Label("亲吻，或开启扩展后：口部动作 / 面部口水状态",
