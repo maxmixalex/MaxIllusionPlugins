@@ -55,6 +55,47 @@ namespace FemboyMode
         // This is the live game's genital-visibility flag, not an inference
         // from a single underwear slot. One-piece outfits, bodysuits and
         // modded clothing can cover the anatomy when shorts are absent.
+        // visibleSon is the native anatomical visibility toggle, not a
+        // guarantee that a physically worn skirt/swimsuit/panties have
+        // stopped covering the emitter. Resolve both sources before
+        // selecting the trajectory.
+        internal static bool IsGenitalExposureEnabled(bool visibleSon,
+            bool onePieceCovers, bool bottomCovers, bool underwearCovers)
+        {
+            return visibleSon &&
+                !onePieceCovers && !bottomCovers && !underwearCovers;
+        }
+
+        // Geometry of the male glyph is defined in a 64x64 pixel square;
+        // include the circular bowl AND the arrow tip in its true
+        // optical bounding box. No font bearing/baseline drift.
+        private static double SymbolSegmentDistanceSquared(
+            double px, double py, double ax, double ay,
+            double bx, double by)
+        {
+            double dx = bx - ax, dy = by - ay;
+            double length = dx * dx + dy * dy;
+            double t = length > 0 ? Math.Max(0d,
+                Math.Min(1d, ((px-ax)*dx + (py-ay)*dy)/length)) : 0d;
+            double x = px - (ax + dx*t), y = py - (ay + dy*t);
+            return x*x + y*y;
+        }
+
+        internal static bool MaleMarkerGlyphPixel(int x, int y)
+        {
+            double px = x + .5d, py = y + .5d;
+            double dx = px - 28.5d, dy = py - 28d;
+            double radius = Math.Sqrt(dx*dx + dy*dy);
+            if (Math.Abs(radius - 9.7d) <= 2.25d) return true;
+            if (SymbolSegmentDistanceSquared(px,py,35.5d,35d,43.5d,43d) <= 4d)
+                return true;
+            if (SymbolSegmentDistanceSquared(px,py,35.5d,43d,43.5d,43d) <= 3d)
+                return true;
+            if (SymbolSegmentDistanceSquared(px,py,43.5d,35d,43.5d,43d) <= 3d)
+                return true;
+            return false;
+        }
+
         internal static FluidClothingProfile FluidProfileForVisibility(bool visibleSon)
         {
             return visibleSon
