@@ -430,6 +430,12 @@ namespace FemboyMode
             return normalOffered && !analOffered && hasNativeAnalPair;
         }
 
+        internal static bool UseFrontAnimationForAnalFallback(
+            bool sameCurrentMarkedPose, bool ordinaryVariantOffered)
+        {
+            return sameCurrentMarkedPose && ordinaryVariantOffered;
+        }
+
         internal static float SafeBoneScale(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value))

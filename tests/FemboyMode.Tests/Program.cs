@@ -239,7 +239,11 @@ internal static class Program
               !FemboyRules.ShouldOfferAnalFallback(false, false, true) &&
               !FemboyRules.ShouldOfferAnalFallback(true, true, true) &&
               !FemboyRules.ShouldOfferAnalFallback(true, false, false),
-            "restore native anal bubbles only when normal is the sole available entry");
+            "offer temporary anal-labelled alias only for front-only poses");
+        Check(FemboyRules.UseFrontAnimationForAnalFallback(true, true) &&
+              !FemboyRules.UseFrontAnimationForAnalFallback(false, true) &&
+              !FemboyRules.UseFrontAnimationForAnalFallback(true, false),
+            "anal alias routes only the matching front animation and available voice variant");
 
         Check(FemboyRules.SafeBoneScale(-2f) == .25f,
             "clamp small scales");

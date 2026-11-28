@@ -27,7 +27,7 @@ namespace FemboyMode
     {
         public const string Guid = "MaxMixAlex.FemboyMode";
         public const string PluginName = "Femboy Mode";
-        public const string Version = "0.6.10";
+        public const string Version = "0.6.11";
 
         internal static ConfigEntry<bool> EnableFreeHRestrictions;
         internal static ConfigEntry<bool> EnableReverseHoushi;
@@ -100,7 +100,7 @@ namespace FemboyMode
         {
             Log = Logger;
             EnableFreeHRestrictions = Config.Bind("Free H", "Restrict front insertion", true,
-                "Hide front-insertion actions for marked Free H heroines; if only the front pair is offered, restore the existing native anal bubbles as an entry fallback.");
+                "Hide front insertion for marked Free H heroines. For front-only poses, show a temporary anal-labelled bubble that calls the SAME native ordinary insertion handler; this is a UI alias, not an anal animation conversion.");
             EnableReverseHoushi = Config.Bind("Free H", "Add reversed Houshi actions", true,
                 "Clone native and imported service actions as [Reversed], exchange body roles and optionally exchange visual mouth expression channels while preserving the native animation controllers and imported assets.");
             ReverseHoushiSwapVisualRoots = Config.Bind("Free H",
