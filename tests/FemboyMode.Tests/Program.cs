@@ -96,8 +96,10 @@ internal static class Program
               !FemboyRules.IsGenitalExposureEnabled(false, false, false, false) &&
               !FemboyRules.IsGenitalExposureEnabled(true, true, false, false) &&
               !FemboyRules.IsGenitalExposureEnabled(true, false, true, false) &&
-              !FemboyRules.IsGenitalExposureEnabled(true, false, false, true),
-              "visibleSon cannot bypass covering one-piece, bottom or underwear fabric");
+              !FemboyRules.IsGenitalExposureEnabled(true, false, false, true) &&
+              !FemboyRules.IsGenitalExposureEnabled(
+                  true, false, false, false, true),
+              "visibleSon cannot bypass covering one-piece, bottom, underwear or accessory panties");
         int markerCount = 0, minX = 64, maxX = -1, minY = 64, maxY = -1;
         for (int y = 0; y < 64; y++)
             for (int x = 0; x < 64; x++)
