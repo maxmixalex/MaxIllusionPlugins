@@ -15,52 +15,76 @@ internal static class AibuDriverRegression
         var flags = new HFlag { mode = 0, nowAnimStateName = "M_Idle" };
         var driver = new HSControlAibuDriver();
 
-        // Auto speed drives Aibu without a second switch, but an empty
-        // native contact list must never change gauge or steal the hand.
+        // Idle with no native contact never injects a gauge value.
         scene.hand.useAreaItems = new TestArea[0];
         for (int i = 0; i < 500; i++)
             Check(!driver.Tick(scene, flags, .97f, .016f),
-                "no real contact means no forced gauge accumulation");
+                "no real contact cannot create stimulation");
         Check(flags.femaleGaugeCalls == 0 && flags.gaugeFemale == 0f &&
               flags.dragStarts == 0 && scene.hand.action == 0,
-            "idle H scene does not grow gauge or synthesize native drags");
+            "idle H scene leaves gauge and native hands untouched");
 
-        scene.hand.useAreaItems = new[] { new TestArea { idUse = 2, kindTouch = 3 } };
+        scene.hand.useAreaItems =
+            new[] { new TestArea { idUse = 2, kindTouch = 3 } };
         Check(driver.Tick(scene, flags, .4f, .016f),
-            "HCtrl speed mode starts one native caress pulse with a real contact");
+            "a real native contact starts an uninterrupted Aibu segment");
         Check(driver.Running && scene.hand.action == 1 &&
               scene.hand.actionUseItem == 2 && flags.dragStarts == 1,
-            "correct native useAreaItems idUse is bound before DragStart");
-        Check(flags.femaleGaugeCalls == 1 &&
-              Math.Abs(flags.gaugeFemale - 2f) < .001f,
-            "gauge is raised once, only on a real owned caress");
-        Check(!driver.Tick(scene, flags, .4f, .016f),
-            "next update releases the previous native pulse");
-        Check(!driver.Running && scene.hand.action == 0 &&
-              flags.dragFinishes == 1 && scene.hand.actionUseItem == -1,
-            "native action and selected item are restored immediately");
-        int old = flags.femaleGaugeCalls;
-        for (int i = 0; i < 25; i++)
-            driver.Tick(scene, flags, .4f, .016f);
-        Check(flags.femaleGaugeCalls == old,
-            "no sustained multi-second input capture");
+            "bind correct native item before first drag");
+        int initialCalls = flags.femaleGaugeCalls;
+        for (int i = 0; i < 115; i++)
+            Check(driver.Tick(scene, flags, .4f, .016f),
+                "Aibu remains active rather than restarting its animation");
+        Check(driver.Running && flags.dragStarts == 1 &&
+              flags.dragFinishes == 0 && scene.hand.action == 1,
+            "long caress does not repeatedly trigger DragStart/FinishDrag");
+        Check(flags.femaleGaugeCalls > initialCalls &&
+              flags.femaleGaugeCalls < 14 &&
+              flags.gaugeFemale > 0f && flags.gaugeFemale < 25f,
+            "bounded gauge fallback never fills bar in a few seconds");
 
         UnityEngine.Input.PrimaryDown = true;
-        for (int i = 0; i < 90; i++)
-            driver.Tick(scene, flags, .5f, .016f);
-        Check(scene.hand.action == 0 && flags.femaleGaugeCalls == old,
-            "manual mouse input always takes priority");
+        int beforeManual = flags.femaleGaugeCalls;
+        Check(!driver.Tick(scene, flags, .4f, .016f) &&
+              !driver.Running && scene.hand.action == 0 &&
+              scene.hand.actionUseItem == -1 &&
+              flags.dragStarts == 1 && flags.dragFinishes == 1,
+            "manual mouse press releases only the owned segment once");
+        for (int i = 0; i < 80; i++)
+            Check(!driver.Tick(scene, flags, .4f, .016f),
+                "held manual input cannot be captured by automation");
+        Check(flags.femaleGaugeCalls == beforeManual &&
+              flags.dragStarts == 1,
+            "manual input prevents synthetic gauge increase and restart");
         UnityEngine.Input.PrimaryDown = false;
+
         scene.hand1.action = 1;
-        for (int i = 0; i < 90; i++)
-            driver.Tick(scene, flags, .5f, .016f);
-        Check(scene.hand1.action == 1 && flags.femaleGaugeCalls == old,
-            "secondary hand remains usable while auto-speed is enabled");
+        for (int i = 0; i < 80; i++)
+            Check(!driver.Tick(scene, flags, .4f, .016f),
+                "secondary hand has priority over auto caress");
+        Check(scene.hand1.action == 1 && flags.dragStarts == 1,
+            "secondary manual hand is never reset");
         scene.hand1.action = 0;
-        flags.nowAnimStateName = "Idle";
-        Check(!driver.Tick(scene, flags, .5f, .016f),
-            "unsupported plain Idle never triggers automatic caress");
+
+        // After manual release, acquire once and remain stable; a
+        // real native scene transition ends without a restart loop.
+        bool restarted = false;
+        for (int i = 0; i < 120; i++)
+            if (driver.Tick(scene, flags, .3f, .016f)) {
+                restarted = true;
+                break;
+            }
+        Check(restarted && flags.dragStarts == 2,
+            "new stable segment may begin only after manual cooldown");
+        flags.nowAnimStateName = "Orgasm_Loop";
+        Check(!driver.Tick(scene, flags, .3f, .016f) &&
+              !driver.Running && flags.dragFinishes == 2,
+            "native action transition cleanly releases previous segment");
         driver.Clear(scene);
-        Console.WriteLine("HSControl one-frame Aibu assertions passed: " + assertions);
+        Check(flags.dragFinishes == 2 &&
+              !driver.TakeCompleted() &&
+              scene.hand.actionUseItem == -1,
+            "teardown is idempotent and resets only synthetic state");
+        Console.WriteLine("HSControl stable Aibu assertions passed: " + assertions);
     }
 }
