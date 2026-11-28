@@ -39,7 +39,11 @@ namespace MaximumUI {
         // Normal DrawLists preserve their existing per-command identity. Only
         // the renderer's private scratch list opts into command recycling.
         private readonly bool reusable;
-        private readonly Stack<DrawCommand> recycled = new Stack<DrawCommand>();
+        // Stable positional slots are faster than Push/Pop-ing thousands
+        // of commands on every Repaint. Only used by renderer-owned scratch
+        // lists; public DrawList instances are never pooled.
+        private readonly List<DrawCommand> retained = new List<DrawCommand>();
+        private int nextRetained;
         private const int MaximumRecycledCommands = 4096;
         public TextFormat DefaultTextFormat;
 
@@ -47,24 +51,16 @@ namespace MaximumUI {
 
         internal DrawList(bool reusable) { this.reusable = reusable; }
 
-        internal int RecycledCount { get { return recycled.Count; } }
+        internal int RecycledCount {
+            get { return retained.Count - System.Math.Min(nextRetained, retained.Count); }
+        }
 
         private DrawCommand RentCommand() {
-            if (!reusable || recycled.Count == 0) return new DrawCommand();
-            DrawCommand result = recycled.Pop();
-            // Every command carries only the fields explicitly assigned for
-            // its new type. Do not leak text, textures or geometry from an old
-            // draw operation.
-            result.Type = default(DrawCommandType);
-            result.Rect = default(MuiRect);
-            result.Color = default(MuiColor);
-            result.P1 = result.P2 = result.P3 = result.P4 = default(MuiVec2);
-            result.Points = null;
-            result.Text = null;
-            result.Resource = null;
-            result.Thickness = result.Radius = 0f;
-            result.Segments = 0;
-            result.TextFormat = default(TextFormat);
+            if (!reusable) return new DrawCommand();
+            int slot = nextRetained++;
+            if (slot < retained.Count) return retained[slot];
+            DrawCommand result = new DrawCommand();
+            if (slot < MaximumRecycledCommands) retained.Add(result);
             return result;
         }
 
@@ -76,14 +72,17 @@ namespace MaximumUI {
             if (reusable) {
                 for (int i = 0; i < commands.Count; i++) {
                     DrawCommand command = commands[i];
-                    if (command == null || recycled.Count >= MaximumRecycledCommands)
-                        continue;
-                    // Release arbitrary object graphs between GUI events.
+                    if (command == null) continue;
+                    // Release object graphs after each event. Values for the
+                    // new draw type are overwritten by the next API call.
                     command.Resource = null;
                     command.Text = null;
                     command.Points = null;
-                    recycled.Push(command);
                 }
+                nextRetained = 0;
+                // Each DrawCanvas previously received a fresh DrawList.
+                // Do not carry one canvas's default typography into another.
+                DefaultTextFormat = default(TextFormat);
             }
             commands.Clear();
         }

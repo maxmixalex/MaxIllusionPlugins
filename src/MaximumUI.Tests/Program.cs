@@ -587,8 +587,11 @@ namespace MaximumUI.Tests {
             var area = new MuiRect(0f, 0f, 20f, 15f);
             scratch.Text(area, "previous", new object(), color);
             DrawCommand first = scratch.Commands[0];
+            scratch.DefaultTextFormat = new TextFormat(18f);
             scratch.Clear();
             AssertEqual(1, scratch.RecycledCount, "private scratch list recycles command object");
+            AssertEqual(0f, scratch.DefaultTextFormat.FontSize,
+                "scratch repaint does not leak default text format across canvases");
             scratch.FillRect(area, color);
             Assert(object.ReferenceEquals(first, scratch.Commands[0]),
                 "repaint reuses the command without new allocation");
