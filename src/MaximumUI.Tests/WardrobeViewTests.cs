@@ -4,13 +4,14 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class WardrobeViewTests {
-        internal const int TestCount = 10;
+        internal const int TestCount = 11;
 
         internal static void RunAll() {
             MinimumWindowRetainsToolbar();
             SelectorsAndBusyState();
             DisplayEqualityIncludesBusinessIdentity();
             FiltersAndBatchOperateOnDisplayedRows();
+            AccessoryHoverAndDebounceModel();
             GarmentPageDispatchesNativeCommands();
             LinkedOnePieceBottomRemainsOperable();
             NineGarmentRowsFitWindowWithoutInternalScroll();
@@ -55,28 +56,41 @@ namespace MaximumUI.Tests {
 
         private static void SelectorsAndBusyState() {
             WardrobeView view = new WardrobeView { Model = Create() };
-            view.Model.Page = 1; // Accessory page follows clothing.
-            int selected = -1, writes = 0;
+            view.Model.Page = 1;
+            int selected = -1, outfit = -1, writes = 0;
             view.Model.SelectTarget = i => selected = i;
+            view.Model.SelectCoordinate = i => outfit = i;
             view.Model.Rows[0].Change = delegate { writes++; };
             Widget window = view.Build(null);
-            ((ArrowButton)Find(window, "wardrobe-target-previous")).OnClick();
-            Require(selected == 1, "Character selector wraps backward.");
-            ((ArrowButton)Find(window, "wardrobe-target-next")).OnClick();
-            Require(selected == 1, "Character selector advances independently.");
-            ((Button)Find(window, "wardrobe-target-current")).OnClick();
-            Require(selected == 1, "The selected value is a next-choice button.");
+            var target = Find(window, "wardrobe-target") as ComboBox<int>;
+            var coordinate = Find(window, "wardrobe-coordinate") as ComboBox<int>;
+            Require(target != null && coordinate != null &&
+                Find(window, "wardrobe-target-current") == null &&
+                Find(window, "wardrobe-coordinate-previous") == null,
+                "Only character and outfit selectors are native dropdowns");
+            target.OnChange(1);
+            coordinate.OnChange(1);
+            Require(selected == 1 && outfit == 1,
+                "Character and outfit dropdown choices dispatch their own values");
             view.Model.Busy = true;
             window = view.Build(null);
-            Require(!Find(window, "wardrobe-target-current").Enabled && !Find(window, "wardrobe-apply").Enabled &&
-                !Find(window, "wardrobe-create").Enabled && !Find(window, "wardrobe-reload").Enabled, "Pending load disables commands.");
-            Widget row = ((VirtualList)Find(window, "wardrobe-accessories")).BuildItem(0);
+            Require(!Find(window, "wardrobe-target").Enabled &&
+                !Find(window, "wardrobe-apply").Enabled &&
+                !Find(window, "wardrobe-create").Enabled &&
+                !Find(window, "wardrobe-reload").Enabled,
+                "Pending load disables commands.");
+            Widget row = ((VirtualList)Find(window, "wardrobe-accessories"))
+                .BuildItem(0);
             ((Checkbox)row).OnChange(true);
-            Require(!row.Enabled && writes == 0, "A stale row callback cannot edit a busy view.");
+            Require(!row.Enabled && writes == 0,
+                "A stale row callback cannot edit a busy view.");
             view.Model.Busy = false; view.Model.CanWrite = false;
             window = view.Build(null);
-            Require(Find(window, "wardrobe-apply").Enabled && Find(window, "wardrobe-reload").Enabled &&
-                !Find(window, "wardrobe-create").Enabled && !Find(window, "wardrobe-delete").Enabled, "XML recovery preserves non-writing operations.");
+            Require(Find(window, "wardrobe-apply").Enabled &&
+                Find(window, "wardrobe-reload").Enabled &&
+                !Find(window, "wardrobe-create").Enabled &&
+                !Find(window, "wardrobe-delete").Enabled,
+                "XML recovery preserves non-writing operations.");
         }
 
         private static void DisplayEqualityIncludesBusinessIdentity() {
@@ -93,8 +107,10 @@ namespace MaximumUI.Tests {
             m.Rows[0].Group = 0; m.Rows[1].Group = 1; m.Rows[2].Group = 2;
             m.AccessoryGroup = 2;
             Require(m.FilteredAccessories().Count == 1 && m.FilteredAccessories()[0].Slot == 1, "Secondary group filters exact rows.");
-            m.AccessoryQuery = "2";
-            Require(m.FilteredAccessories().Count == 1 && m.FilteredAccessories()[0].Slot == 1, "Search accepts displayed slot number.");
+            m.AccessoryFilter = "2";
+            Require(m.FilteredAccessories().Count == 1 &&
+                m.FilteredAccessories()[0].Slot == 1,
+                "Committed search accepts displayed slot number.");
             int calls = 0;
             m.SetFilteredAccessories = value => { Require(!value, "Batch hide uses false."); calls++; };
             m.Page = 1;
@@ -103,33 +119,82 @@ namespace MaximumUI.Tests {
             Require(((VirtualList)Find(root, "wardrobe-accessories")).ItemCount == 1, "Only filtered rows are rendered.");
             ((Button)Find(root, "wardrobe-hide-filtered")).OnClick();
             Require(calls == 1, "Batch action is explicit.");
-            m.AccessoryQuery = "not found";
+            m.AccessoryFilter = "not found";
             root = view.Build(null);
             Require(!Find(root, "wardrobe-hide-filtered").Enabled, "Empty filter disables batch writes.");
+        }
+
+        private static void AccessoryHoverAndDebounceModel() {
+            WardrobeViewModel model = Create();
+            model.Page = 1;
+            model.AccessoryFilter = "1";
+            model.AccessoryQuery = "Accessory 2";
+            Require(model.FilteredAccessories().Count == 1 &&
+                model.FilteredAccessories()[0].Slot == 0,
+                "Typing does not apply a new filter until the debounce commits");
+            model.AccessoryFilter = "Accessory 2";
+            Require(model.FilteredAccessories().Count == 1 &&
+                model.FilteredAccessories()[0].Slot == 1,
+                "Committed filter updates results after the idle interval");
+            model.HighlightOnHover = true;
+            int hoveredSlot = -1, calls = 0;
+            model.ChangeAccessoryHover = (slot, over) => {
+                hoveredSlot = over ? slot : -1; calls++;
+            };
+            WardrobeView view = new WardrobeView { Model = model };
+            Widget tree = view.Build(null);
+            Require(Find(tree, "wardrobe-highlight-hover") is Checkbox,
+                "Accessory page includes an independent hover highlight toggle");
+            var row = (Checkbox)((VirtualList)Find(tree,
+                "wardrobe-accessories")).BuildItem(0);
+            Require(row.OnHoverChanged != null,
+                "Accessory row exposes native retained pointer hover");
+            row.OnHoverChanged(true);
+            Require(hoveredSlot == 1 && calls == 1,
+                "Hover identifies exact accessory slot for private overlay");
+            row.OnHoverChanged(false);
+            Require(hoveredSlot == -1 && calls == 2,
+                "Leaving the row clears its highlight without changing item visibility");
+            WardrobeViewModel same = Create();
+            Require(!model.SameDisplayAs(same),
+                "Debounce and hover state changes invalidate retained visual state");
         }
 
         private static void GarmentPageDispatchesNativeCommands() {
             WardrobeViewModel m = Create();
             m.Page = 0; m.ShoeMode = 0;
-            int writes = 0, restored = 0, shoe = -1;
+            int writes = 0, wear = 0, hide = 0, shoe = -1;
             m.ChangeShoeMode = value => shoe = value;
-            m.RestoreClothing = () => restored++;
+            m.SetAllGarments = value => {
+                if (value) wear++; else hide++;
+            };
             m.Garments.Add(new WardrobeRow { Slot = 0, Label = "Gloves", Item = 12,
                 State = 1, Visible = true, AllowedStates = new[] { 0, 1, 3 },
-                ChangeState = value => { Require(value == 3, "Explicit native garment state."); writes++; }
+                ChangeState = value => {
+                    Require(value == 3, "Explicit native garment state.");
+                    writes++;
+                }
             });
             WardrobeView view = new WardrobeView { Model = m };
             Widget root = view.Build(null);
             ((SegmentedControl<int>)Find(root, "wardrobe-shoe-mode")).OnChange(1);
-            ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
+            ((Button)Find(root, "wardrobe-wear-all")).OnClick();
+            ((Button)Find(root, "wardrobe-hide-all")).OnClick();
             ((ArrowButton)Find(root, "garment-state-0-next")).OnClick();
-            Require(shoe == 1 && restored == 1 && writes == 1, "Garment page dispatches all three actions.");
+            Require(shoe == 1 && wear == 1 && hide == 1 && writes == 1,
+                "Shoe and native all-wear/all-hide dispatch independently");
+            Require(Find(root, "wardrobe-restore-clothing") == null,
+                "Old restore-only button is removed");
             m.Busy = true; root = view.Build(null);
-            Require(!Find(root, "wardrobe-restore-clothing").Enabled && !Find(root, "wardrobe-shoe-mode").Enabled,
-                "Pending load blocks garment editing.");
-            ((Button)Find(root, "wardrobe-restore-clothing")).OnClick();
+            Require(!Find(root, "wardrobe-wear-all").Enabled &&
+                !Find(root, "wardrobe-hide-all").Enabled &&
+                !Find(root, "wardrobe-shoe-mode").Enabled,
+                "Busy state disables all wardrobe changes");
+            ((Button)Find(root, "wardrobe-wear-all")).OnClick();
+            ((Button)Find(root, "wardrobe-hide-all")).OnClick();
             ((ArrowButton)Find(root, "garment-state-0-next")).OnClick();
-            Require(restored == 1 && writes == 1, "Busy callbacks cannot write.");
+            Require(wear == 1 && hide == 1 && writes == 1,
+                "Busy callbacks cannot alter native state");
         }
 
         private static void LinkedOnePieceBottomRemainsOperable() {
@@ -163,8 +228,9 @@ namespace MaximumUI.Tests {
             ((ArrowButton)Find(widget, "garment-state-1-next")).OnClick();
             Require(requested == 3,
                 "One-piece lower half dispatches native bottom-state change");
-            Require(Find(widget, "wardrobe-restore-clothing") != null,
-                "Cross-slot state does not displace regular wardrobe controls");
+            Require(Find(widget, "wardrobe-wear-all") != null &&
+                Find(widget, "wardrobe-hide-all") != null,
+                "Cross-slot state retains garment batch controls");
 
             // One-piece tops can also own the bra; integrated bra designs
             // can in turn own shorts. These are live controls (not missing
@@ -197,7 +263,7 @@ namespace MaximumUI.Tests {
             m.Page = 0;
             m.ShoeMode = 0;
             m.ChangeShoeMode = delegate { };
-            m.RestoreClothing = delegate { };
+            m.SetAllGarments = delegate { };
             for (int i = 0; i < 9; i++) {
                 m.Garments.Add(new WardrobeRow {
                     Slot = i, Label = "garment-" + i, Item = i + 1, State = 0,
@@ -212,37 +278,45 @@ namespace MaximumUI.Tests {
             Require(Find(window, "wardrobe-garment-rows") != null &&
                 Find(window, "wardrobe-garments") == null,
                 "All nine garment rows render normally, with no independent virtual scrollbar.");
-            Require(Find(window, "wardrobe-target-current") is Button &&
-                Find(window, "wardrobe-coordinate-current") is Button &&
+            Require(Find(window, "wardrobe-target") is ComboBox<int> &&
+                Find(window, "wardrobe-coordinate") is ComboBox<int> &&
                 Find(window, "wardrobe-preset-current") is Button &&
                 Find(window, "garment-state-0-current") is Button,
-                "Every main selector cycles with buttons instead of dropdowns.");
+                "Only character and outfit use dropdowns; preset/garments retain cycles");
             LayoutNode tree = new LayoutEngine(ThemeTypography.CreateLayoutMetrics(ThemePalettes.MetroLight()))
                 .Layout(window, new MuiRect(0, 0, window.Width, window.Height));
             LayoutNode first = FindNode(tree, "garment-0");
             LayoutNode last = FindNode(tree, "garment-8");
             LayoutNode shoe = FindNode(tree, "wardrobe-shoe-mode");
-            LayoutNode restore = FindNode(tree, "wardrobe-restore-clothing");
+            LayoutNode wearAll = FindNode(tree, "wardrobe-wear-all");
+            LayoutNode hideAll = FindNode(tree, "wardrobe-hide-all");
             LayoutNode presets = FindNode(tree, "wardrobe-preset-row");
-            Require(first != null && last != null && shoe != null && restore != null &&
-                presets != null, "Nine garments, shoe mode, restore and presets all exist.");
-            Require(last.Rect.Y > first.Rect.Y && shoe.Rect.Y >= last.Rect.Bottom &&
-                restore.Rect.Y >= shoe.Rect.Bottom && presets.Rect.Y >= restore.Rect.Bottom,
-                "Shoe mode and Restore full outfit follow all garment rows, ahead of presets.");
+            Require(first != null && last != null && shoe != null &&
+                wearAll != null && hideAll != null && presets != null,
+                "Nine garments, native all-wear/all-hide, shoe mode and presets exist");
+            Require(wearAll.Rect.Y <= first.Rect.Y &&
+                hideAll.Rect.Y <= first.Rect.Y &&
+                last.Rect.Y > first.Rect.Y &&
+                shoe.Rect.Y >= last.Rect.Bottom &&
+                presets.Rect.Y >= shoe.Rect.Bottom,
+                "All-wear/all-hide are above garments, shoe mode and presets below");
             Require(presets.Rect.Bottom <= window.Height,
                 "The taller default window fits all garment rows and the lower toolbar.");
             LayoutNode minimum = new LayoutEngine(ThemeTypography.CreateLayoutMetrics(ThemePalettes.MetroLight()))
                 .Layout(window, new MuiRect(0, 0, window.MinWidth, window.MinHeight));
             LayoutNode minLast = FindNode(minimum, "garment-8");
             LayoutNode minShoe = FindNode(minimum, "wardrobe-shoe-mode");
-            LayoutNode minRestore = FindNode(minimum, "wardrobe-restore-clothing");
+            LayoutNode minWear = FindNode(minimum, "wardrobe-wear-all");
+            LayoutNode minHide = FindNode(minimum, "wardrobe-hide-all");
             LayoutNode minPresets = FindNode(minimum, "wardrobe-preset-row");
-            Require(minLast != null && minShoe != null && minRestore != null &&
-                minPresets != null && minShoe.Rect.Y >= minLast.Rect.Bottom &&
-                minRestore.Rect.Y >= minShoe.Rect.Bottom &&
-                minPresets.Rect.Y >= minRestore.Rect.Bottom &&
+            Require(minLast != null && minShoe != null &&
+                minWear != null && minHide != null && minPresets != null &&
+                minWear.Rect.Y <= FindNode(minimum, "garment-0").Rect.Y &&
+                minHide.Rect.Y <= FindNode(minimum, "garment-0").Rect.Y &&
+                minShoe.Rect.Y >= minLast.Rect.Bottom &&
+                minPresets.Rect.Y >= minShoe.Rect.Bottom &&
                 minPresets.Rect.Bottom <= window.MinHeight,
-                "Minimum window size must not overlap the last garment, shoe, restore and preset controls.");
+                "Minimum height fits batch actions, nine garment rows and presets");
         }
 
         private static void ClothingStateOptionsInvalidateTheRetainedUi() {
@@ -273,9 +347,7 @@ namespace MaximumUI.Tests {
             });
             WardrobeView view = new WardrobeView { Model = m };
             Widget widget = view.Build(null);
-            Require(!Find(widget, "wardrobe-coordinate-current").Enabled &&
-                !Find(widget, "wardrobe-coordinate-previous").Enabled &&
-                !Find(widget, "wardrobe-coordinate-next").Enabled,
+            Require(!Find(widget, "wardrobe-coordinate").Enabled,
                 "Free H must not reload a whole coordinate during animation.");
             Require(Find(widget, "wardrobe-garments") == null &&
                 Find(widget, "garment-state-0-current").Enabled &&
