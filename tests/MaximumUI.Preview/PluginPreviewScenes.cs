@@ -144,7 +144,7 @@ internal static class PluginPreviewScenes {
 
     private static PreviewScene Wardrobe(string state) {
         var model = new WardrobeViewModel {
-            Version = "0.5.8", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
+            Version = "0.5.9", Targets = new[] { "1. 示例角色 A", "2. 示例角色 B" },
             Coordinates = new[] { "日常配装", "旅行配装", "运动配装" },
             Presets = new[] { "日常配装", "旅行配装" }, TargetIndex = 0, CoordinateIndex = 1, PresetIndex = 0,
             Name = "旅行配装", Status = "就绪。", CanWrite = true, HasTarget = true,
@@ -152,7 +152,10 @@ internal static class PluginPreviewScenes {
             ChangeName = delegate { }, Apply = delegate { }, Create = delegate { },
             Overwrite = delegate { }, Delete = delegate { }, Reload = delegate { }, Close = delegate { },
             ChangePage = delegate { }, ChangeAccessoryGroup = delegate { }, ChangeAccessoryQuery = delegate { },
-            ChangeShoeMode = delegate { }, RestoreClothing = delegate { }, SetFilteredAccessories = delegate { }
+            ChangeShoeMode = delegate { }, SetAllGarments = delegate { },
+            SetFilteredAccessories = delegate { },
+            ChangeHighlightOnHover = delegate { },
+            ChangeAccessoryHover = delegate { }
         };
         string[] names = { "帽子", "眼镜", "围巾", "发夹", "手表", "胸针", "耳饰", "背包" };
         for (int i = 0; i < 32; i++) model.Rows.Add(new WardrobeRow {
@@ -180,7 +183,11 @@ internal static class PluginPreviewScenes {
                 ChangeState = delegate { }
             });
         }
-        if (state == "filtered") { model.AccessoryGroup = 2; model.AccessoryQuery = "围巾"; }
+        if (state == "filtered") {
+            model.AccessoryGroup = 2;
+            model.AccessoryQuery = model.AccessoryFilter = "围巾";
+            model.HighlightOnHover = true;
+        }
         if (state == "scene" || state == "scene-applying") {
             model.Scope = 1; model.CanScenePresets = true; model.HasSceneTargets = true;
             model.Presets = new[] { "旅行组合", "舞台配装" }; model.Name = "旅行组合";
@@ -206,12 +213,14 @@ internal static class PluginPreviewScenes {
             Width = state == "xml-error" ? window.MinWidth : 0f,
             Height = state == "xml-error" ? window.MinHeight : 0f,
             RequiredKeys = state == "main" || state == "garments" || state == "free-h"
-                ? new[] { "wardrobe-target-current", "wardrobe-coordinate-current",
-                    "wardrobe-garment-rows", "garment-state-0-current", "wardrobe-shoe-mode",
-                    "wardrobe-restore-clothing", "wardrobe-preset-current" }
-                : new[] { "wardrobe-target-current", "wardrobe-coordinate-current", "wardrobe-accessories",
+                ? new[] { "wardrobe-target", "wardrobe-coordinate",
+                    "wardrobe-wear-all", "wardrobe-hide-all", "wardrobe-garment-rows",
+                    "garment-state-0-current", "wardrobe-shoe-mode",
+                    "wardrobe-preset-current" }
+                : new[] { "wardrobe-target", "wardrobe-coordinate", "wardrobe-accessories",
                     "wardrobe-preset-current", "wardrobe-name", "wardrobe-apply", "wardrobe-reload",
-                    "wardrobe-accessory-search", "wardrobe-accessory-group-current", "wardrobe-hide-filtered" }
+                    "wardrobe-accessory-search", "wardrobe-highlight-hover",
+                    "wardrobe-accessory-group-current", "wardrobe-hide-filtered" }
         };
     }
 
