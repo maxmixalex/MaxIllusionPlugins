@@ -121,6 +121,10 @@ namespace MaximumUI {
         public string Text;
         public bool Value;
         public Action<bool> OnChange;
+        // Optional model callback when the POINTER enters or leaves this
+        // checkbox. Used by ClothingControl for non-invasive accessory
+        // highlighting, without changing check/selection semantics.
+        public Action<bool> OnHoverChanged;
 
         public Checkbox(string text, bool value, Action<bool> onChange = null, object key = null)
             : base(key) {
