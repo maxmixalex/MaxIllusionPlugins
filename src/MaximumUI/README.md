@@ -1,6 +1,6 @@
 # MaximumUI
 
-供 Unity IMGUI 插件使用的声明式 UI 库，当前版本 **0.5.0**。支持以集合初始化器组织控件，包含布局引擎、输入分发、绘制命令、控件状态、主题、导航、快捷键及运行时挂载。
+供 Unity IMGUI 插件使用的声明式 UI 库，当前版本 **0.5.1**。支持以集合初始化器组织控件，包含布局引擎、输入分发、绘制命令、控件状态、主题、导航、快捷键及运行时挂载。
 
 - `MUI.cs`、`View.cs`、`Widget.cs`：界面与控件入口。
 - `LayoutEngine.cs`、`LayoutNode.cs`、`LayoutHints.cs`：布局和尺寸约束。
@@ -140,3 +140,10 @@ MAXIMUMUI_BENCHMARK=1 dotnet run --project tests/MaximumUI.Runner/MaximumUI.Runn
 `python scripts/test.py --benchmark` 也会执行上述策略基准及全部回归。若需比较历史版本与修复版本的独立 DLL，使用 [MaximumUI.Benchmark](../../tests/MaximumUI.Benchmark/README.md) 的显式程序集路径和独立输出目录；该项目不加入解决方案、不产生插件发布产物。
 
 游戏内仍需用 Gallery 验证文本输入、窗口拖动及释放、滚动到末行、无 Key 窗口中的下拉定位、多挂载/多层模态、对话框中的下拉、主题/分辨率变化，以及长时间打开后的内存和帧耗时。真实字体显示、原生 GUI control ID、鼠标捕获与其他插件叠加不在无界面宿主的覆盖范围内。
+
+
+## 0.5.1 — Checkbox 指针悬停事件
+
+`Checkbox.OnHoverChanged` 是可选的 `Action<bool>`。它在控件实际进入或离开鼠标可见区域时回调，悬停状态通过稳定的控件 ID 保留；原有的选中、取消、点击、键盘输入逻辑不变。ClothingControl 将其用于饰品悬停高亮，使用私有材质覆盖而不是改写原模型。
+
+**兼容性提醒：** 需要悬停 API 的 ClothingControl 0.5.9 必须与 MaximumUI 0.5.1 配套安装，旧 MaximumUI 0.5.0 不提供该字段。完整整合安装包会一起包含对应版本。
