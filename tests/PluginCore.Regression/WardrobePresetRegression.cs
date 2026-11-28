@@ -136,6 +136,22 @@ internal static class WardrobePresetRegression {
         Require(unsupported.Linked && unsupported.StateSlot == -1,
             "Missing native owner state cannot receive fabricated writes");
 
+        WardrobeGarmentIdentity.Binding importedLatex =
+            WardrobeGarmentIdentity.Resolve(
+                1, 0, 270, 0, false, false, false,
+                true, true, false, true);
+        Require(importedLatex.Linked &&
+                importedLatex.Item == 270 &&
+                importedLatex.StateSlot == 1,
+            "Imported Slut Latex Top-like asset with real lower reference " +
+            "retains its native bot state even without notBot flag");
+        WardrobeGarmentIdentity.Binding noLatexReference =
+            WardrobeGarmentIdentity.Resolve(
+                1, 0, 270, 0, false, false, false,
+                true, true, false, false);
+        Require(!noLatexReference.Linked &&
+                noLatexReference.Item == 0,
+            "Unknown top without loaded lower reference cannot invent bot garment");
         Require(WardrobeGarmentIdentity.IsLinkedBottom(
             "bot", true, 120, true), "One-piece top provides bot state");
         Require(WardrobeGarmentIdentity.EffectiveItem(
