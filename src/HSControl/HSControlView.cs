@@ -5,7 +5,7 @@ namespace HSControl
 {
     internal sealed class HSControlViewModel
     {
-        internal string Version = "0.1.6", Status = "就绪", AnimationState = string.Empty;
+        internal string Version = "0.1.7", Status = "就绪", AnimationState = string.Empty;
         internal bool Available, Enabled, ManualOverride, AutoStrength, AutoArmed;
         internal bool AutoMaleFinish, AutoFemaleFinish, AutoReplay, Driving;
         internal bool MaleLocked, FemaleLocked;
