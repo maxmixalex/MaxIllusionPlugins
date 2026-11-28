@@ -50,6 +50,7 @@ namespace ClothingControl {
         private ConfigEntry<bool> highlightOnHover;
         private WardrobeAccessoryHighlighter accessoryHighlighter;
         private int hoveredAccessorySlot = -1;
+        private int lastAccessoryHoverFrame = -1;
         private ConfigEntry<KeyboardShortcut> shortcut;
         private int lastHotkeyFrame = -1;
         private float lastHotkeyTime = -1f;
@@ -529,6 +530,10 @@ namespace ClothingControl {
                 HandleHotkey(configuredKey ? "BepInEx KeyboardShortcut" :
                     "Unity Input.GetKeyDown");
             if (!visible) return;
+            if (hoveredAccessorySlot >= 0 &&
+                lastAccessoryHoverFrame >= 0 &&
+                Time.frameCount - lastAccessoryHoverFrame > 8)
+                ClearAccessoryHover();
             if (accessoryFilterDue >= 0f &&
                 Time.unscaledTime >= accessoryFilterDue) {
                 accessoryFilterDue = -1f;
@@ -597,6 +602,7 @@ namespace ClothingControl {
 
         private void ClearAccessoryHover() {
             hoveredAccessorySlot = -1;
+            lastAccessoryHoverFrame = -1;
             if (accessoryHighlighter != null)
                 accessoryHighlighter.Clear();
         }
@@ -718,6 +724,7 @@ namespace ClothingControl {
                     highlightOnHover == null || !highlightOnHover.Value)
                     return;
                 if (hovered) {
+                    lastAccessoryHoverFrame = Time.frameCount;
                     if (hoveredAccessorySlot == slot) return;
                     hoveredAccessorySlot = slot;
                     accessoryHighlighter.Update(character, slot);
