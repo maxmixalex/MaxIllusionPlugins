@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MaximumUI {
     internal static class WidgetVisibility {
@@ -28,7 +29,26 @@ namespace MaximumUI {
         }
 
         public static bool ContainsDialog(Widget widget) {
+            return ContainsDialog(widget, null);
+        }
+
+        // The renderer inspects nested trees multiple times while a modal
+        // blocks background controls. Cache every subtree for ONE GUI event
+        // so a deep chain cannot be rescanned quadratically. Keep the public
+        // uncached form for isolated callers and runtime modal checks.
+        internal static bool ContainsDialog(Widget widget,
+            Dictionary<Widget, bool> memo) {
             if (widget == null || widget is EmptyWidget) return false;
+            bool cached;
+            if (memo != null && memo.TryGetValue(widget, out cached))
+                return cached;
+            bool result = ContainsDialogUncached(widget, memo);
+            if (memo != null) memo[widget] = result;
+            return result;
+        }
+
+        private static bool ContainsDialogUncached(Widget widget,
+            Dictionary<Widget, bool> memo) {
             if (widget is Dialog) return true;
 
             Window window = widget as Window;
@@ -56,13 +76,13 @@ namespace MaximumUI {
                 for (int i = 0; i < tabs.Children.Count; i++) {
                     Tab candidate = tabs.Children[i] as Tab;
                     if (candidate == null || !candidate.Visible) continue;
-                    if (ordinal++ == selected) return ContainsDialog(candidate);
+                    if (ordinal++ == selected) return ContainsDialog(candidate, memo);
                 }
                 return false;
             }
 
             for (int i = 0; i < widget.Children.Count; i++) {
-                if (ContainsDialog(widget.Children[i])) return true;
+                if (ContainsDialog(widget.Children[i], memo)) return true;
             }
             return false;
         }

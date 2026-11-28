@@ -62,6 +62,8 @@ namespace MaximumUI {
         private int popupDepth;
         private TabsState activeTabs;
         private readonly List<Widget> ownerAncestors = new List<Widget>(8);
+        private readonly Dictionary<Widget, bool> modalSubtreeCache =
+            new Dictionary<Widget, bool>();
         private bool modelEnabled = true;
         private bool modelRootEnabled = true;
         private PopupOwnerState currentPopupOwner;
@@ -82,6 +84,7 @@ namespace MaximumUI {
 
         public void InvalidateLayout() {
             layoutCache.Invalidate();
+            modalSubtreeCache.Clear();
             unchecked { contentRevision++; }
         }
 
@@ -161,6 +164,9 @@ namespace MaximumUI {
             Event guiEvent = Event.current;
             try {
                 coordinates.Reset(Screen.width, Screen.height);
+                // Visibility can change between GUI events. Keep the memo
+                // strictly event-scoped and reuse its storage per mount.
+                modalSubtreeCache.Clear();
                 scrollDepth = 0;
                 if (!context.OwnsKeyboardInput) CommitFocusedText();
                 popupBlocksInput = PreparePopupInput(context);
@@ -3140,8 +3146,8 @@ namespace MaximumUI {
                 (dialogDepth == 0 || !ReferenceEquals(currentDialog, currentContext.InputDialog));
         }
 
-        private static bool HasDialogWidget(Widget widget) {
-            return WidgetVisibility.ContainsDialog(widget);
+        private bool HasDialogWidget(Widget widget) {
+            return WidgetVisibility.ContainsDialog(widget, modalSubtreeCache);
         }
 
         private static float GetSliderHeight(RenderContext context) {

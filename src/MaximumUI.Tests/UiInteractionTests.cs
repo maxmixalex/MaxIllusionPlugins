@@ -32,11 +32,22 @@ namespace MaximumUI.Tests {
                 normal.Add(new Label("Row " + i));
             Require(!WidgetVisibility.MayContainDialog(normal),
                 "a thousand ordinary nodes have no potential modal");
+            var memo = new Dictionary<Widget, bool>();
+            Require(!WidgetVisibility.ContainsDialog(normal, memo) &&
+                    memo.Count == 1025,
+                "first blocked-input scan visits each ordinary subtree once");
+            for (int i = 0; i < normal.Children.Count; i++)
+                Require(!WidgetVisibility.ContainsDialog(normal.Children[i], memo),
+                    "cached blocked-input scans preserve no-modal decisions");
+            Require(memo.Count == 1025,
+                "secondary lookup does not rescan descendants");
             normal.Add(new Dialog("Confirmation"));
+            memo.Clear();
             Require(WidgetVisibility.MayContainDialog(normal),
                 "rebuilding a tree with inline dialog marks it modal-capable");
-            Require(WidgetVisibility.ContainsDialog(normal),
-                "live dialog is found when the structural gate is positive");
+            Require(WidgetVisibility.ContainsDialog(normal) &&
+                    WidgetVisibility.ContainsDialog(normal, memo),
+                "live dialog is found in both cached and uncached modes");
             VStack newRoot = new VStack();
             newRoot.Add(new Label("without confirmation"));
             Require(!WidgetVisibility.MayContainDialog(newRoot),
