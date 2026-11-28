@@ -60,10 +60,12 @@ namespace FemboyMode
         // stopped covering the emitter. Resolve both sources before
         // selecting the trajectory.
         internal static bool IsGenitalExposureEnabled(bool visibleSon,
-            bool onePieceCovers, bool bottomCovers, bool underwearCovers)
+            bool onePieceCovers, bool bottomCovers, bool underwearCovers,
+            bool accessoryUnderwearCovers = false)
         {
             return visibleSon &&
-                !onePieceCovers && !bottomCovers && !underwearCovers;
+                !onePieceCovers && !bottomCovers &&
+                !underwearCovers && !accessoryUnderwearCovers;
         }
 
         // Geometry of the male glyph is defined in a 64x64 pixel square;
