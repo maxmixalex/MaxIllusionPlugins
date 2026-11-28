@@ -6,15 +6,18 @@ using UnityEngine;
 namespace HSControl
 {
     /// <summary>
-    /// HCtrl-compatible single-update synthetic Aibu pulses. The original
-    /// AibuAuto activates HandCtrl.action for ONE update, releases it on the
-    /// next call, then waits 0.7–3 seconds. The earlier multi-second hold
-    /// made body parts unclickable and the standalone "auto caress" toggle
-    /// did not exist in the original HCtrl.
+    /// A single continuous, non-restarting native Aibu interaction.
     ///
-    /// Unlike HCtrl's unconditional gauge injection on every idle frame,
-    /// FemaleGaugeUp is called ONLY on a successfully bound native contact.
-    /// This prevents idle-runaway while respecting native touch ownership.
+    /// Previous implementation issued DragStart/FinishDrag every 0.7–3s,
+    /// repeatedly restarting the heroine animation and duplicating gauge
+    /// increases. The current driver:
+    /// - enters only after an explicit current-scene speed change;
+    /// - calls DragStart ONCE per uninterrupted automatic segment;
+    /// - yields immediately to either manual hand/mouse button;
+    /// - never resets native playback every few frames;
+    /// - allows the native engine to raise the gauge, using only a paced,
+    ///   conservative fallback if its gauge has genuinely stalled.
+    /// No new manual "auto-caress enabled" switch.
     /// </summary>
     internal sealed class HSControlAibuDriver
     {
@@ -32,7 +35,9 @@ namespace HSControl
         private HFlag ownedFlags;
         private int previousUseId;
         private bool restoreUseId;
-        private float retryIn;
+        private float manualCooldown;
+        private float gaugeStalledFor, fallbackElapsed;
+        private float gaugeLastSeen = -1f;
         private bool completed;
 
         internal bool Running { get { return ownedHand != null && ownedFlags != null; } }
@@ -43,8 +48,7 @@ namespace HSControl
         }
 
         private static int Action(HandCtrl hand) {
-            if (hand == null) return -1;
-            if (ActionField == null) return -1;
+            if (hand == null || ActionField == null) return -1;
             try { return Convert.ToInt32(ActionField.GetValue(hand)); }
             catch { return -1; }
         }
@@ -73,7 +77,8 @@ namespace HSControl
                 FieldInfo field = type.GetField(name, Flags);
                 if (field != null) return Convert.ToInt32(field.GetValue(owner));
                 PropertyInfo prop = type.GetProperty(name, Flags);
-                if (prop != null) return Convert.ToInt32(prop.GetValue(owner, null));
+                if (prop != null)
+                    return Convert.ToInt32(prop.GetValue(owner, null));
             } catch { }
             return -1;
         }
@@ -91,7 +96,8 @@ namespace HSControl
                     int kind = MemberInt(area, "kindTouch");
                     int id = MemberInt(area, "idUse");
                     if (kind < 2 || kind > 7 || id < 0) continue;
-                    if (items != null && (id >= items.Length || items.GetValue(id) == null))
+                    if (items != null &&
+                        (id >= items.Length || items.GetValue(id) == null))
                         continue;
                     return id;
                 }
@@ -101,82 +107,123 @@ namespace HSControl
 
         internal void Stop(HSceneProc scene) {
             if (Running) {
-                // Release only a drag we still own. Never clear the second
-                // hand's active drag or overwrite a fresh manual action.
                 bool stillOwned = Action(ownedHand) == 1;
-                bool secondBusy = scene != null && Action(scene.hand1) != 0;
-                if (stillOwned) {
+                if (stillOwned)
                     Assign(ActionField, ownedHand, 0);
-                    if (!secondBusy) ownedFlags.FinishDrag();
-                }
                 if (restoreUseId && stillOwned)
                     Assign(ActionUseField, ownedHand, previousUseId);
+                // An ongoing synthetic drag needs one native release.
+                // No repeated FinishDrag calls during ordinary movement.
+                if (stillOwned && ownedFlags != null)
+                    ownedFlags.FinishDrag();
             }
             ownedHand = null;
             ownedFlags = null;
             restoreUseId = false;
+            gaugeStalledFor = fallbackElapsed = 0f;
+            gaugeLastSeen = -1f;
         }
 
         internal void Clear(HSceneProc scene) {
             Stop(scene);
+            manualCooldown = 0f;
             completed = false;
-            retryIn = 0f;
         }
 
-        /// <summary>
-        /// Called only when the existing HCtrl automatic speed mode is on.
-        /// No independent auto-caress setting: mode 0 disables all synthesis.
-        /// </summary>
-        internal bool Tick(HSceneProc scene, HFlag flags, float speed, float dt) {
+        private void PaceGauge(HFlag flags, HandCtrl hand, float speed, float dt)
+        {
+            float actual = flags.gaugeFemale;
+            if (gaugeLastSeen < 0f || actual > gaugeLastSeen + .01f) {
+                gaugeStalledFor = 0f;
+                fallbackElapsed = 0f;
+            } else {
+                gaugeStalledFor += dt;
+                fallbackElapsed += dt;
+            }
+            gaugeLastSeen = actual;
+            // Native HandCtrl normally owns the gauge progression. Only if
+            // it has remained flat > .35 seconds do we ask the original
+            // FemaleGaugeUp method for a *bounded* supplementary increment,
+            // never once per Update with an unscaled multiplier of five.
+            if (gaugeStalledFor >= .35f && fallbackElapsed >= .18f &&
+                hand != null && hand.nowMES != null &&
+                flags.gaugeFemale < 99.5f) {
+                fallbackElapsed = 0f;
+                float nativeDelta = Mathf.Clamp01(speed) *
+                    Mathf.Clamp(flags.rateDragGauge, .1f, 2f) * .45f;
+                if (nativeDelta > 0f)
+                    flags.FemaleGaugeUp(nativeDelta, false,
+                        hand.nowMES.stateMotion == 0);
+                gaugeLastSeen = flags.gaugeFemale;
+            }
+        }
+
+        internal bool Tick(HSceneProc scene, HFlag flags, float speed, float dt)
+        {
+            float delta = Mathf.Clamp(dt, 0f, .1f);
             if (scene == null || flags == null || scene.hand == null ||
                 !HSControlActionRules.IsAutoCaressState((int)flags.mode,
                     flags.nowAnimStateName, flags.rely)) {
                 Clear(scene);
                 return false;
             }
-
-            // HCtrl sends an action only for a single game update. Release
-            // our prior pulse BEFORE checking new mouse input.
-            if (Running) {
-                Stop(scene);
-                return false;
-            }
-            retryIn = Mathf.Max(0f, retryIn - Mathf.Clamp(dt, 0f, .2f));
-            if (retryIn > 0f || flags.gaugeFemale >= 99.5f)
-                return false;
+            // Changing body part, using either hand, or holding a mouse
+            // button immediately cancels OUR interaction. The native hand
+            // takes over; avoid re-acquiring while the player is still
+            // choosing a different body region.
             if (Input.GetMouseButton(0) || Input.GetMouseButton(1) ||
-                Action(scene.hand) != 0 || Action(scene.hand1) != 0)
-                return false;
-
-            int id = NativeUseArea(scene.hand);
-            if (id < 0) return false;
-
-            int previous = ReadInt(ActionUseField, scene.hand);
-            if (!Assign(ActionUseField, scene.hand, id)) return false;
-            if (!flags.DragStart()) {
-                Assign(ActionUseField, scene.hand, previous);
+                Action(scene.hand1) > 0) {
+                Stop(scene);
+                manualCooldown = .85f;
                 return false;
             }
-            if (!Assign(ActionField, scene.hand, 1)) {
-                flags.FinishDrag();
-                Assign(ActionUseField, scene.hand, previous);
+
+            manualCooldown = Mathf.Max(0f, manualCooldown - delta);
+            if (Running && (!ReferenceEquals(ownedHand, scene.hand) ||
+                !ReferenceEquals(ownedFlags, flags))) {
+                Stop(scene);
+                manualCooldown = .85f;
                 return false;
             }
-            ownedHand = scene.hand;
-            ownedFlags = flags;
-            previousUseId = previous;
-            // -1 is the original native "no selected item" value too.
-            restoreUseId = ActionUseField != null;
+
+            if (!Running) {
+                if (manualCooldown > 0f || Action(scene.hand) != 0 ||
+                    flags.gaugeFemale >= 99.5f) return false;
+                int id = NativeUseArea(scene.hand);
+                if (id < 0) return false;
+                int previous = ReadInt(ActionUseField, scene.hand);
+                if (!Assign(ActionUseField, scene.hand, id))
+                    return false;
+                if (!flags.DragStart()) {
+                    Assign(ActionUseField, scene.hand, previous);
+                    manualCooldown = .5f;
+                    return false;
+                }
+                if (!Assign(ActionField, scene.hand, 1)) {
+                    flags.FinishDrag();
+                    Assign(ActionUseField, scene.hand, previous);
+                    manualCooldown = .5f;
+                    return false;
+                }
+                ownedHand = scene.hand;
+                ownedFlags = flags;
+                previousUseId = previous;
+                restoreUseId = ActionUseField != null;
+                gaugeLastSeen = flags.gaugeFemale;
+                gaugeStalledFor = fallbackElapsed = 0f;
+            } else if (Action(scene.hand) != 1) {
+                // The game's hand state changed externally: never fight it.
+                // Repeating DragStart would restart the native animation.
+                ownedHand = null;
+                ownedFlags = null;
+                restoreUseId = false;
+                manualCooldown = .85f;
+                return false;
+            }
 
             flags.speed = Mathf.Clamp01(speed);
-            if (scene.hand.nowMES != null && flags.gaugeFemale < 100f)
-                flags.FemaleGaugeUp(flags.speed * 5f * flags.rateDragGauge,
-                    false, scene.hand.nowMES.stateMotion == 0);
-
-            // 0.7–3 s is the interval to the NEXT one-frame pulse,
-            // not how long to hold the hand.action field.
-            retryIn = UnityEngine.Random.Range(.7f, 3f);
-            if (flags.gaugeFemale >= 100f) {
+            PaceGauge(flags, scene.hand, speed, delta);
+            if (flags.gaugeFemale >= 99.5f) {
                 Stop(scene);
                 completed = true;
             }
