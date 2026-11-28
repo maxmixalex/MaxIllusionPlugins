@@ -4,12 +4,13 @@ using MaximumUI;
 
 namespace MaximumUI.Tests {
     internal static class LoveJuiceViewTests {
-        internal const int TestCount = 4;
+        internal const int TestCount = 5;
         internal static void RunAll() {
             PreviewRequiresLiveActor();
             SettingsActionsUseRealWidgets();
             RetainedViewTracksNativeFeedback();
             ActorSelectionUsesDedicatedNativeControls();
+            AutomaticTriggerExplanationsAndAdvancedIsolation();
         }
 
         private static LoveJuiceViewModel Create() {
@@ -84,6 +85,31 @@ namespace MaximumUI.Tests {
             Check(!Find<ComboBox<int>>(ui, "lovejuice-target").Enabled &&
                 !Find<Button>(ui, "lovejuice-emit").Enabled,
                 "No old actor survives an empty scene.");
+        }
+
+        private static void AutomaticTriggerExplanationsAndAdvancedIsolation() {
+            LoveJuiceView view = new LoveJuiceView { Model = Create() };
+            Widget tree = view.Build(null);
+            Check(Find<Label>(tree, "lovejuice-how-to") != null &&
+                Find<Label>(tree, "lovejuice-body-condition") != null &&
+                Find<Label>(tree, "lovejuice-intimate-condition") != null &&
+                Find<Label>(tree, "lovejuice-pre-condition") != null,
+                "Default panel explains exact body/intimate/pre-fluid trigger sources");
+            Foldout advanced = Find<Foldout>(tree, "lovejuice-advanced");
+            Check(!advanced.Open && !view.AdvancedOpen,
+                "Unverified and optional proxy options are collapsed by default");
+            advanced.OnChange(true);
+            Check(view.AdvancedOpen,
+                "Advanced panel opens only from explicit user interaction");
+            tree = view.Build(null);
+            advanced = Find<Foldout>(tree, "lovejuice-advanced");
+            Check(advanced.Open &&
+                Find<Checkbox>(advanced, "lovejuice-experimental-spheres") != null &&
+                Find<Checkbox>(advanced, "lovejuice-milk") != null &&
+                Find<Button>(advanced, "lovejuice-inspect-studio") != null,
+                "Advanced area labels optional sources and native asset inspection");
+            advanced.OnChange(false);
+            Check(!view.AdvancedOpen, "Advanced options can be hidden again");
         }
 
         private static T Find<T>(Widget root, string key) where T : Widget {
