@@ -594,6 +594,15 @@ namespace LoveJuice {
 
         private void RefreshPanel() {
             if (!panelVisible || panel == null) return;
+            Actor selected = null;
+            if (roster.Selected != null) actors.TryGetValue(roster.Selected, out selected);
+            bool sceneReady = scene != null && scene.flags != null && !scene.isEnd;
+            bool nativeObject = sceneReady && scene.objMetaball != null;
+            string nativeSummary = !sceneReady
+                ? "原生物理源：无 H 场景"
+                : !nativeObject
+                    ? "原生物理源：此场景未检测到 Metaball 容器；滴落不可用"
+                    : "原生物理源：场景容器已发现；能否发射需看当前动作/预制体";
             int token = panelRevision;
             Func<bool> live = () => panelVisible && panelRevision == token;
             LoveJuiceViewModel m = new LoveJuiceViewModel {
@@ -601,6 +610,15 @@ namespace LoveJuice {
                 HasScene = scene != null && scene.flags != null && !scene.isEnd,
                 ActorCount = roster.Count, ActorNames = ActorNames(),
                 SelectedActorIndex = roster.SelectedIndex, ActiveParticles = ActiveDrops,
+                NativeSourceState = nativeSummary,
+                CurrentAnimation = sceneReady ?
+                    (scene.flags.nowAnimStateName ?? string.Empty) : string.Empty,
+                SelectedFaceLevel = selected == null ? -1 : selected.FaceLevel,
+                SelectedBodyLevel = selected == null ? -1 : selected.BodyLevel,
+                SelectedIntimateLevel = selected == null ||
+                    selected.Character == null ||
+                    selected.Character.sex != 1 ? -1 :
+                    selected.IntimateLevel,
                 Status = panelStatus, Integration = integrations.HasSkinEffects
                     ? "SkinEffects：已连接（仅读取状态）。"
                     : "SkinEffects：未连接，使用游戏自身状态。",
