@@ -360,6 +360,68 @@ namespace MaximumUI.Tests {
             PrintBenchmark("default-per-frame", frame);
             PrintBenchmark("retained-idle", retained);
             Console.WriteLine("Benchmark: same fixed engine, 1000 labels, 150 frames, 2 GUI events/frame; build/layout only, not a baseline DLL comparison or Unity frame rate.");
+            MeasureDenseQueryPerformance(allocated);
+        }
+
+        private static void MeasureDenseQueryPerformance(Func<long> allocated) {
+            // This measures the hot query-store path for a multiwindow,
+            // high-refresh workload. It is NOT a Unity/GPU FPS measurement.
+            const int controls = 1024, frames = 90;
+            MuiRect rect = new MuiRect(0f, 0f, 240f, 32f);
+            for (int windowCount = 1; windowCount <= 16; windowCount *= 2) {
+                if (windowCount != 1 && windowCount != 8 && windowCount != 16)
+                    continue;
+                BenchmarkResult[] samples = new BenchmarkResult[3];
+                for (int trial = 0; trial < samples.Length; trial++) {
+                    UiQueryStore[] stores = new UiQueryStore[windowCount];
+                    for (int w = 0; w < windowCount; w++)
+                        stores[w] = new UiQueryStore();
+                    Button[] controlsList = new Button[controls];
+                    string[] paths = new string[controls];
+                    for (int i = 0; i < controls; i++) {
+                        controlsList[i] = new Button("Row", null, "perf-row-" + i);
+                        paths[i] = "0." + i;
+                    }
+                    // Fully warm the 1024-row identity and pool before sample.
+                    for (int w = 0; w < windowCount; w++) {
+                        stores[w].BeginFrame();
+                        for (int i = 0; i < controls; i++)
+                            stores[w].RecordItem(controlsList[i], paths[i],
+                                rect, false, false, false, false);
+                    }
+                    GC.Collect();
+                    long before = allocated == null ? 0L : allocated();
+                    System.Diagnostics.Stopwatch watch =
+                        System.Diagnostics.Stopwatch.StartNew();
+                    for (int frame = 0; frame < frames; frame++)
+                        for (int guiEvent = 0; guiEvent < 2; guiEvent++)
+                            for (int w = 0; w < windowCount; w++) {
+                                UiQueryStore store = stores[w];
+                                store.BeginFrame();
+                                for (int i = 0; i < controls; i++)
+                                    store.RecordItem(controlsList[i], paths[i],
+                                        rect, false, false, false, false);
+                                if (store.ItemCount != controls)
+                                    throw new InvalidOperationException("Dense benchmark lost query rows");
+                            }
+                    watch.Stop();
+                    samples[trial] = new BenchmarkResult {
+                        Milliseconds = watch.Elapsed.TotalMilliseconds,
+                        AllocatedBytes = allocated == null ? -1L :
+                            allocated() - before
+                    };
+                }
+                Array.Sort(samples, delegate(BenchmarkResult a,
+                    BenchmarkResult b) {
+                    return a.Milliseconds.CompareTo(b.Milliseconds);
+                });
+                BenchmarkResult median = samples[1];
+                Console.WriteLine("BENCH dense-query: windows=" + windowCount +
+                    ", controlsPerWindow=1024, frames=90, eventsPerFrame=2" +
+                    ", median_ms=" + median.Milliseconds.ToString("F3",
+                        System.Globalization.CultureInfo.InvariantCulture) +
+                    ", allocated_bytes=" + median.AllocatedBytes);
+            }
         }
 
         private static BenchmarkResult RunLayoutBenchmark(int frames, int rows, int mode, Func<long> allocated) {

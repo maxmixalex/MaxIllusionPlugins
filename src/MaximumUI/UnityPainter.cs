@@ -20,7 +20,9 @@ namespace MaximumUI {
         private MuiVec2 clipOrigin;
 
         public UnityPainter() {
-            white = Textures.Solid(Color.white);
+            // Unity already owns this immutable 1x1 white texture. Creating
+            // one private GPU texture for every open window is unnecessary.
+            white = Texture2D.whiteTexture;
         }
 
         public MaximumTheme Theme {
@@ -34,7 +36,7 @@ namespace MaximumUI {
         }
 
         public void Dispose() {
-            if (white != null) UnityEngine.Object.Destroy(white);
+            // whiteTexture is Unity-owned; never destroy it on unmount.
             if (disc != null) UnityEngine.Object.Destroy(disc);
             textStyles.Clear();
             defaultTextStyle = null;

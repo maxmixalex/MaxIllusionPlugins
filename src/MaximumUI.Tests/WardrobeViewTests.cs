@@ -127,14 +127,17 @@ namespace MaximumUI.Tests {
         private static void AccessoryHoverAndDebounceModel() {
             WardrobeViewModel model = Create();
             model.Page = 1;
-            model.AccessoryFilter = "1";
-            model.AccessoryQuery = "Accessory 2";
+            // Filters are substring matches, not exact/starts-with. "1"
+            // would also match Accessory 10..19, 21, 31 and 41.
+            // Choose unique labels to test debounce independently of matching.
+            model.AccessoryFilter = "Accessory 47";
+            model.AccessoryQuery = "Accessory 46";
             Require(model.FilteredAccessories().Count == 1 &&
-                model.FilteredAccessories()[0].Slot == 0,
+                model.FilteredAccessories()[0].Slot == 47,
                 "Typing does not apply a new filter until the debounce commits");
-            model.AccessoryFilter = "Accessory 2";
+            model.AccessoryFilter = "Accessory 46";
             Require(model.FilteredAccessories().Count == 1 &&
-                model.FilteredAccessories()[0].Slot == 1,
+                model.FilteredAccessories()[0].Slot == 46,
                 "Committed filter updates results after the idle interval");
             model.HighlightOnHover = true;
             int hoveredSlot = -1, calls = 0;
@@ -150,7 +153,7 @@ namespace MaximumUI.Tests {
             Require(row.OnHoverChanged != null,
                 "Accessory row exposes native retained pointer hover");
             row.OnHoverChanged(true);
-            Require(hoveredSlot == 1 && calls == 1,
+            Require(hoveredSlot == 46 && calls == 1,
                 "Hover identifies exact accessory slot for private overlay");
             row.OnHoverChanged(false);
             Require(hoveredSlot == -1 && calls == 2,

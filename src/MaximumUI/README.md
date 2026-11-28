@@ -126,6 +126,8 @@ Runtime Update 采用稳定挂载快照，允许回调卸载当前视图或添�
 - Runtime 的 modal 所属窗口已经在全体挂载点扫描过，绘制阶段不再重复遍历同一棵树。单独直接使用 ImguiRenderer 的调用仍保留旧扫描行为。
 - 描边统一四边的颜色状态切换，避免在非 Repaint 事件构造无效绘制调用；UnityPainter 的文本样式缓存上限从 128 增至 512，避免多窗口复杂主题反复创建 GUIStyle。
 - `MaximumUIRuntime.GetMetrics()` 新增构建次数、GUI 事件渲染次数、布局次数、缓存命中和查询/导航池规模，供实机采样对比。注意：该统计是当前已挂载视图的累计/当前布局缓存记录，不包含 Unity GPU 时间。
+- UnityPainter 的纯白基础纹理统一复用 `Texture2D.whiteTexture`，减少多窗口各自的 GPU 纹理分配；卸载窗口时不删除 Unity 共享纹理。
+- CI 的 `MAXIMUMUI_BENCHMARK=1` 额外报告 1、8、16 窗口各 1024 条记录、90 帧双事件的 QueryStore 中位耗时和托管分配。此测量不等于实际 FPS。
 - `BuildEveryFrame = false` 仍是响应 `MarkDirty` 的**显式按需策略**，不强行改变所有插件的默认刷新语义。动态窗口保留原生输入响应与每帧更新。
 
 ## 无界面回归与性能测量
