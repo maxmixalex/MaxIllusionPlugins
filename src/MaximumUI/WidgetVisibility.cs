@@ -2,6 +2,18 @@ using System;
 
 namespace MaximumUI {
     internal static class WidgetVisibility {
+        // Structural prefilter: a retained root with no Dialog descendants
+        // cannot become modal through a tab/fold state change alone. Runtime
+        // computes this only when a view rebuilds; dynamic modal visibility
+        // is still evaluated normally when any Dialog exists.
+        public static bool MayContainDialog(Widget root) {
+            if (root == null || root is EmptyWidget) return false;
+            if (root is Dialog) return true;
+            for (int i = 0; i < root.Children.Count; i++)
+                if (MayContainDialog(root.Children[i])) return true;
+            return false;
+        }
+
         public static bool ContainsRootDialog(Widget root, RenderContext context, string rootPath) {
             // RenderWindow stores folding outside the declarative tree and skips
             // its entire content in DrawWindowContents while folded.

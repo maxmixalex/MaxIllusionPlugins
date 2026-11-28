@@ -25,6 +25,7 @@ namespace MaximumUI {
             public long Order;
             public long WindowActivation;
             public bool PendingWindowPromotion;
+            public bool MayContainInlineDialog;
             public long ViewBuilds;
             public long RenderEvents;
         }
@@ -323,6 +324,8 @@ namespace MaximumUI {
                     mount.Shortcuts.BeginBuild();
                     bool wasWindow = mount.CachedRoot is Window;
                     mount.CachedRoot = mount.View.Build(mount.BuildContext) ?? EmptyWidget.Instance;
+                    mount.MayContainInlineDialog =
+                        WidgetVisibility.MayContainDialog(mount.CachedRoot);
                     Window rootWindow = mount.CachedRoot as Window;
                     rootKindChanged |= wasWindow != (rootWindow != null);
                     mount.RootWindowStateId = rootWindow == null ? null : mount.RenderContext.StateId(rootWindow, "window", "0");
@@ -446,7 +449,9 @@ namespace MaximumUI {
             for (int i = snapshot.Length - 1; i >= 0; i--) {
                 MountRecord mount = snapshot[i];
                 if (!mount.Active || !mount.Options.Visible) continue;
-                if (mount.Dialogs.HasOpenDialogs || WidgetVisibility.ContainsRootDialog(mount.CachedRoot, mount.RenderContext, "0")) return i;
+                if (mount.Dialogs.HasOpenDialogs ||
+                    (mount.MayContainInlineDialog && WidgetVisibility.ContainsRootDialog(
+                        mount.CachedRoot, mount.RenderContext, "0"))) return i;
             }
             return -1;
         }

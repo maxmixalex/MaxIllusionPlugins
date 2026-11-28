@@ -98,10 +98,16 @@ namespace MaximumUI {
 
         private void Stroke(MuiRect rect, MuiColor color, float thickness) {
             float t = thickness <= 0f ? 1f : thickness;
-            DrawTexture(new MuiRect(rect.X, rect.Y, rect.Width, t), white, color);
-            DrawTexture(new MuiRect(rect.X, rect.Bottom - t, rect.Width, t), white, color);
-            DrawTexture(new MuiRect(rect.X, rect.Y, t, rect.Height), white, color);
-            DrawTexture(new MuiRect(rect.Right - t, rect.Y, t, rect.Height), white, color);
+            // All four strokes share one tint and one draw texture. The
+            // clip-relative coordinates remain identical to DrawTexture.
+            Color previous = GUI.color;
+            try {
+                GUI.color = Transparent(ToColor(color));
+                GUI.DrawTexture(ToRectRelative(new MuiRect(rect.X, rect.Y, rect.Width, t)), white);
+                GUI.DrawTexture(ToRectRelative(new MuiRect(rect.X, rect.Bottom - t, rect.Width, t)), white);
+                GUI.DrawTexture(ToRectRelative(new MuiRect(rect.X, rect.Y, t, rect.Height)), white);
+                GUI.DrawTexture(ToRectRelative(new MuiRect(rect.Right - t, rect.Y, t, rect.Height)), white);
+            } finally { GUI.color = previous; }
         }
 
         private void DrawText(DrawCommand command) {

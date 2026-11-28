@@ -6,6 +6,10 @@ namespace MaximumUI {
     public sealed class ImguiRenderer : IDisposable {
         private static readonly GUIContent TempContent = new GUIContent();
         private readonly DragController dragController = new DragController();
+        // One input snapshot and one scratch command list per renderer/mount,
+        // rather than new heap objects for every IMGUI event or canvas draw.
+        private readonly MuiInputEvent queryInput = new MuiInputEvent();
+        private readonly DrawList scratchDrawList = new DrawList(true);
         private LayoutEngine layoutEngine = new LayoutEngine();
         private float controlRowHeight = 32f;
         private LayoutCache layoutCache;
@@ -192,7 +196,9 @@ namespace MaximumUI {
                 for (int i = 0; i < context.ComboBoxStates.Count; i++) context.ComboBoxStates[i].HasButtonRect = false;
                 if (context.Query != null) {
                     context.Query.BeginFrame();
-                    context.Query.RecordInput(ToMuiInputEvent(Event.current));
+                    // RecordInput snapshots values immediately; the mutable
+                    // per-mount event object never escapes the renderer.
+                    context.Query.RecordInput(ToMuiInputEvent(Event.current, queryInput));
                 }
                 if (context.Navigation != null && !context.SuppressInput) context.Navigation.BeginFrame();
                 context.Overlay.Clear();
@@ -2575,12 +2581,15 @@ namespace MaximumUI {
                     DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
                 }
 
-                DrawList drawList = new DrawList();
-                MuiRect canvasRect = ToMuiRect(rect);
-                if (widget.Clip) drawList.PushClip(canvasRect);
-                if (widget.OnDraw != null) widget.OnDraw(drawList, canvasRect);
-                if (widget.Clip) drawList.PopClip();
-                Paint(drawList);
+                DrawList drawList = scratchDrawList;
+                drawList.Clear();
+                try {
+                    MuiRect canvasRect = ToMuiRect(rect);
+                    if (widget.Clip) drawList.PushClip(canvasRect);
+                    if (widget.OnDraw != null) widget.OnDraw(drawList, canvasRect);
+                    if (widget.Clip) drawList.PopClip();
+                    Paint(drawList);
+                } finally { drawList.Clear(); }
             }
 
             RegisterInputRegion(rect, true);
@@ -2593,14 +2602,17 @@ namespace MaximumUI {
                     DrawStyle(context.Theme.TextField, rect, GUIContent.none, false, false, false, false);
                 }
 
-                DrawList drawList = new DrawList();
-                MuiRect canvasRect = ToMuiRect(rect);
-                if (widget.Clip) drawList.PushClip(canvasRect);
-                if (widget.Source != null) {
-                    drawList.Append(widget.Source, widget.LocalCoordinates ? new MuiVec2(canvasRect.X, canvasRect.Y) : new MuiVec2(0f, 0f));
-                }
-                if (widget.Clip) drawList.PopClip();
-                Paint(drawList);
+                DrawList drawList = scratchDrawList;
+                drawList.Clear();
+                try {
+                    MuiRect canvasRect = ToMuiRect(rect);
+                    if (widget.Clip) drawList.PushClip(canvasRect);
+                    if (widget.Source != null)
+                        drawList.Append(widget.Source, widget.LocalCoordinates
+                            ? new MuiVec2(canvasRect.X, canvasRect.Y) : new MuiVec2(0f, 0f));
+                    if (widget.Clip) drawList.PopClip();
+                    Paint(drawList);
+                } finally { drawList.Clear(); }
             }
 
             RegisterInputRegion(rect, true);
@@ -3692,7 +3704,7 @@ namespace MaximumUI {
             }
         }
 
-        private static MuiInputEvent ToMuiInputEvent(Event current) {
+        private static MuiInputEvent ToMuiInputEvent(Event current, MuiInputEvent destination = null) {
             if (current == null) return null;
 
             MuiEventType type = MuiEventType.None;
@@ -3704,18 +3716,18 @@ namespace MaximumUI {
             else if (current.type == EventType.KeyUp) type = MuiEventType.KeyUp;
             else if (current.type == EventType.Repaint) type = MuiEventType.Repaint;
 
-            return new MuiInputEvent {
-                Type = type,
-                MousePosition = new MuiVec2(current.mousePosition.x, current.mousePosition.y),
-                MouseButton = current.button,
-                KeyCode = (int)current.keyCode,
-                Character = current.character,
-                ScrollDeltaY = current.delta.y,
-                Control = current.control,
-                Shift = current.shift,
-                Alt = current.alt,
-                Command = current.command
-            };
+            if (destination == null) destination = new MuiInputEvent();
+            destination.Type = type;
+            destination.MousePosition = new MuiVec2(current.mousePosition.x, current.mousePosition.y);
+            destination.MouseButton = current.button;
+            destination.KeyCode = (int)current.keyCode;
+            destination.Character = current.character;
+            destination.ScrollDeltaY = current.delta.y;
+            destination.Control = current.control;
+            destination.Shift = current.shift;
+            destination.Alt = current.alt;
+            destination.Command = current.command;
+            return destination;
         }
 
         private static MuiRect ToMuiRect(Rect rect) {

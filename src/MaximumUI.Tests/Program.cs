@@ -45,6 +45,7 @@ namespace MaximumUI.Tests {
                 FontSizingAndWrappedLabelsRespectAvailableSpace();
                 DrawingOnlyRunsDuringRepaint();
                 DrawListCanAppendItselfWithoutGrowingForever();
+                ReusableDrawCommandsAndInputSnapshotsAreIsolated();
                 DialogCallbacksCannotCloseNewDialogsOrLoopForever();
                 OverlayOrderSelectsOnlyTheTopDialog();
                 ThemeDesignTests.RunAll();
@@ -534,6 +535,42 @@ namespace MaximumUI.Tests {
 
             AssertEqual("0.0.1", result.ClickedPath, "clicked path");
             Assert(result.ClickedWidget is Toggle, "clicked widget");
+        }
+
+        private static void ReusableDrawCommandsAndInputSnapshotsAreIsolated() {
+            DrawList scratch = new DrawList(true);
+            var color = MuiColor.FromRgb(1f, 0f, 0f);
+            var area = new MuiRect(0f, 0f, 20f, 15f);
+            scratch.Text(area, "previous", new object(), color);
+            DrawCommand first = scratch.Commands[0];
+            scratch.Clear();
+            AssertEqual(1, scratch.RecycledCount, "private scratch list recycles command object");
+            scratch.FillRect(area, color);
+            Assert(object.ReferenceEquals(first, scratch.Commands[0]),
+                "repaint reuses the command without new allocation");
+            Assert(scratch.Commands[0].Resource == null &&
+                   scratch.Commands[0].Text == null &&
+                   scratch.Commands[0].Points == null,
+                "recycled commands never retain prior texture, text or polyline references");
+            DrawList normal = new DrawList();
+            normal.FillRect(area, color);
+            DrawCommand identity = normal.Commands[0];
+            normal.Clear();
+            normal.FillRect(area, color);
+            Assert(!object.ReferenceEquals(identity, normal.Commands[0]),
+                "public DrawList preserves preexisting command identity behavior");
+            UiQueryStore queries = new UiQueryStore();
+            MuiInputEvent reused = new MuiInputEvent {
+                KeyCode = 17, Character = 'a', MousePosition = new MuiVec2(2f, 4f)
+            };
+            queries.RecordInput(reused);
+            reused.KeyCode = 23;
+            reused.Character = 'z';
+            reused.MousePosition = new MuiVec2(7f, 8f);
+            Assert(queries.Capture.KeyCode == 17 &&
+                   queries.Capture.Character == 'a' &&
+                   queries.Capture.MousePosition.X == 2f,
+                "query event snapshot does not retain mutable renderer input");
         }
 
         private static void DrawListRecordsCommands() {

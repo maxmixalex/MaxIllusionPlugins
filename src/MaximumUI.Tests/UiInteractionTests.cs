@@ -6,11 +6,12 @@ using UnityEngine;
 
 namespace MaximumUI.Tests {
     internal static class UiInteractionTests {
-        internal const int TestCount = 13;
+        internal const int TestCount = 14;
 
         public static void RunAll() {
             ChoiceListsRetainAndFilterWithoutRepeatedFormatting();
             DenseMultiWindowQueryAndNavigationPoolsStayBounded();
+            ModalStructurePrefilterTracksRebuildsAndVisibility();
             VirtualRowsReuseAndBoundWorkToTheViewport();
             WindowGeometryKeepsChromeReachable();
             PopupGeometryFitsEveryScreenEdge();
@@ -22,7 +23,24 @@ namespace MaximumUI.Tests {
             SliderKeysRespectRangeAndStep();
             TabsDistinguishClicksFromDragAndAlwaysRelease();
             PopupStateClosesEveryOwner();
-            Console.WriteLine("MaximumUI interaction/performance regressions: 13 groups passed.");
+            Console.WriteLine("MaximumUI interaction/performance regressions: 14 groups passed.");
+        }
+
+        private static void ModalStructurePrefilterTracksRebuildsAndVisibility() {
+            VStack normal = new VStack();
+            for (int i = 0; i < 1024; i++)
+                normal.Add(new Label("Row " + i));
+            Require(!WidgetVisibility.MayContainDialog(normal),
+                "a thousand ordinary nodes have no potential modal");
+            normal.Add(new Dialog("Confirmation"));
+            Require(WidgetVisibility.MayContainDialog(normal),
+                "rebuilding a tree with inline dialog marks it modal-capable");
+            Require(WidgetVisibility.ContainsDialog(normal),
+                "live dialog is found when the structural gate is positive");
+            VStack newRoot = new VStack();
+            newRoot.Add(new Label("without confirmation"));
+            Require(!WidgetVisibility.MayContainDialog(newRoot),
+                "rebuilding away the dialog clears the prefilter");
         }
 
         private static void DenseMultiWindowQueryAndNavigationPoolsStayBounded() {

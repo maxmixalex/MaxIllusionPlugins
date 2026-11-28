@@ -36,54 +36,96 @@ namespace MaximumUI {
 
     public sealed class DrawList {
         private readonly List<DrawCommand> commands = new List<DrawCommand>();
+        // Normal DrawLists preserve their existing per-command identity. Only
+        // the renderer's private scratch list opts into command recycling.
+        private readonly bool reusable;
+        private readonly Stack<DrawCommand> recycled = new Stack<DrawCommand>();
+        private const int MaximumRecycledCommands = 4096;
         public TextFormat DefaultTextFormat;
+
+        public DrawList() : this(false) { }
+
+        internal DrawList(bool reusable) { this.reusable = reusable; }
+
+        internal int RecycledCount { get { return recycled.Count; } }
+
+        private DrawCommand RentCommand() {
+            if (!reusable || recycled.Count == 0) return new DrawCommand();
+            DrawCommand result = recycled.Pop();
+            // Every command carries only the fields explicitly assigned for
+            // its new type. Do not leak text, textures or geometry from an old
+            // draw operation.
+            result.Type = default(DrawCommandType);
+            result.Rect = default(MuiRect);
+            result.Color = default(MuiColor);
+            result.P1 = result.P2 = result.P3 = result.P4 = default(MuiVec2);
+            result.Points = null;
+            result.Text = null;
+            result.Resource = null;
+            result.Thickness = result.Radius = 0f;
+            result.Segments = 0;
+            result.TextFormat = default(TextFormat);
+            return result;
+        }
 
         public IList<DrawCommand> Commands {
             get { return commands; }
         }
 
         public void Clear() {
+            if (reusable) {
+                for (int i = 0; i < commands.Count; i++) {
+                    DrawCommand command = commands[i];
+                    if (command == null || recycled.Count >= MaximumRecycledCommands)
+                        continue;
+                    // Release arbitrary object graphs between GUI events.
+                    command.Resource = null;
+                    command.Text = null;
+                    command.Points = null;
+                    recycled.Push(command);
+                }
+            }
             commands.Clear();
         }
 
         public void PushClip(MuiRect rect) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.PushClip,
-                Rect = rect
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.PushClip;
+            command.Rect = rect;
+            commands.Add(command);
         }
 
         public void PopClip() {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.PopClip
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.PopClip;
+            commands.Add(command);
         }
 
         public void FillRect(MuiRect rect, MuiColor color) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.FillRect,
-                Rect = rect,
-                Color = color
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.FillRect;
+            command.Rect = rect;
+            command.Color = color;
+            commands.Add(command);
         }
 
         public void StrokeRect(MuiRect rect, MuiColor color, float thickness) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.StrokeRect,
-                Rect = rect,
-                Color = color,
-                Thickness = thickness
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.StrokeRect;
+            command.Rect = rect;
+            command.Color = color;
+            command.Thickness = thickness;
+            commands.Add(command);
         }
 
         public void Line(MuiVec2 start, MuiVec2 end, MuiColor color, float thickness) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.Line,
-                P1 = start,
-                P2 = end,
-                Color = color,
-                Thickness = thickness
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.Line;
+            command.P1 = start;
+            command.P2 = end;
+            command.Color = color;
+            command.Thickness = thickness;
+            commands.Add(command);
         }
 
         public void Polyline(IList<MuiVec2> points, MuiColor color, float thickness) {
@@ -97,66 +139,66 @@ namespace MaximumUI {
             for (int i = 0; i < points.Count; i++) copy[i] = points[i];
             if (copy.Length > points.Count) copy[copy.Length - 1] = points[0];
 
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.Polyline,
-                Points = copy,
-                Color = color,
-                Thickness = thickness
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.Polyline;
+            command.Points = copy;
+            command.Color = color;
+            command.Thickness = thickness;
+            commands.Add(command);
         }
 
         public void FillTriangle(MuiVec2 a, MuiVec2 b, MuiVec2 c, MuiColor color) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.FillTriangle,
-                P1 = a,
-                P2 = b,
-                P3 = c,
-                Color = color
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.FillTriangle;
+            command.P1 = a;
+            command.P2 = b;
+            command.P3 = c;
+            command.Color = color;
+            commands.Add(command);
         }
 
         public void StrokeTriangle(MuiVec2 a, MuiVec2 b, MuiVec2 c, MuiColor color, float thickness) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.StrokeTriangle,
-                P1 = a,
-                P2 = b,
-                P3 = c,
-                Color = color,
-                Thickness = thickness
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.StrokeTriangle;
+            command.P1 = a;
+            command.P2 = b;
+            command.P3 = c;
+            command.Color = color;
+            command.Thickness = thickness;
+            commands.Add(command);
         }
 
         public void FillCircle(MuiVec2 center, float radius, MuiColor color) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.FillCircle,
-                P1 = center,
-                Radius = radius,
-                Color = color
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.FillCircle;
+            command.P1 = center;
+            command.Radius = radius;
+            command.Color = color;
+            commands.Add(command);
         }
 
         public void StrokeCircle(MuiVec2 center, float radius, MuiColor color, float thickness, int segments) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.StrokeCircle,
-                P1 = center,
-                Radius = radius,
-                Color = color,
-                Thickness = thickness,
-                Segments = segments
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.StrokeCircle;
+            command.P1 = center;
+            command.Radius = radius;
+            command.Color = color;
+            command.Thickness = thickness;
+            command.Segments = segments;
+            commands.Add(command);
         }
 
         public void Bezier(MuiVec2 p1, MuiVec2 p2, MuiVec2 p3, MuiVec2 p4, MuiColor color, float thickness, int segments) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.Bezier,
-                P1 = p1,
-                P2 = p2,
-                P3 = p3,
-                P4 = p4,
-                Color = color,
-                Thickness = thickness,
-                Segments = segments
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.Bezier;
+            command.P1 = p1;
+            command.P2 = p2;
+            command.P3 = p3;
+            command.P4 = p4;
+            command.Color = color;
+            command.Thickness = thickness;
+            command.Segments = segments;
+            commands.Add(command);
         }
 
         public void Text(MuiRect rect, string text, object fontOrStyle, MuiColor color) {
@@ -164,23 +206,23 @@ namespace MaximumUI {
         }
 
         public void Text(MuiRect rect, string text, object fontOrStyle, MuiColor color, TextFormat format) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.Text,
-                Rect = rect,
-                Text = text ?? string.Empty,
-                Resource = fontOrStyle,
-                Color = color,
-                TextFormat = format
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.Text;
+            command.Rect = rect;
+            command.Text = text ?? string.Empty;
+            command.Resource = fontOrStyle;
+            command.Color = color;
+            command.TextFormat = format;
+            commands.Add(command);
         }
 
         public void Image(MuiRect rect, object texture, MuiColor color) {
-            commands.Add(new DrawCommand {
-                Type = DrawCommandType.Image,
-                Rect = rect,
-                Resource = texture,
-                Color = color
-            });
+            DrawCommand command = RentCommand();
+            command.Type = DrawCommandType.Image;
+            command.Rect = rect;
+            command.Resource = texture;
+            command.Color = color;
+            commands.Add(command);
         }
 
         public void Append(DrawList source) {
@@ -198,22 +240,21 @@ namespace MaximumUI {
             }
         }
 
-        private static DrawCommand CloneWithOffset(DrawCommand source, MuiVec2 offset) {
-            DrawCommand clone = new DrawCommand {
-                Type = source.Type,
-                Rect = Offset(source.Rect, offset),
-                Color = source.Color,
-                P1 = Offset(source.P1, offset),
-                P2 = Offset(source.P2, offset),
-                P3 = Offset(source.P3, offset),
-                P4 = Offset(source.P4, offset),
-                Text = source.Text,
-                Resource = source.Resource,
-                Thickness = source.Thickness,
-                Radius = source.Radius,
-                Segments = source.Segments,
-                TextFormat = source.TextFormat
-            };
+        private DrawCommand CloneWithOffset(DrawCommand source, MuiVec2 offset) {
+            DrawCommand clone = RentCommand();
+            clone.Type = source.Type;
+            clone.Rect = Offset(source.Rect, offset);
+            clone.Color = source.Color;
+            clone.P1 = Offset(source.P1, offset);
+            clone.P2 = Offset(source.P2, offset);
+            clone.P3 = Offset(source.P3, offset);
+            clone.P4 = Offset(source.P4, offset);
+            clone.Text = source.Text;
+            clone.Resource = source.Resource;
+            clone.Thickness = source.Thickness;
+            clone.Radius = source.Radius;
+            clone.Segments = source.Segments;
+            clone.TextFormat = source.TextFormat;
 
             if (source.Points != null) {
                 clone.Points = new MuiVec2[source.Points.Length];
