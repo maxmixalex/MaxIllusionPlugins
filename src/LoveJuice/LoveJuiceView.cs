@@ -195,7 +195,7 @@ namespace LoveJuice {
                             i == 4 ? "乳液" : i == 5 ? "附加" :
                             i == 6 ? "爱液" : "前液",
                         m.ChangePreviewChannel, "lovejuice-preview-channel")
-                        .Enabled(m.Enabled).Width(115f),
+                        .Enabled(m.Enabled).Width(155f),
                     new Button("测试", m.Preview, "lovejuice-emit")
                         .Enabled(m.Enabled && m.HasScene && m.ActorCount > 0)
                         .Width(58f)
